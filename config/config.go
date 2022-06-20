@@ -1055,6 +1055,19 @@ var defaultConf = Config{
 	TiDBMaxReuseChunk:                    64,
 	TiDBMaxReuseColumn:                   256,
 	TiDBEnableExitCheck:                  false,
+
+	MCTech: MCTech{
+		Sequence: Sequence{
+			Mock:          false,
+			MaxFetchCount: 1000,
+			Backend:       3,
+			ApiPrefix:     "http://node-infra-sequence-service.mc/",
+		},
+		Encryption: Encryption{
+			AccessId:  "oJEKJh1wvqncJYASxp1Iiw",
+			ApiPrefix: "http://node-infra-encryption-service.mc/",
+		},
+	},
 }
 
 var (
