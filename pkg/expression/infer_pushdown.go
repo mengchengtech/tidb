@@ -215,6 +215,10 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 		ast.MD5, ast.SHA1, ast.UncompressedLength,
 
 		ast.Cast,
+		// add by zhangbing
+		// mctech functions
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt,
+		// add end
 
 		// misc functions.
 		// TODO(#26942): enable functions below after them are fully tested in TiKV.
