@@ -7299,3 +7299,12 @@ func TestMultiStmt(t *testing.T) {
 	require.Equal(t, "'baz'", stmt3.Fields.Fields[2].Text())
 	require.Equal(t, "1", stmt4.Fields.Fields[0].Text())
 }
+
+func TestMCTechFunctionDelete(t *testing.T) {
+	cases := []testCase{
+		{"/*& tenant:gslq */ select mctech_sequence() as full_id", true,
+			"SELECT MCTECH_SEQUENCE() AS `full_id`"},
+	}
+
+	RunTest(t, cases, false)
+}
