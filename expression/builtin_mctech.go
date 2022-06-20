@@ -2,6 +2,7 @@ package expression
 
 import (
 	"github.com/pingcap/tidb/mctech/udf"
+	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
@@ -33,7 +34,7 @@ func (c *mctechSequenceFunctionClass) getFunction(ctx sessionctx.Context, args [
 		return nil, err
 	}
 	sig := &builtinMCTechSequenceSig{bf}
-	bf.tp.SetFlen(10)
+	bf.tp.SetFlen(21)
 	return sig, nil
 }
 
@@ -68,7 +69,7 @@ func (c *mctechVersionJustPassFunctionClass) getFunction(ctx sessionctx.Context,
 		return nil, err
 	}
 	sig := &builtinMCTechVersionJustPassSig{bf}
-	bf.tp.SetFlen(10)
+	bf.tp.SetFlen(21)
 	return sig, nil
 }
 
@@ -103,7 +104,7 @@ func (c *mctechDecryptFunctionClass) getFunction(ctx sessionctx.Context, args []
 		return nil, err
 	}
 	sig := &builtinMCTechDecryptSig{bf}
-	bf.tp.SetFlen(10)
+	bf.tp.SetFlen(mysql.MaxFieldCharLength)
 	return sig, nil
 }
 
@@ -143,8 +144,8 @@ func (c *mctechEncryptFunctionClass) getFunction(ctx sessionctx.Context, args []
 	if err != nil {
 		return nil, err
 	}
+	bf.tp.SetFlen(mysql.MaxFieldCharLength)
 	sig := &builtinMCTechEncryptSig{bf}
-	bf.tp.SetFlen(10)
 	return sig, nil
 }
 
