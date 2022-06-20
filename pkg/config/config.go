@@ -1089,6 +1089,19 @@ var defaultConf = Config{
 	TiDBEnableExitCheck:                  false,
 	InMemSlowQueryTopNNum:                30,
 	InMemSlowQueryRecentNum:              500,
+
+	MCTech: MCTech{
+		Sequence: Sequence{
+			Mock:          false,
+			MaxFetchCount: 1000,
+			Backend:       3,
+			ApiPrefix:     "http://node-infra-sequence-service.mc/",
+		},
+		Encryption: Encryption{
+			AccessId:  "oJEKJh1wvqncJYASxp1Iiw",
+			ApiPrefix: "http://node-infra-encryption-service.mc/",
+		},
+	},
 }
 
 var (
