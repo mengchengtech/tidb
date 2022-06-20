@@ -1001,6 +1001,9 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 
 		ast.Cast,
 
+		// mctech functions
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt,
+
 		// misc functions.
 		// TODO(#26942): enable functions below after them are fully tested in TiKV.
 		/*ast.InetNtoa, ast.InetAton, ast.Inet6Ntoa, ast.Inet6Aton, ast.IsIPv4, ast.IsIPv4Compat, ast.IsIPv4Mapped, ast.IsIPv6,*/

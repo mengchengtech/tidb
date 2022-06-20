@@ -266,6 +266,7 @@ type Config struct {
 	EnableBatchDML bool   `toml:"enable-batch-dml" json:"enable-batch-dml"`
 	MemQuotaQuery  int64  `toml:"mem-quota-query" json:"mem-quota-query"`
 	OOMAction      string `toml:"oom-action" json:"oom-action"`
+	MCTech				 MCTech `toml:"mctech" json:"mctech"`
 }
 
 // UpdateTempStoragePath is to update the `TempStoragePath` if port/statusPort was changed
