@@ -266,7 +266,7 @@ type Config struct {
 	EnableBatchDML bool   `toml:"enable-batch-dml" json:"enable-batch-dml"`
 	MemQuotaQuery  int64  `toml:"mem-quota-query" json:"mem-quota-query"`
 	OOMAction      string `toml:"oom-action" json:"oom-action"`
-	MCTech				 MCTech `toml:"mctech" json:"mctech"`
+	MCTech         MCTech `toml:"mctech" json:"mctech"`
 }
 
 // UpdateTempStoragePath is to update the `TempStoragePath` if port/statusPort was changed
@@ -908,6 +908,19 @@ var defaultConf = Config{
 	EnableForwarding:                     defTiKVCfg.EnableForwarding,
 	NewCollationsEnabledOnFirstBootstrap: true,
 	EnableGlobalKill:                     true,
+
+	MCTech: MCTech{
+		Sequence: Sequence{
+			Mock:          false,
+			MaxFetchCount: 1000,
+			Backend:       3,
+			ApiPrefix:     "http://node-infra-sequence-service.mc/",
+		},
+		Encryption: Encryption{
+			AccessId:  "oJEKJh1wvqncJYASxp1Iiw",
+			ApiPrefix: "http://node-infra-encryption-service.mc/",
+		},
+	},
 }
 
 var (

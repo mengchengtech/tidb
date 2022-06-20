@@ -115,7 +115,7 @@ func (c *AesCryptoClient) Decrypt(content string) (string, error) {
 
 func loadCryptoParams() (key []byte, iv []byte, err error) {
 	// 从配置中获取
-	apiPrefix := getEncryptionServiceUrlPrefix()
+	apiPrefix := option.getEncryptionServiceUrlPrefix()
 	serviceUrl := apiPrefix + "db/aes"
 	get, err := http.NewRequest("GET", serviceUrl, nil)
 	if err != nil {
@@ -123,7 +123,7 @@ func loadCryptoParams() (key []byte, iv []byte, err error) {
 	}
 
 	get.Header = map[string][]string{
-		"x-access-id": {getAesAccessId()},
+		"x-access-id": {option.getAesAccessId()},
 	}
 
 	body, err := DoRequest(get)
