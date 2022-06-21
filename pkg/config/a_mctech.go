@@ -16,6 +16,7 @@ type Sequence struct {
 }
 
 type Encryption struct {
+	Mock      bool   `toml:"mock" json:"mock"`
 	ApiPrefix string `toml:"api-prefix" json:"api-prefix"`
 	AccessId  string `toml:"access-id" json:"access-id"`
 }
@@ -30,6 +31,7 @@ func init() {
 			ApiPrefix:     "http://node-infra-sequence-service.mc/",
 		},
 		Encryption: Encryption{
+			Mock:          false,
 			AccessId:  "oJEKJh1wvqncJYASxp1Iiw",
 			ApiPrefix: "http://node-infra-encryption-service.mc/",
 		},
