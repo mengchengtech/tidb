@@ -12,13 +12,13 @@ import (
 type mctechOption struct {
 }
 
-func (o *mctechOption) Mock() bool {
+func (o *mctechOption) SequenceMock() bool {
 	mock := config.GetGlobalConfig().MCTech.Sequence.Mock
 	log.Info("mock sequence service ?", zap.Bool("mock", mock))
 	return mock
 }
 
-func (o *mctechOption) Debug() bool {
+func (o *mctechOption) SequenceDebug() bool {
 	debug := config.GetGlobalConfig().MCTech.Sequence.Debug
 	log.Info("debug sequence service ?", zap.Bool("debug", debug))
 	return debug
@@ -45,7 +45,13 @@ func (o *mctechOption) SequenceServiceUrlPrefix() string {
 	return apiPrefix
 }
 
-func (o *mctechOption) AesAccessId() string {
+func (o *mctechOption) EncryptionMock() bool {
+	mock := config.GetGlobalConfig().MCTech.Encryption.Mock
+	log.Info("mock sequence service ?", zap.Bool("mock", mock))
+	return mock
+}
+
+func (o *mctechOption) EncryptionAesAccessId() string {
 	// 先从配置中获取
 	accessId := config.GetGlobalConfig().MCTech.Encryption.AccessId
 	return accessId
