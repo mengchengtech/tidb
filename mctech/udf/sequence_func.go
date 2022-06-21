@@ -216,13 +216,14 @@ func (r *compositeRange) Available() bool {
 	}
 
 	atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&r.current)), nil)
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
 	for {
 		if r.queue.Len() == 0 {
 			break
 		}
-
-		r.lock.Lock()
-		defer r.lock.Unlock()
 
 		front := r.queue.Front()
 		if front == nil {
