@@ -11,6 +11,7 @@ type Sequence struct {
 	ApiPrefix     string `toml:"api-prefix" json:"api-prefix"`
 	Backend       int64  `toml:"backend" json:"backend"`
 	Mock          bool   `toml:"mock" json:"mock"`
+	Debug         bool   `toml:"debug" json:"debug"`
 	MaxFetchCount int64  `toml:"max-fetch-count" json:"max-fetch-count"`
 }
 
@@ -23,6 +24,7 @@ func init() {
 	defaultConf.MCTech = MCTech{
 		Sequence: Sequence{
 			Mock:          false,
+			Debug:         false,
 			MaxFetchCount: 1000,
 			Backend:       3,
 			ApiPrefix:     "http://node-infra-sequence-service.mc/",
