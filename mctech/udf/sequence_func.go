@@ -187,13 +187,13 @@ func newCompositeRange() *compositeRange {
 
 func (r *compositeRange) AddRange(rg IRange) {
 	r.lock.Lock()
+	defer r.lock.Unlock()
 	if r.current == nil {
 		r.current = rg
 	} else {
 		r.queue.PushBack(rg)
 		r.remainingInQueue += rg.Remaining()
 	}
-	r.lock.Unlock()
 }
 
 func (r *compositeRange) Next() (int64, error) {
@@ -233,6 +233,7 @@ func (r *compositeRange) Available() bool {
 	}
 
 	r.lock.Lock()
+	defer r.lock.Unlock()
 	r.current = nil
 
 	for {
@@ -249,7 +250,6 @@ func (r *compositeRange) Available() bool {
 			break
 		}
 	}
-	r.lock.Unlock()
 	return r.current != nil
 }
 
