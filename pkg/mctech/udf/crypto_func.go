@@ -21,12 +21,15 @@ const CRYPTO_PFEFIX = "{crypto}"
 var cryptoPfrefixLength = len(CRYPTO_PFEFIX)
 
 type AesCryptoClient struct {
-	key []byte
-	iv  []byte
+	mock bool
+	key  []byte
+	iv   []byte
 }
 
 func newAesCryptoClientFromService() *AesCryptoClient {
 	c := new(AesCryptoClient)
+	c.mock = option.EncryptionMock()
+
 	key, iv, err := loadCryptoParams()
 	if err == nil {
 		log.Info("GET mctech aes crypto KEY/IV SUCCESS. ")
@@ -67,6 +70,11 @@ func NewAesCryptoClient(key string, iv string) *AesCryptoClient {
 }
 
 func (c *AesCryptoClient) Encrypt(plainText string) (string, error) {
+	if c.mock {
+		// 用于调试场景
+		return plainText, nil
+	}
+
 	var cypher string
 	block, err := aes.NewCipher(c.key)
 	if err != nil {
@@ -87,6 +95,11 @@ func (c *AesCryptoClient) Encrypt(plainText string) (string, error) {
 }
 
 func (c *AesCryptoClient) Decrypt(content string) (string, error) {
+	if c.mock {
+		// 用于调试场景
+		return content, nil
+	}
+
 	if !strings.HasPrefix(content, CRYPTO_PFEFIX) {
 		return content, nil
 	}
@@ -123,7 +136,7 @@ func loadCryptoParams() (key []byte, iv []byte, err error) {
 	}
 
 	get.Header = map[string][]string{
-		"x-access-id": {option.AesAccessId()},
+		"x-access-id": {option.EncryptionAesAccessId()},
 	}
 
 	body, err := doRequest(get)
