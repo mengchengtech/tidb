@@ -201,21 +201,6 @@ func (r *compositeRange) Next() (int64, error) {
 	return r.current.Next()
 }
 
-func (r *compositeRange) HasNext() bool {
-	// 只要 remainingInQueue 有值，表示除current以外还有待取的值，返回true
-	if r.remainingInQueue > 0 {
-		return true
-	}
-
-	// remainingInQueue 为0时，再来检查current
-	rg := r.current
-	if rg == nil {
-		return false
-	}
-
-	return rg.HasNext()
-}
-
 func (r *compositeRange) Remaining() int64 {
 	cur := r.current
 	if cur != nil {
@@ -281,8 +266,8 @@ func newSequenceCache() *SequenceCache {
 	sc := new(SequenceCache)
 	sc.frange = newCompositeRange()
 
-	sc.mock = option.Mock()
-	sc.debug = option.Debug()
+	sc.mock = option.SequenceMock()
+	sc.debug = option.SequenceDebug()
 
 	// 后台取序列的最大线程数
 	backendCount := option.BackendCount()
