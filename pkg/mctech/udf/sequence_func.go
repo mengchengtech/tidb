@@ -7,19 +7,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/pingcap/log"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
-
-type IRange interface {
-	Next() (int64, error)
-	HasNext() bool
-	Remaining() int64
-	Available() bool
-}
 
 /**
  * 序列段实体。
@@ -164,9 +159,9 @@ type compositeRange struct {
 	/**
 	 * 当前正在使用的Range
 	 */
-	current IRange
+	current *segmentRange
 	/**
-	 * 除current以外，剩下的已准备好，还未使用的IRange
+	 * 除current以外，剩下的已准备好，还未使用的segmentRange
 	 */
 	queue *list.List
 	/**
@@ -185,15 +180,17 @@ func newCompositeRange() *compositeRange {
 	return r
 }
 
-func (r *compositeRange) AddRange(rg IRange) {
+func (r *compositeRange) AddRange(rg *segmentRange) {
+	swapped := atomic.CompareAndSwapPointer(
+		(*unsafe.Pointer)(unsafe.Pointer(&r.current)), nil, unsafe.Pointer(&rg))
+	if swapped {
+		return
+	}
+
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	if r.current == nil {
-		r.current = rg
-	} else {
-		r.queue.PushBack(rg)
-		r.remainingInQueue += rg.Remaining()
-	}
+	r.queue.PushBack(rg)
+	r.remainingInQueue += rg.Remaining()
 }
 
 func (r *compositeRange) Next() (int64, error) {
@@ -232,17 +229,20 @@ func (r *compositeRange) Available() bool {
 		return true
 	}
 
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.current = nil
-
+	atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&r.current)), nil)
 	for {
 		if r.queue.Len() == 0 {
 			break
 		}
 
+		r.lock.Lock()
+		defer r.lock.Unlock()
+
 		front := r.queue.Front()
-		rg := front.Value.(IRange)
+		if front == nil {
+			break
+		}
+		rg := front.Value.(*segmentRange)
 		r.queue.Remove(front)
 		r.remainingInQueue -= rg.Remaining()
 		if rg.Available() {
