@@ -912,6 +912,7 @@ var defaultConf = Config{
 	MCTech: MCTech{
 		Sequence: Sequence{
 			Mock:          false,
+			Debug:         false,
 			MaxFetchCount: 1000,
 			Backend:       3,
 			ApiPrefix:     "http://node-infra-sequence-service.mc/",

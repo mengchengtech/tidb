@@ -12,25 +12,31 @@ import (
 type mctechOption struct {
 }
 
-func (o *mctechOption) getMock() bool {
+func (o *mctechOption) Mock() bool {
 	mock := config.GetGlobalConfig().MCTech.Sequence.Mock
 	log.Info("mock sequence service ?", zap.Bool("mock", mock))
 	return mock
 }
 
-func (o *mctechOption) getMaxFetchCount() int64 {
+func (o *mctechOption) Debug() bool {
+	debug := config.GetGlobalConfig().MCTech.Sequence.Debug
+	log.Info("debug sequence service ?", zap.Bool("debug", debug))
+	return debug
+}
+
+func (o *mctechOption) MaxFetchCount() int64 {
 	maxFetchCount := config.GetGlobalConfig().MCTech.Sequence.MaxFetchCount
 	return maxFetchCount
 }
 
-func (o *mctechOption) getBackendCount() int64 {
+func (o *mctechOption) BackendCount() int64 {
 	backend := config.GetGlobalConfig().MCTech.Sequence.Backend
 	log.Info("Get backend sequence goroutines.",
 		zap.Int64("backend", backend))
 	return backend
 }
 
-func (o *mctechOption) getSequenceServiceUrlPrefix() string {
+func (o *mctechOption) SequenceServiceUrlPrefix() string {
 	// 先从配置中获取
 	apiPrefix := config.GetGlobalConfig().MCTech.Sequence.ApiPrefix
 	apiPrefix = formatUrl(apiPrefix)
@@ -39,13 +45,13 @@ func (o *mctechOption) getSequenceServiceUrlPrefix() string {
 	return apiPrefix
 }
 
-func (o *mctechOption) getAesAccessId() string {
+func (o *mctechOption) AesAccessId() string {
 	// 先从配置中获取
 	accessId := config.GetGlobalConfig().MCTech.Encryption.AccessId
 	return accessId
 }
 
-func (o *mctechOption) getEncryptionServiceUrlPrefix() string {
+func (o *mctechOption) EncryptionServiceUrlPrefix() string {
 	// 先从配置中获取
 	apiPrefix := config.GetGlobalConfig().MCTech.Encryption.ApiPrefix
 	apiPrefix = formatUrl(apiPrefix)
