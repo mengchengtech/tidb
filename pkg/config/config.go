@@ -1086,6 +1086,7 @@ var defaultConf = Config{
 			ApiPrefix:     "http://node-infra-sequence-service.mc/",
 		},
 		Encryption: Encryption{
+			Mock:          false,
 			AccessId:  "oJEKJh1wvqncJYASxp1Iiw",
 			ApiPrefix: "http://node-infra-encryption-service.mc/",
 		},
