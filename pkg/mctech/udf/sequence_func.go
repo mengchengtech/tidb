@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -113,7 +114,7 @@ func newSegmentRange(value string) (*segmentRange, error) {
 func (r *segmentRange) Next() (int64, error) {
 	for {
 		if !r.HasNext() {
-			return 0, fmt.Errorf("返回的序列值已用完")
+			return 0, fmt.Errorf("segmentRange: 返回的序列值已用完")
 		}
 
 		if r.segment == nil {
@@ -182,7 +183,7 @@ func newCompositeRange() *compositeRange {
 
 func (r *compositeRange) AddRange(rg *segmentRange) {
 	swapped := atomic.CompareAndSwapPointer(
-		(*unsafe.Pointer)(unsafe.Pointer(&r.current)), nil, unsafe.Pointer(&rg))
+		(*unsafe.Pointer)(unsafe.Pointer(&r.current)), nil, unsafe.Pointer(rg))
 	if swapped {
 		return
 	}
@@ -195,7 +196,7 @@ func (r *compositeRange) AddRange(rg *segmentRange) {
 
 func (r *compositeRange) Next() (int64, error) {
 	if !r.Available() {
-		return -1, fmt.Errorf("返回的序列值已用完")
+		return -1, fmt.Errorf("compositeRange: 返回的序列值已用完")
 	}
 	return r.current.Next()
 }
@@ -272,20 +273,22 @@ type SequenceCache struct {
 	// 激活后台取序列的阈值
 	backendThreshold int64
 
-	mock bool
+	mock  bool
+	debug bool
 }
 
 func newSequenceCache() *SequenceCache {
 	sc := new(SequenceCache)
 	sc.frange = newCompositeRange()
 
-	sc.mock = option.getMock()
+	sc.mock = option.Mock()
+	sc.debug = option.Debug()
 
 	// 后台取序列的最大线程数
-	backendCount := option.getBackendCount()
-	sc.maxFetchCount = option.getMaxFetchCount()
+	backendCount := option.BackendCount()
+	sc.maxFetchCount = option.MaxFetchCount()
 	sc.sem = semaphore.NewWeighted(backendCount)
-	sc.serviceUrlPrefix = option.getSequenceServiceUrlPrefix()
+	sc.serviceUrlPrefix = option.SequenceServiceUrlPrefix()
 	sc.backendThreshold = (sc.maxFetchCount * backendCount * 2) / 3
 	return sc
 }
@@ -337,7 +340,7 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 		"Content-Type": {"application/json"},
 	}
 
-	body, err := DoRequest(post)
+	body, err := doRequest(post)
 	if err != nil {
 		return 0, err
 	}
@@ -354,7 +357,7 @@ func (s *SequenceCache) loadSequence(count int64) (*segmentRange, error) {
 		return nil, err
 	}
 
-	body, err := DoRequest(post)
+	body, err := doRequest(post)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +395,45 @@ var cache *SequenceCache
 func GetCache() *SequenceCache {
 	if cache == nil {
 		cache = newSequenceCache()
+		if cache.debug {
+			go func() {
+				c := make(chan os.Signal)
+				for {
+					select {
+					case <-c:
+						return
+					default:
+						start := time.Now().UnixNano()
+						time.Sleep(time.Second)
+						renderSequenceMetrics(start)
+					}
+				}
+			}()
+		}
 	}
-	log.Debug("get sequence cache")
+	log.Info("get sequence cache")
 	return cache
+}
+
+func renderSequenceMetrics(startNano int64) {
+	metric := cache.GetMetrics()
+	if metric.TotalFetchCount == 0 {
+		return
+	}
+
+	durationNano := time.Now().UnixNano() - startNano
+	seconds := durationNano / int64(time.Second)
+	if seconds == 0 {
+		return
+	}
+
+	avgCountPerSecond := metric.TotalFetchCount / seconds
+	avgFetchPerSecond := (metric.Direct + metric.Backend) / seconds
+	log.Info("sequence per second metrics.",
+		zap.Int64("direct", metric.Direct),
+		zap.Int64("backend", metric.Backend),
+		zap.Int64("avgCount", avgCountPerSecond),
+		zap.Int64("avgFetch", avgFetchPerSecond),
+	)
+	time.Sleep(time.Second)
 }

@@ -14,7 +14,7 @@ var apiClient = &http.Client{
 	},
 }
 
-func DoRequest(request *http.Request) ([]byte, error) {
+func doRequest(request *http.Request) ([]byte, error) {
 	var err error
 	retryCount := 3
 	for retryCount > 0 {
