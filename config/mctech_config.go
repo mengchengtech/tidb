@@ -8,7 +8,8 @@ type MCTech struct {
 type Sequence struct {
 	ApiPrefix     string `toml:"api-prefix" json:"api-prefix"`
 	Backend       int64  `toml:"backend" json:"backend"`
-	Mock          bool   `toml:"mock" json:"mock"`
+	Mock         bool   `toml:"mock" json:"mock"`
+	Debug         bool   `toml:"debug" json:"debug"`
 	MaxFetchCount int64  `toml:"max-fetch-count" json:"max-fetch-count"`
 }
 
