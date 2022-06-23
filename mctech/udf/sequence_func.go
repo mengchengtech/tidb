@@ -2,7 +2,6 @@ package udf
 
 import (
 	"container/list"
-	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -111,11 +110,12 @@ func newSegmentRange(value string) (*segmentRange, error) {
 	return r, nil
 }
 
-func (r *segmentRange) Next() (int64, error) {
+func (r *segmentRange) Next() int64 {
 	for {
-		if !r.HasNext() {
-			return 0, fmt.Errorf("segmentRange: 返回的序列值已用完")
-		}
+		// 已在CompositeRange中判断过，此处不再重复判断
+		// if !r.HasNext() {
+		// 	return -1
+		// }
 
 		if r.segment == nil {
 			r.segment = &r.items[r.segmentIndex]
@@ -139,7 +139,7 @@ func (r *segmentRange) Next() (int64, error) {
 		}
 	}
 	r.fetched++
-	return r.seq, nil
+	return r.seq
 }
 
 func (r *segmentRange) HasNext() bool {
@@ -170,14 +170,16 @@ type compositeRange struct {
 	 */
 	remainingInQueue int64
 
-	lock *sync.Mutex
+	backendLock *sync.Mutex
+	frontLock   *sync.Mutex
 }
 
 func newCompositeRange() *compositeRange {
 	r := new(compositeRange)
 	r.queue = list.New()
 	r.remainingInQueue = 0
-	r.lock = &sync.Mutex{}
+	r.backendLock = &sync.Mutex{}
+	r.frontLock = &sync.Mutex{}
 	return r
 }
 
@@ -188,15 +190,15 @@ func (r *compositeRange) AddRange(rg *segmentRange) {
 		return
 	}
 
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.backendLock.Lock()
+	defer r.backendLock.Unlock()
 	r.queue.PushBack(rg)
 	r.remainingInQueue += rg.Remaining()
 }
 
-func (r *compositeRange) Next() (int64, error) {
+func (r *compositeRange) Next() int64 {
 	if !r.Available() {
-		return -1, fmt.Errorf("compositeRange: 返回的序列值已用完")
+		return -1
 	}
 	return r.current.Next()
 }
@@ -217,8 +219,8 @@ func (r *compositeRange) Available() bool {
 
 	atomic.SwapPointer((*unsafe.Pointer)(unsafe.Pointer(&r.current)), nil)
 
-	r.lock.Lock()
-	defer r.lock.Unlock()
+	r.backendLock.Lock()
+	defer r.backendLock.Unlock()
 
 	for {
 		if r.queue.Len() == 0 {
@@ -283,31 +285,6 @@ func (s *SequenceCache) GetMetrics() *SequenceMetrics {
 	return &s.metrics
 }
 
-func (s *SequenceCache) Next() (int64, error) {
-	if s.mock {
-		// 用于调试场景
-		return 0, nil
-	}
-
-	// 数据是否可用
-	available := s.frange.Available()
-	var err error
-	if !available {
-		// 数据不可用，直接再取一次
-		rg, err := s.loadSequence(s.maxFetchCount)
-		if err != nil {
-			return -1, err
-		}
-		s.metrics.Direct++
-		s.frange.AddRange(rg)
-	}
-
-	value, err := s.frange.Next()
-	s.backendFetchSequenceIfNeeded()
-	s.metrics.TotalFetchCount++
-	return value, err
-}
-
 func (s *SequenceCache) VersionJustPass() (int64, error) {
 	if s.mock {
 		// 用于调试场景
@@ -335,23 +312,37 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 	return strconv.ParseInt(text, 10, 64)
 }
 
-func (s *SequenceCache) loadSequence(count int64) (*segmentRange, error) {
-	url := s.serviceUrlPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
-	log.Debug("next sequence url", zap.String("url", url))
-	post, err := http.NewRequest("POST", url, &strings.Reader{})
-	if err != nil {
-		return nil, err
+func (s *SequenceCache) Next() (int64, error) {
+	if s.mock {
+		// 用于调试场景
+		return 0, nil
 	}
 
-	body, err := doRequest(post)
-	if err != nil {
-		return nil, err
+	s.frange.frontLock.Lock()
+	defer s.frange.frontLock.Unlock()
+
+	value := s.frange.Next()
+	var err error
+	if value < 0 {
+		// 没有可用的序列值，直接去服务端
+		err = s.loadSequence(s.maxFetchCount)
+		if err != nil {
+			return -2, err
+		}
+
+		// 在锁内部可直接操作
+		s.metrics.Direct++
+		value = s.frange.Next()
 	}
 
-	text := string(body)
-	return newSegmentRange(text)
+	s.backendFetchSequenceIfNeeded()
+	if err != nil {
+		// 在锁内部可直接操作
+		return -3, err
+	}
+	s.metrics.TotalFetchCount++
+	return value, nil
 }
-
 func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 	if s.frange.Remaining() > s.backendThreshold {
 		return
@@ -364,22 +355,41 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 		}
 
 		defer s.sem.Release(1)
-
-		// fmt.Println("=====================load from backend")
-		var err error
-		rg, err := s.loadSequence(s.maxFetchCount)
+		err := s.loadSequence(s.maxFetchCount)
 		if err != nil {
 			panic(err)
 		}
-		s.metrics.Backend++
-		s.frange.AddRange(rg)
+		atomic.AddInt64(&s.metrics.Backend, 1)
 	}()
 }
 
+func (s *SequenceCache) loadSequence(count int64) error {
+	url := s.serviceUrlPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
+	log.Debug("next sequence url", zap.String("url", url))
+	post, err := http.NewRequest("POST", url, &strings.Reader{})
+	if err != nil {
+		return err
+	}
+
+	body, err := doRequest(post)
+	if err != nil {
+		return err
+	}
+
+	text := string(body)
+	rg, err := newSegmentRange(text)
+	if err != nil {
+		return err
+	}
+	s.frange.AddRange(rg)
+	return nil
+}
+
 var cache *SequenceCache
+var sequenceInitOnce sync.Once
 
 func GetCache() *SequenceCache {
-	if cache == nil {
+	sequenceInitOnce.Do(func() {
 		cache = newSequenceCache()
 		if cache.debug {
 			go func() {
@@ -396,8 +406,8 @@ func GetCache() *SequenceCache {
 				}
 			}()
 		}
-	}
-	log.Info("get sequence cache")
+		log.Info("init sequence cache")
+	})
 	return cache
 }
 
