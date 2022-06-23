@@ -48,6 +48,12 @@ func extractJoinGroup(p base.LogicalPlan) *joinGroupResult {
 		hasOuterJoin      bool
 	)
 	join, isJoin := p.(*logicalop.LogicalJoin)
+	// add by zhangbing
+	// 6.x中改bug加的. 7.x中暂时先去掉，需要时再放开
+	// if !isJoin || join.JoinType != InnerJoin {
+	// 	return []LogicalPlan{p}, nil, nil, nil, nil, false
+	// }
+	// add end
 	if isJoin && join.PreferJoinOrder {
 		// When there is a leading hint, the hint may not take effect for other reasons.
 		// For example, the join type is cross join or straight join, or exists the join algorithm hint, etc.
