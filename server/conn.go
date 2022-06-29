@@ -63,6 +63,7 @@ import (
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/mctech/tenant"
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
@@ -1830,6 +1831,12 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	if len(stmts) == 0 {
 		return cc.writeOK(ctx)
 	}
+
+	// add by zhangbing
+	for _, stmt := range stmts {
+		tenant.ApplyTenantIsolation(cc.ctx.TiDBContext, stmt)
+	}
+	// add end
 
 	warns := sc.GetWarnings()
 	parserWarns := warns[len(prevWarns):]
