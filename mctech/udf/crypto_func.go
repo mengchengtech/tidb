@@ -141,7 +141,7 @@ func loadCryptoParams(option *mctech.MCTechOption) (key []byte, iv []byte, err e
 		"x-access-id": {option.Encryption_AccessId},
 	}
 
-	body, err := doRequest(get)
+	body, err := mctech.DoRequest(get)
 	if err != nil {
 		return nil, nil, err
 	}
