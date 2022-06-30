@@ -1,4 +1,4 @@
-package udf
+package mctech
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ var apiClient = &http.Client{
 	},
 }
 
-func doRequest(request *http.Request) ([]byte, error) {
+func DoRequest(request *http.Request) ([]byte, error) {
 	var err error
 	retryCount := 3
 	for retryCount > 0 {
