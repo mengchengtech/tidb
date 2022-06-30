@@ -305,7 +305,7 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 		"Content-Type": {"application/json"},
 	}
 
-	body, err := doRequest(post)
+	body, err := mctech.DoRequest(post)
 	if err != nil {
 		return 0, err
 	}
@@ -359,7 +359,7 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 		defer s.sem.Release(1)
 		err := s.loadSequence(s.maxFetchCount)
 		if err != nil {
-			panic(err)
+			log.Error("[backend] fetch sequence error", zap.Error(err))
 		}
 		atomic.AddInt64(&s.metrics.Backend, 1)
 	}()
@@ -373,7 +373,7 @@ func (s *SequenceCache) loadSequence(count int64) error {
 		return err
 	}
 
-	body, err := doRequest(post)
+	body, err := mctech.DoRequest(post)
 	if err != nil {
 		return err
 	}
