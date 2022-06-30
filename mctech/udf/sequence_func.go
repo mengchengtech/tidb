@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/mctech"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -267,16 +268,17 @@ type SequenceCache struct {
 
 func newSequenceCache() *SequenceCache {
 	sc := new(SequenceCache)
+	option := mctech.GetMCTechOption()
 	sc.frange = newCompositeRange()
 
-	sc.mock = option.SequenceMock()
-	sc.debug = option.SequenceDebug()
+	sc.mock = option.Sequence_Mock
+	sc.debug = option.Sequence_Debug
 
 	// 后台取序列的最大线程数
-	backendCount := option.BackendCount()
-	sc.maxFetchCount = option.MaxFetchCount()
+	backendCount := option.Sequence_Backend
+	sc.maxFetchCount = option.Sequence_MaxFetchCount
 	sc.sem = semaphore.NewWeighted(backendCount)
-	sc.serviceUrlPrefix = option.SequenceServiceUrlPrefix()
+	sc.serviceUrlPrefix = option.Sequence_ApiPrefix
 	sc.backendThreshold = (sc.maxFetchCount * backendCount * 2) / 3
 	return sc
 }

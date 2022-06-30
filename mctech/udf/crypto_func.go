@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/mctech"
 	"go.uber.org/zap"
 )
 
@@ -28,9 +29,10 @@ type AesCryptoClient struct {
 
 func newAesCryptoClientFromService() *AesCryptoClient {
 	c := new(AesCryptoClient)
-	c.mock = option.EncryptionMock()
+	option := mctech.GetMCTechOption()
+	c.mock = option.Encryption_Mock
 
-	key, iv, err := loadCryptoParams()
+	key, iv, err := loadCryptoParams(option)
 	if err == nil {
 		log.Info("GET mctech aes crypto KEY/IV SUCCESS. ")
 		c.key = key
@@ -44,7 +46,7 @@ func newAesCryptoClientFromService() *AesCryptoClient {
 	// 转成后台定时加载
 	go func() {
 		for {
-			key, iv, err = loadCryptoParams()
+			key, iv, err = loadCryptoParams(option)
 			log.Info("GET mctech aes crypto KEY/IV SUCCESS. ")
 			// 加载成功退出后台执行
 			if err == nil {
@@ -126,9 +128,9 @@ func (c *AesCryptoClient) Decrypt(content string) (string, error) {
 	return raw, nil
 }
 
-func loadCryptoParams() (key []byte, iv []byte, err error) {
+func loadCryptoParams(option *mctech.MCTechOption) (key []byte, iv []byte, err error) {
 	// 从配置中获取
-	apiPrefix := option.EncryptionServiceUrlPrefix()
+	apiPrefix := option.Encryption_ApiPrefix
 	serviceUrl := apiPrefix + "db/aes"
 	get, err := http.NewRequest("GET", serviceUrl, nil)
 	if err != nil {
@@ -136,7 +138,7 @@ func loadCryptoParams() (key []byte, iv []byte, err error) {
 	}
 
 	get.Header = map[string][]string{
-		"x-access-id": {option.EncryptionAesAccessId()},
+		"x-access-id": {option.Encryption_AccessId},
 	}
 
 	body, err := doRequest(get)
