@@ -36,9 +36,10 @@ func GetMCTechOption() *MCTechOption {
 		Sequence_MaxFetchCount: opts.Sequence.MaxFetchCount,
 		Sequence_Backend:       opts.Sequence.Backend,
 		Sequence_ApiPrefix:     formatUrl(opts.Sequence.ApiPrefix),
-		Encryption_Mock:        opts.Encryption.Mock,
-		Encryption_AccessId:    opts.Encryption.AccessId,
-		Encryption_ApiPrefix:   opts.Encryption.ApiPrefix,
+
+		Encryption_Mock:      opts.Encryption.Mock,
+		Encryption_AccessId:  opts.Encryption.AccessId,
+		Encryption_ApiPrefix: opts.Encryption.ApiPrefix,
 	}
 
 	content, err := json.Marshal(option)
