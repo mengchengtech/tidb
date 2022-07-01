@@ -918,9 +918,15 @@ var defaultConf = Config{
 			ApiPrefix:     "http://node-infra-sequence-service.mc/",
 		},
 		Encryption: Encryption{
-			Mock:          false,
+			Mock:      false,
 			AccessId:  "oJEKJh1wvqncJYASxp1Iiw",
 			ApiPrefix: "http://node-infra-encryption-service.mc/",
+		},
+		DbChecker: DbChecker{
+			ApiPrefix:        "http://node-infra-dim-service.mc/",
+			MutexAcrossDbs:   []string{},
+			ExcludeAcrossDbs: []string{},
+			AcrossDbGroups:   []string{},
 		},
 	},
 }

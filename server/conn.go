@@ -63,7 +63,7 @@ import (
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/mctech/tenant"
+	"github.com/pingcap/tidb/mctech/prapared"
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
@@ -1823,6 +1823,9 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	defer trace.StartRegion(ctx, "handleQuery").End()
 	sc := cc.ctx.GetSessionVars().StmtCtx
 	prevWarns := sc.GetWarnings()
+
+	resolver := prapared.NewStatementResolver()
+	sql, err = resolver.PrepareSql(cc.ctx.Session, sql)
 	stmts, err := cc.ctx.Parse(ctx, sql)
 	if err != nil {
 		return err
@@ -1833,8 +1836,25 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
+	session := cc.ctx.Session
+	charset, collation := session.GetSessionVars().GetCharsetInfo()
+
 	for _, stmt := range stmts {
-		tenant.ApplyTenantIsolation(cc.ctx.TiDBContext, stmt)
+		resolver.Context().Reset()
+		err = resolver.ResolveStmt(stmt, charset, collation)
+		if err != nil {
+			return err
+		}
+
+		// 改写session上的数据库
+		// 必须在解析完成后再改写库名称，否则会存在表无法解析的问题
+		// FIXME: 移植后不再需要？
+		// TQueryCtx ctx = localData.getQueryCtx()
+		// ctx.session.database = ThreadLocalDataManager.ToPysicalDbName(ctx.session.database)
+		err = resolver.Validate(session)
+		if err != nil {
+			return err
+		}
 	}
 	// add end
 

@@ -3,6 +3,7 @@ package config
 type MCTech struct {
 	Sequence   Sequence   `toml:"sequence" json:"sequence"`
 	Encryption Encryption `toml:"encryption" json:"encryption"`
+	DbChecker  DbChecker  `toml:"db-checker" json:"db-checker"`
 }
 
 type Sequence struct {
@@ -11,6 +12,13 @@ type Sequence struct {
 	Mock          bool   `toml:"mock" json:"mock"`
 	Debug         bool   `toml:"debug" json:"debug"`
 	MaxFetchCount int64  `toml:"max-fetch-count" json:"max-fetch-count"`
+}
+
+type DbChecker struct {
+	ApiPrefix        string   `toml:"api-prefix" json:"api-prefix"`
+	MutexAcrossDbs   []string `toml:"mutex" json:"mutex"`
+	ExcludeAcrossDbs []string `toml:"exclude" json:"exclude"`
+	AcrossDbGroups   []string `toml:"across" json:"across"`
 }
 
 type Encryption struct {
