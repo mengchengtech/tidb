@@ -18,6 +18,7 @@ type MCTechContext interface {
 	SetSqlRewrited(rewrited bool)
 	SqlWithGlobalPrefixDB() bool
 	SetSqlWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool)
+	GetInfo() string
 }
 
 type DBSelector interface {
@@ -33,6 +34,14 @@ type GlobalValueInfo struct {
 	Excludes []string
 }
 
+func NewGlobalValueInfo(global bool, excludes ...string) *GlobalValueInfo {
+	return &GlobalValueInfo{Global: global, Excludes: excludes}
+}
+
+func (g *GlobalValueInfo) String() string {
+	return fmt.Sprintf("{%t,%s}", g.Global, g.Excludes)
+}
+
 type ResolveResult struct {
 	params         map[string]any
 	dbPrefix       string
@@ -41,7 +50,7 @@ type ResolveResult struct {
 	tenantFromRole bool
 }
 
-func NewResolveResult(tenant string, params map[string]any) *ResolveResult {
+func NewResolveResult(tenant string, params map[string]any) (*ResolveResult, error) {
 	fromRole := tenant != ""
 	if !fromRole {
 		// 如果从角色中无法找到租户信息，并且查询的是global库，必须有hint，如果没有报错，如果hint写了租户，自动按写的租户补条件
@@ -57,11 +66,12 @@ func NewResolveResult(tenant string, params map[string]any) *ResolveResult {
 	if !ok {
 		globalInfo = &GlobalValueInfo{}
 	} else {
+		delete(params, PARAM_GLOBAL)
 		globalInfo = v.(*GlobalValueInfo)
 	}
 
 	if tenant != "" && globalInfo.Global {
-		panic(errors.New("存在tenant信息时，global不允许设置为true"))
+		return nil, errors.New("存在tenant信息时，global不允许设置为true")
 	}
 
 	var dbPrefix string
@@ -81,7 +91,16 @@ func NewResolveResult(tenant string, params map[string]any) *ResolveResult {
 		globalInfo:     globalInfo,
 		params:         newParams,
 	}
-	return r
+	return r, nil
+}
+
+func (r *ResolveResult) String() string {
+	lst := make([]string, len(r.params))
+	for k, v := range r.params {
+		lst = append(lst, fmt.Sprintf("[%s,%s]", k, v))
+	}
+	return fmt.Sprintf("{%s,%s,%t,%s,%s}",
+		r.dbPrefix, r.tenant, r.tenantFromRole, lst, r.globalInfo)
 }
 
 func (r *ResolveResult) Tenant() string {
@@ -108,13 +127,6 @@ func (r *ResolveResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
-func (r *ResolveResult) TenantSafe() string {
-	if r.tenant == "" {
-		panic(errors.New("tenant不能为空"))
-	}
-	return r.tenant
-}
-
 type baseMCTechContext struct {
 	selector              DBSelector
 	resolveResult         *ResolveResult
@@ -131,6 +143,10 @@ func NewBaseMCTechContext(resolveResult *ResolveResult, dbSelector DBSelector) M
 		resolveResult: resolveResult,
 		selector:      dbSelector,
 	}
+}
+
+func (d *baseMCTechContext) GetInfo() string {
+	return fmt.Sprintf("{%s}", d.resolveResult)
 }
 
 func (d *baseMCTechContext) CurrentDB() string {
