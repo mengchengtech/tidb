@@ -14,6 +14,7 @@ import (
 
 var dbMap = map[string]string{
 	"pf": "global_platform",
+	"dw": "global_dw",
 }
 
 type mctechTestCase struct {
@@ -25,6 +26,11 @@ type mctechTestCase struct {
 type testMCTechContext struct {
 	mctech.MCTechContext
 	currentDb string
+}
+
+func (d *testMCTechContext) GetInfo() string {
+	info := d.MCTechContext.GetInfo()
+	return fmt.Sprintf("{%s,%s}", info, d.CurrentDB())
 }
 
 func (d *testMCTechContext) CurrentDB() string {
@@ -39,11 +45,15 @@ func (s *testDBSelector) GetDbIndex() (mctech.DbIndex, error) {
 	return s.dbIndex, nil
 }
 
-func newTestMCTechContext(currentDb string) mctech.MCTechContext {
-	result := mctech.NewResolveResult("gslq4dev", map[string]any{
+func newTestMCTechContext(currentDb string) (mctech.MCTechContext, error) {
+	result, err := mctech.NewResolveResult("gslq4dev", map[string]any{
 		"dbPrefix": "mock",
 		"global":   &mctech.GlobalValueInfo{Global: false},
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	context := &testMCTechContext{
 		MCTechContext: mctech.NewBaseMCTechContext(
@@ -51,9 +61,8 @@ func newTestMCTechContext(currentDb string) mctech.MCTechContext {
 	}
 
 	context.currentDb = context.ToPhysicalDbName(currentDb)
-	return context
+	return context, nil
 }
-
 
 func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
 	p := parser.New()
@@ -68,7 +77,8 @@ func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
 		restoreSQLs := ""
 		for _, stmt := range stmts {
 			sb.Reset()
-			context := newTestMCTechContext(dbMap[tbl.shortDb])
+			context, err := newTestMCTechContext(dbMap[tbl.shortDb])
+			require.NoError(t, err, comment)
 			visitor := NewTenantVisitor(context, "", "")
 			stmt.Accept(visitor)
 			err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
@@ -119,6 +129,7 @@ var insertIntoValuesCases = []mctechTestCase{
 	{"pf", "insert into component (id, name, tenant) values(1, 'zhang', 'gslq'), (2, 'bbbb', 'gslq')", "INSERT INTO `component` (`id`,`name`,`tenant`) VALUES (1,_UTF8MB4'zhang',_UTF8MB4'gslq'),(2,_UTF8MB4'bbbb',_UTF8MB4'gslq')"},
 	{"pf", "insert into global_ipm.component (id, name) values(1, 'zhang'), (2, 'bbbb')", "INSERT INTO `mock_global_ipm`.`component` (`id`,`name`,`tenant`) VALUES (1,_UTF8MB4'zhang','gslq4dev'),(2,_UTF8MB4'bbbb','gslq4dev')"},
 	{"pf", "insert into mock_global_ipm.component (id, name) values(1, 'zhang'), (2, 'bbbb')", "INSERT INTO `mock_global_ipm`.`component` (`id`,`name`,`tenant`) VALUES (1,_UTF8MB4'zhang','gslq4dev'),(2,_UTF8MB4'bbbb','gslq4dev')"},
+	{"dw", "insert into global_dw.component (id, name) values(1, 'zhang'), (2, 'bbbb')", "INSERT INTO `mock_global_dw_1`.`component` (`id`,`name`,`tenant`) VALUES (1,_UTF8MB4'zhang','gslq4dev'),(2,_UTF8MB4'bbbb','gslq4dev')"},
 }
 
 var insertSetCases = []mctechTestCase{

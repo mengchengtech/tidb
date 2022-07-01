@@ -7,6 +7,7 @@ import (
 	"time"
 
 	goCache "github.com/patrickmn/go-cache"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/sessionctx"
 )
@@ -28,6 +29,11 @@ func NewMCTechContext(
 
 func (d *tidbSessionMCTechContext) CurrentDB() string {
 	return d.session.GetSessionVars().CurrentDB
+}
+
+func (d *tidbSessionMCTechContext) GetInfo() string {
+	info := d.MCTechContext.GetInfo()
+	return fmt.Sprintf("{%s,%s}", info, d.CurrentDB())
 }
 
 const paramBackgroundKey = "background"
@@ -161,7 +167,7 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, err
+		return -1, errors.Wrap(err, "get dw index errors")
 	}
 	return js["current"], nil
 }
@@ -183,7 +189,7 @@ func (d *dbSelector) getDbIndexByTicketFromService(env string, requestId string)
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, err
+		return -1, errors.Wrap(err, "get dw index by request errors")
 	}
 
 	return js["db"], nil
