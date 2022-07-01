@@ -96,7 +96,10 @@ require (
 	sourcegraph.com/sourcegraph/appdash-data v0.0.0-20151005221446-73f23eafcf67
 )
 
-require github.com/aliyun/alibaba-cloud-sdk-go v1.61.1581
+require (
+	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1581
+	github.com/patrickmn/go-cache v2.1.0+incompatible
+)
 
 require (
 	cloud.google.com/go v0.100.2 // indirect
@@ -158,7 +161,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/ncw/directio v1.0.5 // indirect
 	github.com/ngaut/sync2 v0.0.0-20141008032647-7a24ed77b2ef // indirect
-	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pingcap/goleveldb v0.0.0-20191226122134-f82aafb29989 // indirect
 	github.com/pkg/browser v0.0.0-20180916011732-0a3d74bf9ce4 // indirect
