@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser"
 	. "github.com/pingcap/tidb/parser/format"
 	_ "github.com/pingcap/tidb/parser/test_driver"
@@ -14,6 +15,45 @@ import (
 var dbMap = map[string]string{
 	"pf": "global_platform",
 }
+
+type mctechTestCase struct {
+	shortDb string
+	src     string
+	expect  string
+}
+
+type testMCTechContext struct {
+	mctech.MCTechContext
+	currentDb string
+}
+
+func (d *testMCTechContext) CurrentDB() string {
+	return d.currentDb
+}
+
+type testDBSelector struct {
+	dbIndex mctech.DbIndex
+}
+
+func (s *testDBSelector) GetDbIndex() (mctech.DbIndex, error) {
+	return s.dbIndex, nil
+}
+
+func newTestMCTechContext(currentDb string) mctech.MCTechContext {
+	result := mctech.NewResolveResult("gslq4dev", map[string]any{
+		"dbPrefix": "mock",
+		"global":   &mctech.GlobalValueInfo{Global: false},
+	})
+
+	context := &testMCTechContext{
+		MCTechContext: mctech.NewBaseMCTechContext(
+			result, &testDBSelector{dbIndex: 1}),
+	}
+
+	context.currentDb = context.ToPhysicalDbName(currentDb)
+	return context
+}
+
 
 func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
 	p := parser.New()
