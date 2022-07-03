@@ -47,33 +47,6 @@ type dbSelector struct {
 	resolveResult *mctech.ResolveResult
 	ticketMap     *goCache.Cache
 	currentMap    *goCache.Cache
-	// private final static RestRpcClient client = new RestRpcClient();
-
-	// //    private static final String DEFAULT_DIM_SERVICE_URL = "http://node-dp-dim-service.mc";
-	// // TODO: 后期改为从node-dp-dim-service.mc获取
-	// private static final String DEFAULT_DIM_SERVICE_URL = "http://127.0.0.1:31051";
-
-	// static {
-	// 	ticketMap = ExpiringMap.builder()
-	// 			.expiration(60, TimeUnit.SECONDS)
-	// 			.expirationPolicy(ExpirationPolicy.CREATED)
-	// 			.variableExpiration()
-	// 			.build();
-
-	// 	currentMap = ExpiringMap.builder()
-	// 			.expiration(15, TimeUnit.SECONDS)
-	// 			.expirationPolicy(ExpirationPolicy.CREATED)
-	// 			.variableExpiration()
-	// 			.build();
-
-	// 	try {
-	// 		Configuration conf = new Configuration();
-	// 		String dwServiceUrl = conf.get("com.mctech.impala.dim-service", DEFAULT_DIM_SERVICE_URL);
-	// 		BASE_URI = new URI(dwServiceUrl);
-	// 	} catch (Throwable t) {
-	// 		throw new RuntimeException(t.getMessage(), t);
-	// 	}
-	// }
 }
 
 func newDBSelector(resolveResult *mctech.ResolveResult) mctech.DBSelector {
