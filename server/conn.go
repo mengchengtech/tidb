@@ -1817,6 +1817,19 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	// add by zhangbing
 	resolver := prapared.NewStatementResolver()
 	sql, err = resolver.PrepareSql(cc.ctx.Session, sql)
+
+	if err != nil {
+		return err
+	}
+
+	session := cc.ctx.Session
+	vars := session.GetSessionVars()
+	currDB := vars.CurrentDB
+	currDB, err = resolver.Context().ToPhysicalDbName(currDB)
+	if err != nil {
+		return err
+	}
+	vars.CurrentDB = currDB
 	// add end
 
 	var stmts []ast.StmtNode
@@ -1831,7 +1844,6 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
-	session := cc.ctx.Session
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
 
 	for _, stmt := range stmts {
