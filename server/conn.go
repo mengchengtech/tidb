@@ -1813,10 +1813,12 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	sessVars := cc.ctx.GetSessionVars()
 	sc := sessVars.StmtCtx
 	prevWarns := sc.GetWarnings()
+
 	// add by zhangbing
 	resolver := prapared.NewStatementResolver()
 	sql, err = resolver.PrepareSql(cc.ctx.Session, sql)
 	// add end
+
 	var stmts []ast.StmtNode
 	cc.ctx.GetSessionVars().SetAlloc(cc.chunkAlloc)
 	if stmts, err = cc.ctx.Parse(ctx, sql); err != nil {
