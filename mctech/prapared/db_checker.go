@@ -41,13 +41,13 @@ type DatabaseGrouper struct {
 
 func NewDatabaseGrouper(groups []string) *DatabaseGrouper {
 	return &DatabaseGrouper{
-		groups: append(make([]string, len(groups)), groups...),
+		groups: append(make([]string, 0, len(groups)), groups...),
 	}
 }
 
 func (g *DatabaseGrouper) GroupBy(context mctech.MCTechContext, dbNames []string) []DbGroup {
 	// 合并前数据库只有一个
-	results := make([]DbGroup, 10)
+	results := make([]DbGroup, 0, 10)
 	used := map[string]bool{}
 
 	// 先处理在分组中的数据库
@@ -57,7 +57,7 @@ func (g *DatabaseGrouper) GroupBy(context mctech.MCTechContext, dbNames []string
 			if strings.Contains(gp, dbName) {
 				// 包含在当前分组中
 				if lst == nil {
-					lst = make([]string, 10)
+					lst = make([]string, 0, 10)
 				}
 				used[dbName] = true
 				lst = append(lst, dbName)
@@ -190,7 +190,7 @@ func (c *MutexDatabaseChecker) Check(context mctech.MCTechContext, dbs []string)
 		return nil
 	}
 
-	logicNames := make([]string, len(dbs))
+	logicNames := make([]string, 0, len(dbs))
 	for _, dbName := range dbs {
 		logicName := context.ToLogicDbName(dbName)
 		matched, err := c.dbPredicate(logicName)

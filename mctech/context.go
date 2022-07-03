@@ -97,7 +97,7 @@ func NewResolveResult(tenant string, params map[string]any) (*ResolveResult, err
 }
 
 func (r *ResolveResult) String() string {
-	lst := make([]string, len(r.params))
+	lst := make([]string, 0, len(r.params))
 	for k, v := range r.params {
 		lst = append(lst, fmt.Sprintf("{%s,%s}", k, v))
 	}
