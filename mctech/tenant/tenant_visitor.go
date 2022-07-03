@@ -67,43 +67,59 @@ const DB_ASSET_PREFIX = "asset_"
 const DB_GLOBAL_PREFIX = "global_"
 
 func (v *DatabaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
+	var err error
 	switch node := n.(type) {
 	case *ast.ColumnNameExpr:
-		v.enterColumnNameExpr(node)
+		err = v.enterColumnNameExpr(node)
+	}
+	if err != nil {
+		panic(err)
 	}
 	return n, false
 }
 
 func (v *DatabaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
+	var err error
 	switch node := n.(type) {
 	case *ast.TableName:
-		v.leaveTableName(node)
+		err = v.leaveTableName(node)
+	}
+	if err != nil {
+		panic(err)
 	}
 	return n, true
 }
 
-func (v *DatabaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) {
+func (v *DatabaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) error {
 	dbName := node.Name.Schema.L
 	if dbName == "" {
-		return
+		return nil
 	}
 
 	// database.table.column
-	physicalDbName := v.context.ToPhysicalDbName(dbName)
-	if physicalDbName != dbName {
-		node.Name.Schema = model.NewCIStr(physicalDbName)
+	physicalDbName, err := v.context.ToPhysicalDbName(dbName)
+	if err == nil {
+		if physicalDbName != dbName {
+			node.Name.Schema = model.NewCIStr(physicalDbName)
+		}
 	}
+	return err
 }
 
-func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) {
+func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) error {
 	dbName := node.Schema.L
-	if dbName != "" {
-		physicalDbName := v.context.ToPhysicalDbName(dbName)
+	if dbName == "" {
+		return nil
+	}
+
+	physicalDbName, err := v.context.ToPhysicalDbName(dbName)
+	if err == nil {
 		if physicalDbName != dbName {
 			node.Schema = model.NewCIStr(physicalDbName)
 		}
+		v.dbNames[node.Schema.L] = true
 	}
-	v.dbNames[node.Schema.L] = true
+	return err
 }
 
 type TenantVisitor struct {
