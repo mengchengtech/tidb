@@ -15,8 +15,8 @@ var rolePattern = regexp.MustCompile(`(?i)^([^_]+)_internal_(read|write)$`)
 func currentRoles(ctx sessionctx.Context) []string {
 	vars := ctx.GetSessionVars()
 	roles := make([]string, len(vars.ActiveRoles))
-	for _, r := range vars.ActiveRoles {
-		roles = append(roles, r.Username)
+	for i, r := range vars.ActiveRoles {
+		roles[i] = r.Username
 	}
 	return roles
 }
