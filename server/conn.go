@@ -1824,8 +1824,11 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	sc := cc.ctx.GetSessionVars().StmtCtx
 	prevWarns := sc.GetWarnings()
 
+	// add by zhangbing
 	resolver := prapared.NewStatementResolver()
 	sql, err = resolver.PrepareSql(cc.ctx.Session, sql)
+	// add end
+	
 	stmts, err := cc.ctx.Parse(ctx, sql)
 	if err != nil {
 		return err

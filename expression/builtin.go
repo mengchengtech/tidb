@@ -842,11 +842,13 @@ var funcs = map[string]functionClass{
 	ast.SetVal:  &setValFunctionClass{baseFunctionClass{ast.SetVal, 2, 2}},
 
 
-	// MCTech function.
+	// add by zhangbing
+	// mctech function.
 	ast.MCTechSequence: &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}},
 	ast.MCTechVersionJustPass: &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}},
 	ast.MCTechDecrypt: &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}},
 	ast.MCTechEncrypt: &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}},
+	// add end
 }
 
 // IsFunctionSupported check if given function name is a builtin sql function.
