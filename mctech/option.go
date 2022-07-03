@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
@@ -29,9 +30,16 @@ type MCTechOption struct {
 	DbChecker_AcrossDbGroups   []string
 }
 
-var mctechOpts = initMCTechOption()
+var mctechOpts *MCTechOption
 
 func GetOption() *MCTechOption {
+	// 只能懒加载，需要在启动时先加载 config模块
+	once := &sync.Once{}
+	once.Do(func() {
+		if mctechOpts == nil {
+			mctechOpts = initMCTechOption()
+		}
+	})
 	return mctechOpts
 }
 
@@ -74,5 +82,7 @@ func formatUrl(str string) string {
 		u.Path += "/"
 	}
 	apiPrefix := u.String()
+
+	log.Info("api prefix: " + apiPrefix)
 	return apiPrefix
 }

@@ -140,7 +140,7 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, errors.Wrap(err, "get dw index errors")
+		return -1, errors.Wrap(err, "get dw index errors：" + apiPrefix)
 	}
 	return js["current"], nil
 }
