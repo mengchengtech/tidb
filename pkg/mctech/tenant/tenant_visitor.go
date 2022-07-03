@@ -108,19 +108,18 @@ func (v *DatabaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) erro
 
 func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) error {
 	dbName := node.Schema.L
-	if dbName == "" {
-		v.dbNames[dbName] = true
-		return nil
-	}
+	if dbName != "" {
+		physicalDbName, err := v.context.ToPhysicalDbName(dbName)
+		if err != nil {
+			return err
+		}
 
-	physicalDbName, err := v.context.ToPhysicalDbName(dbName)
-	if err == nil {
 		if physicalDbName != dbName {
 			node.Schema = model.NewCIStr(physicalDbName)
 		}
-		v.dbNames[dbName] = true
 	}
-	return err
+	v.dbNames[node.Schema.L] = true
+	return nil
 }
 
 type TenantVisitor struct {
@@ -212,9 +211,9 @@ func (v *TenantVisitor) enterWithScope(stmt ast.Node) {
 
 func (v *TenantVisitor) setWithClause(withClause *ast.WithClause) {
 	cteNames := make([]string, len(withClause.CTEs))
-	for _, cte := range withClause.CTEs {
+	for i, cte := range withClause.CTEs {
 		rawName := cte.Name.L
-		cteNames = append(cteNames, rawName)
+		cteNames[i] = rawName
 	}
 
 	item := v.withClauseScope.Peek()
@@ -457,8 +456,8 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 			t := v.tenant.GetType()
 			charset := t.GetCharset()
 			collate := t.GetCollate()
-			for _, str := range rt.Excludes() {
-				exprList = append(exprList, ast.NewValueExpr(str, charset, collate))
+			for i, str := range rt.Excludes() {
+				exprList[i] = ast.NewValueExpr(str, charset, collate)
 			}
 			condition = &ast.PatternInExpr{
 				Expr: tenantField,
