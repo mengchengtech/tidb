@@ -60,8 +60,8 @@ func newTestMCTechContext(currentDb string) (mctech.MCTechContext, error) {
 			result, &testDBSelector{dbIndex: 1}),
 	}
 
-	context.currentDb = context.ToPhysicalDbName(currentDb)
-	return context, nil
+	context.currentDb, err = context.ToPhysicalDbName(currentDb)
+	return context, err
 }
 
 func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {

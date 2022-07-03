@@ -3,10 +3,10 @@ package prapared
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/pingcap/tidb/mctech"
+	"golang.org/x/exp/slices"
 )
 
 type DbGroup interface {
@@ -48,7 +48,7 @@ func NewDatabaseGrouper(groups []string) *DatabaseGrouper {
 func (g *DatabaseGrouper) GroupBy(context mctech.MCTechContext, dbNames []string) []DbGroup {
 	// 合并前数据库只有一个
 	results := make([]DbGroup, 10)
-	used := map[string]any{}
+	used := map[string]bool{}
 
 	// 先处理在分组中的数据库
 	for _, gp := range g.groups {
@@ -66,8 +66,8 @@ func (g *DatabaseGrouper) GroupBy(context mctech.MCTechContext, dbNames []string
 
 		if lst != nil {
 			if len(lst) > 1 {
-				sort.Slice(lst, func(i, j int) bool {
-					return strings.ToLower(lst[i]) < strings.ToLower(lst[j])
+				slices.SortFunc(lst, func(a, b string) bool {
+					return strings.ToLower(a) < strings.ToLower(b)
 				})
 				results = append(results, &MultiDbGroup{dbNames: lst})
 			} else {

@@ -4,13 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"golang.org/x/exp/slices"
 )
 
 type MCTechContext interface {
 	CurrentDB() string // 当前数据库
 	Reset()
-	ToPhysicalDbName(db string) string // 转换为物理库名称
-	ToLogicDbName(db string) string    // 转换为数据库的逻辑名称
+	ToPhysicalDbName(db string) (string, error) // 转换为物理库名称
+	ToLogicDbName(db string) string             // 转换为数据库的逻辑名称
 	ResolveResult() *ResolveResult
 	SetResolveResult(result *ResolveResult)
 	IsGlobalDb(dbName string) bool
@@ -97,8 +99,9 @@ func NewResolveResult(tenant string, params map[string]any) (*ResolveResult, err
 func (r *ResolveResult) String() string {
 	lst := make([]string, len(r.params))
 	for k, v := range r.params {
-		lst = append(lst, fmt.Sprintf("[%s,%s]", k, v))
+		lst = append(lst, fmt.Sprintf("{%s,%s}", k, v))
 	}
+	slices.Sort(lst)
 	return fmt.Sprintf("{%s,%s,%t,%s,%s}",
 		r.dbPrefix, r.tenant, r.tenantFromRole, lst, r.globalInfo)
 }
@@ -182,15 +185,15 @@ func (d *baseMCTechContext) SetResolveResult(result *ResolveResult) {
 	d.resolveResult = result
 }
 
-func (d *baseMCTechContext) ToPhysicalDbName(db string) string {
+func (d *baseMCTechContext) ToPhysicalDbName(db string) (string, error) {
 	if db == "" {
-		return db
+		return db, nil
 	}
 	// 处理dw库的索引
 	if d.IsGlobalDb(db) && strings.HasSuffix(db, "_dw") {
 		dbIndex, err := d.selector.GetDbIndex()
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 		db = fmt.Sprintf("%s_%d", db, dbIndex)
 	}
@@ -198,21 +201,21 @@ func (d *baseMCTechContext) ToPhysicalDbName(db string) string {
 	prefixAvaliable := isProductDatabase(db)
 	if !prefixAvaliable {
 		// 数据库不支持添加前缀
-		return db
+		return db, nil
 	}
 
 	// 到此database支持添加数据库前缀
 	result := d.resolveResult
 	if result == nil {
-		return db
+		return db, nil
 	}
 	dbPrefix := result.DbPrefix()
 
 	if dbPrefix == "" {
-		return db
+		return db, nil
 	}
 
-	return dbPrefix + "_" + db
+	return dbPrefix + "_" + db, nil
 }
 
 func (d *baseMCTechContext) ToLogicDbName(db string) string {

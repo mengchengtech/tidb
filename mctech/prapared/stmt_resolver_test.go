@@ -1,9 +1,11 @@
 package prapared
 
 import (
-	"testing"
 	"context"
+	"testing"
+
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/auth"
 	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/pingcap/tidb/session"
@@ -96,7 +98,9 @@ func runTestCase(t *testing.T, c *mctechTestCase, session session.Session) error
 		return err
 	}
 	err = resolver.ResolveStmt(stmt, charset, collation)
-	require.NoErrorf(t, err, "source %v", sql)
+	if err != nil {
+		return err
+	}
 	err = resolver.Validate(session)
 	if err != nil {
 		return err
@@ -117,18 +121,32 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/* global:true */ select * from company", "", "用户root所属的角色无法确定租户信息"},
 		{"test", "/* global:true */ select * from company", "{{{,,false,[],{false,[]}}},test}", ""},
 		// tenant hint
-		{"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[ [tenant,gdcd]],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[ {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", "", "存在tenant信息时，global不允许设置为true"},
 
 		// request_id
-		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[  [requestId,abc123456] [tenant,gdcd]],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[  {requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		// background
-		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[  [tenant,ztsj] [background,true]],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[  {background,true} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
 		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[  [dbPrefix,mock]],{false,[]}}},public_data}", ""},
-		// dw
-		{"pd", "/*& global:true */ select * from global_dw.company", "{{{,,false,[],{true,[]}}},public_data}", ""},
+		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[ {dbPrefix,mock}],{false,[]}}},public_data}", ""},
 	}
 
+	doRunTest(t, cases)
+}
+
+func TestStmtResolverDW_WithRoot(t *testing.T) {
+	cases := []*mctechTestCase{
+		// dw
+		{"pd", "/*& global:true */ select * from global_dw.company", "", "get dw index errors"},
+	}
+	doRunTest(t, cases)
+
+	option := mctech.GetOption()
+	option.DbChecker_ApiPrefix = "http://10.12.6.5:31051/"
+	cases = []*mctechTestCase{
+		// dw
+		{"pd", "/*& global:true */ select * from global_dw.company", "{{{,,false,[],{true,[]}}},public_data}", "get dw index errors"},
+	}
 	doRunTest(t, cases)
 }
