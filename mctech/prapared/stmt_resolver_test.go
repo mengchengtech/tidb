@@ -121,15 +121,15 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/* global:true */ select * from company", "", "用户root所属的角色无法确定租户信息"},
 		{"test", "/* global:true */ select * from company", "{{{,,false,[],{false,[]}}},test}", ""},
 		// tenant hint
-		{"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[ {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", "", "存在tenant信息时，global不允许设置为true"},
 
 		// request_id
-		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[  {requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[{requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		// background
-		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[  {background,true} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[{background,true} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
 		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[ {dbPrefix,mock}],{false,[]}}},public_data}", ""},
+		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[{dbPrefix,mock}],{false,[]}}},public_data}", ""},
 	}
 
 	doRunTest(t, cases)
