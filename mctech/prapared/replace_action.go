@@ -30,7 +30,11 @@ func (a *ReplaceAction) Resolve(input string, args string, params map[string]any
 		}
 	} else {
 		name = args
-		value = params[name].(string)
+		var ok bool
+		v, ok := params[name]
+		if ok {
+			value, _ = v.(string)
+		}
 
 		if value == "" {
 			err := fmt.Errorf("执行%s时未找到名称为'%s'的参数的值", ACTION_NAME, name)

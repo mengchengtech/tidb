@@ -42,18 +42,17 @@ const paramRequestIdKey = "requestId"
 // TODO: 暂时留下的占位参数值
 const localCacheKey = "global"
 
+var ticketMap = goCache.New(60*time.Second, 20*time.Second)
+var currentMap = goCache.New(15*time.Second, 10*time.Second)
+
 type dbSelector struct {
 	// private final static URI BASE_URI;
 	resolveResult *mctech.ResolveResult
-	ticketMap     *goCache.Cache
-	currentMap    *goCache.Cache
 }
 
 func newDBSelector(resolveResult *mctech.ResolveResult) mctech.DBSelector {
 	return &dbSelector{
 		resolveResult: resolveResult,
-		ticketMap:     goCache.New(60*time.Second, 20*time.Second),
-		currentMap:    goCache.New(15*time.Second, 10*time.Second),
 	}
 }
 
@@ -72,6 +71,10 @@ func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
 			// 同一个ticket使用相同的后端库
 			dbIndex, err = d.getDbIndexByTicket(env, ticket.(string))
 		}
+	}
+
+	if err != nil {
+		return -1, err
 	}
 
 	if dbIndex < 0 {
@@ -93,7 +96,7 @@ func (d *dbSelector) forceBackground(env string) (mctech.DbIndex, error) {
 
 func (d *dbSelector) getDbIndexByTicket(env string, requestId string) (mctech.DbIndex, error) {
 	// 从缓存中获取，如果不存在就创建一个
-	if value, ok := d.ticketMap.Get(requestId); ok {
+	if value, ok := ticketMap.Get(requestId); ok {
 		return value.(mctech.DbIndex), nil
 	}
 
@@ -101,14 +104,14 @@ func (d *dbSelector) getDbIndexByTicket(env string, requestId string) (mctech.Db
 	if err != nil {
 		return -1, err
 	}
-	d.ticketMap.Set(requestId, value, 0)
+	ticketMap.Set(requestId, value, 0)
 	return value, nil
 }
 
 // 从缓存中取取的当前正在用的库的索引
 func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) {
 	if local {
-		if value, ok := d.currentMap.Get(localCacheKey); ok {
+		if value, ok := currentMap.Get(localCacheKey); ok {
 			return value.(mctech.DbIndex), nil
 		}
 	}
@@ -119,7 +122,7 @@ func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) 
 		return -1, err
 	}
 
-	d.currentMap.Set(localCacheKey, index, 0)
+	currentMap.Set(localCacheKey, index, 0)
 	return index, nil
 }
 
@@ -140,7 +143,7 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, errors.Wrap(err, "get dw index errors：" + apiPrefix)
+		return -1, errors.Wrap(err, "get dw index errors："+apiPrefix)
 	}
 	return js["current"], nil
 }
