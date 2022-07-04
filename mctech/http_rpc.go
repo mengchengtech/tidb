@@ -7,11 +7,29 @@ import (
 	"time"
 )
 
-var apiClient = &http.Client{
-	Transport: &http.Transport{
-		IdleConnTimeout: time.Second,
-		// DisableKeepAlives: true,
-	},
+type RpcClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	apiClient RpcClient
+)
+
+func init() {
+	apiClient = &http.Client{
+		Transport: &http.Transport{
+			IdleConnTimeout: time.Second,
+			// DisableKeepAlives: true,
+		},
+	}
+}
+
+func SetRpcClient(client RpcClient) {
+	apiClient = client
+}
+
+func GetRpcClient() RpcClient {
+	return apiClient
 }
 
 func DoRequest(request *http.Request) ([]byte, error) {
