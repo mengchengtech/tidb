@@ -37,15 +37,17 @@ func findTenantCodeFromRole(ctx sessionctx.Context) (string, error) {
 	}
 
 	user := currentUser(ctx)
-	tenantFromRolesLength := len(tenantFromRoles)
-	var isAdmin = false
-	for _, role := range roleNames {
-		if role == SUPER_ADMIN_ROLE {
-			isAdmin = true
-			break
+	var isAdmin = user == "root"
+	if !isAdmin {
+		for _, role := range roleNames {
+			if role == SUPER_ADMIN_ROLE {
+				isAdmin = true
+				break
+			}
 		}
 	}
 
+	tenantFromRolesLength := len(tenantFromRoles)
 	if !isAdmin && tenantFromRolesLength > 0 && tenantFromRolesLength != len(roleNames) {
 		// 1. 如果发现有一个{tenant}_internal_r/w角色，不能再有其他任何角色，否则报错
 		return "", fmt.Errorf("当前用户%s同时属于多种类型的角色。", user)

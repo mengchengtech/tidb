@@ -9,6 +9,7 @@ import (
 	"github.com/pingcap/tidb/mctech/tenant"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
+	"golang.org/x/exp/slices"
 )
 
 var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*/`)
@@ -92,16 +93,10 @@ func (r *mctechStatementResolver) rewriteStmt(
 		return dbs, skipped, err
 	}
 
-	// 此处不能从tableCache.dbs里获取db的列表，应该从tableCache.tables获取
-	// 因为dbs中包含了currentDb信息，而tables里只包含了从sql解析中获取到的表以及对应的数据库信息
-	// 当currentDb与sql中用到的所有表所属的库都不一样时，使用dbs就会出现判断错误
-	hasGlobalDb := false
-	for _, db := range dbs {
-		if r.context.IsGlobalDb(db) {
-			hasGlobalDb = true
-			break
-		}
-	}
+	// 判断sql中是否使用了是否包含'global_xxx'这样的数据库
+	hasGlobalDb := slices.IndexFunc(dbs, func(db string) bool {
+		return r.context.IsGlobalDb(db)
+	}) >= 0
 
 	if !hasGlobalDb {
 		return nil, false, nil
@@ -110,12 +105,8 @@ func (r *mctechStatementResolver) rewriteStmt(
 	r.context.SetSqlWithGlobalPrefixDB(true)
 	result := r.context.ResolveResult()
 	if result.Global() {
-		// 启用了global且没有需要排除的租户
-		if len(result.Excludes()) == 0 {
-			if !hasGlobalDb {
-				return nil, false, nil
-			}
-		}
+		// 启用global时，允许跨任意数据库查询
+		return nil, false, nil
 	} else {
 		// 未启用global,租户code为空，留到后续Validate步骤统一校验
 		if result.Tenant() == "" {
