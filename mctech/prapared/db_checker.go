@@ -152,28 +152,19 @@ func NewMutexDatabaseChecker() *MutexDatabaseChecker {
 }
 
 func NewMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDbs []string) *MutexDatabaseChecker {
-	mutexFilters := []*StringFilter{
-		NewStringFilter("starts-with:global_"),
-	}
-
-	if len(mutexAcrossDbs) > 0 {
-		for _, t := range mutexAcrossDbs {
-			mutexFilters = append(mutexFilters, NewStringFilter(t))
-		}
+	mutexAcrossDbs = append(slices.Clone(mutexAcrossDbs),
+		"starts-with:global_")
+	mutexFilters := make([]*StringFilter, len(mutexAcrossDbs))
+	for i, t := range mutexAcrossDbs {
+		mutexFilters[i] = NewStringFilter(t)
 	}
 
 	// 在mutex filters过滤结果中中可与其它数据库共同查询的表
-	excludeFilters := []*StringFilter{
-		NewStringFilter("global_platform"),
-		NewStringFilter("global_ipm"),
-		NewStringFilter("starts-with:global_dw_"),
-		NewStringFilter("global_dwb"),
-	}
-
-	if len(excludeAcrossDbs) > 0 {
-		for _, t := range excludeAcrossDbs {
-			excludeFilters = append(excludeFilters, NewStringFilter(t))
-		}
+	excludeAcrossDbs = append(slices.Clone(excludeAcrossDbs),
+		"global_platform", "global_ipm", "starts-with:global_dw_", "global_dwb")
+	excludeFilters := make([]*StringFilter, len(excludeAcrossDbs))
+	for i, t := range excludeAcrossDbs {
+		excludeFilters[i] = NewStringFilter(t)
 	}
 
 	// 数据库分组，组内的数据库可以互机访问
