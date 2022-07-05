@@ -26,8 +26,11 @@ func (m *mctechStmtResolverTestCase) Source() any {
 func TestStmtResolverWithRoot(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*mctechStmtResolverTestCase{
+		{"test", "describe company", "{{{,,false,[],{false,[]}}},test}", ""},
 		{"test", "select * from company /*& global:true */", "{{{,,false,[],{true,[]}}},test}", ""},
 		//
+		{"pf", "/*& global:true */ select * from company", "{{{,,false,[],{true,[]}}},global_platform}", ""},
+		{"test", "/*& global:true */ select * from company", "{{{,,false,[],{true,[]}}},test}", ""},
 		{"pf", "/*& global:!ys2 */ select * from company", "{{{,,false,[],{true,[ys2]}}},global_platform}", ""},
 		{"pf", "select * from company /*& global:!ys2,!ys3 */", "{{{,,false,[],{true,[ys2 ys3]}}},global_platform}", ""},
 		// hint 格式不匹配
@@ -79,14 +82,15 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 	if err != nil {
 		return err
 	}
-	err = resolver.ResolveStmt(stmt, charset, collation)
+	skipped, err := resolver.ResolveStmt(stmt, charset, collation)
 	if err != nil {
 		return err
 	}
-
-	err = resolver.Validate(session)
-	if err != nil {
-		return err
+	if !skipped {
+		err = resolver.Validate(session)
+		if err != nil {
+			return err
+		}
 	}
 	info := resolver.Context().GetInfo()
 	require.Equal(t, c.expect, info, c.Source())
