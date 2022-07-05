@@ -923,10 +923,14 @@ var defaultConf = Config{
 			ApiPrefix: "http://node-infra-encryption-service.mc/",
 		},
 		DbChecker: DbChecker{
+			Enabled:          true,
 			ApiPrefix:        "http://node-infra-dim-service.mc/",
 			MutexAcrossDbs:   []string{},
 			ExcludeAcrossDbs: []string{},
 			AcrossDbGroups:   []string{},
+		},
+		Tenant: Tenant{
+			Enabled: true,
 		},
 	},
 }

@@ -24,6 +24,9 @@ type MCTechOption struct {
 	Encryption_AccessId  string
 	Encryption_ApiPrefix string
 
+	Tenant_Enabled bool
+
+	DbChecker_Enabled          bool
 	DbChecker_ApiPrefix        string
 	DbChecker_MutexAcrossDbs   []string
 	DbChecker_ExcludeAcrossDbs []string
@@ -56,6 +59,8 @@ func initMCTechOption() *MCTechOption {
 		Encryption_AccessId:  opts.Encryption.AccessId,
 		Encryption_ApiPrefix: formatUrl(opts.Encryption.ApiPrefix),
 
+		Tenant_Enabled:             opts.Tenant.Enabled,
+		DbChecker_Enabled:          opts.DbChecker.Enabled,
 		DbChecker_ApiPrefix:        formatUrl(opts.DbChecker.ApiPrefix),
 		DbChecker_MutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
 		DbChecker_ExcludeAcrossDbs: opts.DbChecker.ExcludeAcrossDbs,

@@ -4,6 +4,7 @@ type MCTech struct {
 	Sequence   Sequence   `toml:"sequence" json:"sequence"`
 	Encryption Encryption `toml:"encryption" json:"encryption"`
 	DbChecker  DbChecker  `toml:"db-checker" json:"db-checker"`
+	Tenant     Tenant     `toml:"tenant" json:"tenant"`
 }
 
 type Sequence struct {
@@ -15,10 +16,15 @@ type Sequence struct {
 }
 
 type DbChecker struct {
+	Enabled          bool     `toml:"enabled" json:"enabled"`
 	ApiPrefix        string   `toml:"api-prefix" json:"api-prefix"`
 	MutexAcrossDbs   []string `toml:"mutex" json:"mutex"`
 	ExcludeAcrossDbs []string `toml:"exclude" json:"exclude"`
 	AcrossDbGroups   []string `toml:"across" json:"across"`
+}
+
+type Tenant struct {
+	Enabled bool `toml:"enabled" json:"enabled"`
 }
 
 type Encryption struct {
