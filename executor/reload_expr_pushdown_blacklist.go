@@ -330,12 +330,4 @@ var funcName2Alias = map[string]string{
 	"json_depth":                 ast.JSONDepth,
 	"json_keys":                  ast.JSONKeys,
 	"json_length":                ast.JSONLength,
-
-	// add by zhangbing
-	// mctech functions
-	"mctech_sequence":          ast.MCTechSequence,
-	"mctech_version_just_pass": ast.MCTechVersionJustPass,
-	"mctech_decrypt":           ast.MCTechDecrypt,
-	"mctech_encrypt":           ast.MCTechEncrypt,
-	// add end
 }

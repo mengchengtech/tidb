@@ -44,8 +44,8 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		// dbPrefix
 		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[{dbPrefix,mock}],{false,[]}}},public_data}", ""},
 		// replace
-		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", "{{{,gslq,false,[{tenant,gslq}],{false,[]}}},public_data}", ""},// replace
-		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "{{{,gslq,false,[{tenant,gslq}],{false,[]}}},public_data}", ""},// replace
+		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", "{{{,gslq,false,[{tenant,gslq}],{false,[]}}},public_data}", ""},   // replace
+		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "{{{,gslq,false,[{tenant,gslq}],{false,[]}}},public_data}", ""}, // replace
 		{"pd", "/*& $replace:tenant=mctech */ select * from company", "{{{,,false,[],{false,[]}}},public_data}", ""},
 		{"pd", "/*& $replace:tenant */ select * from company", "", "执行replace时未找到名称为'tenant'的参数的值"},
 	}
@@ -54,7 +54,9 @@ func TestStmtResolverWithRoot(t *testing.T) {
 }
 
 func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
-	resolver := NewStatementResolver()
+	resolver := &mctechStatementResolver{
+		checker: NewMutexDatabaseChecker(),
+	}
 	db, ok := dbMap[c.shortDb]
 	if !ok {
 		db = "test"
@@ -81,6 +83,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 	if err != nil {
 		return err
 	}
+
 	err = resolver.Validate(session)
 	if err != nil {
 		return err

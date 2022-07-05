@@ -1825,21 +1825,11 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	prevWarns := sc.GetWarnings()
 
 	// add by zhangbing
-	resolver := prapared.NewStatementResolver()
-	sql, err = resolver.PrepareSql(cc.ctx.Session, sql)
-
-	if err != nil {
-		return err
-	}
-
 	session := cc.ctx.Session
-	vars := session.GetSessionVars()
-	currDB := vars.CurrentDB
-	currDB, err = resolver.Context().ToPhysicalDbName(currDB)
-	if err != nil {
+	handler := prapared.CreateMctechHandler(session, sql)
+	if _, err = handler.PrapareSql(); err != nil {
 		return err
 	}
-	vars.CurrentDB = currDB
 	// add end
 
 	stmts, err := cc.ctx.Parse(ctx, sql)
@@ -1852,24 +1842,8 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
-	charset, collation := session.GetSessionVars().GetCharsetInfo()
-
-	for _, stmt := range stmts {
-		resolver.Context().Reset()
-		err = resolver.ResolveStmt(stmt, charset, collation)
-		if err != nil {
-			return err
-		}
-
-		// 改写session上的数据库
-		// 必须在解析完成后再改写库名称，否则会存在表无法解析的问题
-		// FIXME: 移植后不再需要？
-		// TQueryCtx ctx = localData.getQueryCtx()
-		// ctx.session.database = ThreadLocalDataManager.ToPysicalDbName(ctx.session.database)
-		err = resolver.Validate(session)
-		if err != nil {
-			return err
-		}
+	if err = handler.ResolveAndValidate(stmts); err != nil {
+		return err
 	}
 	// add end
 	warns := sc.GetWarnings()
