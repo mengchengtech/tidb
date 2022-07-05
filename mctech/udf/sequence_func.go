@@ -20,8 +20,6 @@ import (
 /**
  * 序列段实体。
  * 每个段内序号是连续的，由一个起始值一个结束值组成，起始值一定是小于结束值
- *
- * @author zhangbing
  */
 type segment struct {
 	start int64
