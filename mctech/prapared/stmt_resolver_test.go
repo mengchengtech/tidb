@@ -82,8 +82,12 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 	if err != nil {
 		return err
 	}
-	skipped, err := resolver.ResolveStmt(stmt, charset, collation)
+	dbs, skipped, err := resolver.ResolveStmt(stmt, charset, collation)
 	if err != nil {
+		return err
+	}
+
+	if err = resolver.CheckDB(dbs); err != nil {
 		return err
 	}
 	if !skipped {
