@@ -153,7 +153,7 @@ func NewMutexDatabaseChecker() *MutexDatabaseChecker {
 
 func NewMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDbs []string) *MutexDatabaseChecker {
 	mutexAcrossDbs = append(slices.Clone(mutexAcrossDbs),
-		"starts-with:global_")
+		"starts-with:global_", "starts-with:asset_", "starts-with:public_")
 	mutexFilters := make([]*StringFilter, len(mutexAcrossDbs))
 	for i, t := range mutexAcrossDbs {
 		mutexFilters[i] = NewStringFilter(t)
@@ -208,13 +208,13 @@ func (c *MutexDatabaseChecker) Check(context mctech.MCTechContext, dbs []string)
 }
 
 func (c *MutexDatabaseChecker) dbPredicate(dbName string) (bool, error) {
-	for _, f := range c.mutexFilters {
-		matched, err := f.Match(dbName)
+	for _, deny := range c.mutexFilters {
+		matched, err := deny.Match(dbName)
 		if err != nil {
 			return false, err
 		}
 
-		if matched {
+		if !matched {
 			continue
 		}
 
