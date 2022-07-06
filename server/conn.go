@@ -1842,7 +1842,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
-	if err = handler.ResolveAndValidate(stmts); err != nil {
+	if _, err = handler.ResolveAndValidate(stmts); err != nil {
 		return err
 	}
 	// add end

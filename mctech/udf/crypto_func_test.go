@@ -4,37 +4,55 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
 
-var mockClient *AesCryptoClient
-
-func init() {
-	key := "W1gfHNQTARa7Uxt7wua8Aw=="
-	iv := "a9Z5R6YCjYx1QmoG5WF9BQ=="
-	mockClient = NewAesCryptoClient(key, iv)
+type encryptionTestCases struct {
+	encrypt bool
+	input   string
+	expect  string
+	failure string
 }
 
-func TestMCTechEncryptSuccess(t *testing.T) {
-	cipher, err := mockClient.Encrypt("13511868785")
-	require.NoError(t, err)
-	fmt.Println(cipher)
-	require.Equal(t, "{crypto}HMvlbGus4V3geqwFULvOUw==", cipher)
+func TestMCTechCrypto(t *testing.T) {
+	cases := []*encryptionTestCases{
+		{true, "13511868785", "{crypto}HMvlbGus4V3geqwFULvOUw==", ""},
+		{false, "{crypto}HMvlbGus4V3geqwFULvOUw==", "13511868785", ""},
+		{false, "{crypto}YEsSIc6gxBu7NJt8De3fxg=", "", "illegal base64 data at input byte"},
+	}
+
+	doRunCryptoTest(t, cases)
 }
 
-func TestMCTechDecryptSuccess(t *testing.T) {
-	plain, err := mockClient.Decrypt("{crypto}HMvlbGus4V3geqwFULvOUw==")
-	require.NoError(t, err)
-	require.Equal(t, "13511868785", plain)
-}
+func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
+	var rpcClient = mctech.GetRpcClient()
+	mctech.SetRpcClientForTest(&MockClient{})
+	defer mctech.SetRpcClientForTest(rpcClient)
+	GetDoFunc = createGetDoFunc(
+		fmt.Sprintf(`{"key":"%s", "iv":"%s"}`, "W1gfHNQTARa7Uxt7wua8Aw==", "a9Z5R6YCjYx1QmoG5WF9BQ=="),
+	)
 
-func TestMCTechDecryptFailure1(t *testing.T) {
-	plain, err := mockClient.Decrypt("YEsSIc6gxBu7NJt8De3fxg==")
-	require.NoError(t, err)
-	require.Equal(t, "YEsSIc6gxBu7NJt8De3fxg==", plain)
-}
+	client := newAesCryptoClientFromService()
+	for _, c := range cases {
+		var (
+			err  error
+			text string
+		)
+		if c.encrypt {
+			text, err = client.Encrypt(c.input)
+		} else {
+			text, err = client.Decrypt(c.input)
+		}
 
-func TestMCTechDecryptFailure2(t *testing.T) {
-	_, err := mockClient.Decrypt("{crypto}YEsSIc6gxBu7NJt8De3fxg=")
-	require.ErrorContains(t, err, "illegal base64 data at input byte")
+		if err != nil {
+			if c.failure != "" {
+				require.ErrorContains(t, err, c.failure)
+			} else {
+				require.NoError(t, err)
+			}
+		} else {
+			require.Equal(t, c.expect, text)
+		}
+	}
 }

@@ -73,6 +73,7 @@ func TestDatabaseChecker(t *testing.T) {
 		{"gslq", []string{"global_platform", "global_ds", "global_cq3"}, "dbs not allow in the same statement"}, // 基础库，和两个普通库，不允许在一起使用
 		{"gslq", []string{"global_ds", "global_mtlp"}, "dbs not allow in the same statement"},
 		{"gslq", []string{"global_platform", "global_mtlp"}, ""},
+		{"gslq", []string{"global_cq3", "global_sq"}, "dbs not allow in the same statement"},
 		{"gslq", []string{"global_ma", "global_mtlp"}, ""},                    // 陕梦特殊要求，能在一起使用
 		{"gslq", []string{"global_platform", "global_ma", "global_mtlp"}, ""}, // 陕梦特殊要求，能在一起使用
 		{"gslq", []string{"global_platform", "global_mc", "global_ma", "global_mtlp"}, "dbs not allow in the same statement"},
@@ -85,11 +86,7 @@ func TestDatabaseChecker(t *testing.T) {
 }
 
 func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
-	checker := NewMutexDatabaseCheckerWithParams(
-		[]string{"starts-with:global_", "starts-with:asset_", "public_data"},
-		nil,
-		nil,
-	)
+	checker := NewMutexDatabaseCheckerWithParams(nil, nil, nil)
 
 	context, _ := newTestMCTechContext(c.tenant)
 	return checker.Check(context, c.dbs)
