@@ -1,25 +1,11 @@
 package prapared
 
 import (
-	"bytes"
-	"io/ioutil"
-	"net/http"
 	"testing"
 
 	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
-
-type GetDoFuncType func(req *http.Request) (*http.Response, error)
-
-var GetDoFunc GetDoFuncType
-
-type MockClient struct {
-}
-
-func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
-	return GetDoFunc(req)
-}
 
 type testContextCase struct {
 	tenant   string
@@ -53,8 +39,8 @@ func TestDbSelector_GetDbIndex(t *testing.T) {
 
 func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	var rpcClient = mctech.GetRpcClient()
-	mctech.SetRpcClient(&MockClient{})
-	defer mctech.SetRpcClient(rpcClient)
+	mctech.SetRpcClientForTest(&MockClient{})
+	defer mctech.SetRpcClientForTest(rpcClient)
 	GetDoFunc = createGetDoFunc(c.response)
 
 	result, err := mctech.NewResolveResult("gslq", c.params)
@@ -68,14 +54,4 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	}
 	require.Equal(t, c.expect, index, c.Source())
 	return nil
-}
-
-func createGetDoFunc(text string) GetDoFuncType {
-	return func(req *http.Request) (*http.Response, error) {
-		res := &http.Response{
-			StatusCode: 200,
-			Body:       ioutil.NopCloser(bytes.NewReader([]byte(text))),
-		}
-		return res, nil
-	}
 }

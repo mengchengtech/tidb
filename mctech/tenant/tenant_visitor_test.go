@@ -70,7 +70,7 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	return context, err
 }
 
-func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
+func doNodeVisitorRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
 	p := parser.New()
 	p.EnableWindowFunc(true)
 	for _, tbl := range cases {
@@ -230,6 +230,6 @@ var cases = [][]mctechTestCase{
 
 func TestTenantVisitor(t *testing.T) {
 	for _, lst := range cases {
-		doRunTest(t, lst, true)
+		doNodeVisitorRunTest(t, lst, true)
 	}
 }
