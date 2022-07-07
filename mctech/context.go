@@ -12,6 +12,7 @@ import (
 type Context interface {
 	CurrentDB() string // 当前数据库
 	Reset()
+	GetDbIndex() (DbIndex, error)
 	ToPhysicalDbName(db string) (string, error) // 转换为物理库名称
 	ToLogicDbName(db string) string             // 转换为数据库的逻辑名称
 	PrapareResult() *PrapareResult
@@ -143,7 +144,7 @@ func (r *PrapareResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
-type baseMCTechContext struct {
+type mctechContext struct {
 	selector              DBSelector
 	prapareResult         *PrapareResult
 	sqlRewrited           bool
@@ -154,52 +155,52 @@ const dbPublicPrefix = "public_"
 const dbAssetPrefix = "asset_"
 const dbGlobalPrefix = "global_"
 
-// NewBaseContext create baseMCTechContext (Context)
-func NewBaseContext(resolveResult *PrapareResult, dbSelector DBSelector) Context {
-	return &baseMCTechContext{
-		prapareResult: resolveResult,
+// NewBaseContext create mctechContext (Context)
+func NewBaseContext(prapareResult *PrapareResult, dbSelector DBSelector) Context {
+	return &mctechContext{
+		prapareResult: prapareResult,
 		selector:      dbSelector,
 	}
 }
 
-func (d *baseMCTechContext) GetInfo() string {
+func (d *mctechContext) GetInfo() string {
 	return fmt.Sprintf("{%s}", d.prapareResult)
 }
 
-func (d *baseMCTechContext) CurrentDB() string {
+func (d *mctechContext) CurrentDB() string {
 	panic(errors.New("not implemented"))
 }
 
-func (d *baseMCTechContext) Reset() {
+func (d *mctechContext) Reset() {
 	d.sqlRewrited = false
 	d.sqlWithGlobalPrefixDB = false
 }
 
-func (d *baseMCTechContext) SQLRewrited() bool {
+func (d *mctechContext) SQLRewrited() bool {
 	return d.sqlRewrited
 }
 
-func (d *baseMCTechContext) SetSQLRewrited(sqlRewrited bool) {
+func (d *mctechContext) SetSQLRewrited(sqlRewrited bool) {
 	d.sqlRewrited = sqlRewrited
 }
 
-func (d *baseMCTechContext) SQLWithGlobalPrefixDB() bool {
+func (d *mctechContext) SQLWithGlobalPrefixDB() bool {
 	return d.sqlWithGlobalPrefixDB
 }
 
-func (d *baseMCTechContext) SetSQLWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool) {
+func (d *mctechContext) SetSQLWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool) {
 	d.sqlWithGlobalPrefixDB = sqlWithGlobalPrefixDB
 }
 
-func (d *baseMCTechContext) PrapareResult() *PrapareResult {
+func (d *mctechContext) PrapareResult() *PrapareResult {
 	return d.prapareResult
 }
 
-func (d *baseMCTechContext) SetResolveResult(result *PrapareResult) {
+func (d *mctechContext) SetResolveResult(result *PrapareResult) {
 	d.prapareResult = result
 }
 
-func (d *baseMCTechContext) ToPhysicalDbName(db string) (string, error) {
+func (d *mctechContext) ToPhysicalDbName(db string) (string, error) {
 	if db == "" {
 		return db, nil
 	}
@@ -232,7 +233,7 @@ func (d *baseMCTechContext) ToPhysicalDbName(db string) (string, error) {
 	return dbPrefix + "_" + db, nil
 }
 
-func (d *baseMCTechContext) ToLogicDbName(db string) string {
+func (d *mctechContext) ToLogicDbName(db string) string {
 	if db == "" {
 		return db
 	}
@@ -254,7 +255,7 @@ func (d *baseMCTechContext) ToLogicDbName(db string) string {
 	return db
 }
 
-func (d *baseMCTechContext) IsGlobalDb(db string) bool {
+func (d *mctechContext) IsGlobalDb(db string) bool {
 	result := d.PrapareResult()
 	if strings.HasPrefix(db, dbGlobalPrefix) {
 		return true
@@ -265,6 +266,10 @@ func (d *baseMCTechContext) IsGlobalDb(db string) bool {
 		return strings.HasPrefix(db, dbPrefix+"_"+dbGlobalPrefix)
 	}
 	return false
+}
+
+func (d *mctechContext) GetDbIndex() (DbIndex, error) {
+	return d.selector.GetDbIndex()
 }
 
 /**
