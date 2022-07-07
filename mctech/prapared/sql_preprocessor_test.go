@@ -47,7 +47,7 @@ func TestProcessorWithRoot(t *testing.T) {
 		{"select * from custom.company", map[string]string{"nop": ""}, nil, "", "", "不支持的action操作"},
 		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant=gslq"}, nil, "{,,false,[],{false,[]}}", "select * from gslq_custom.company", ""},
 		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant"}, map[string]any{"tenant": "gdcd"}, "{,gdcd,false,[{tenant,gdcd}],{false,[]}}", "select * from gdcd_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant"}, nil, "", "", "执行replace时未找到名称为'tenant'的参数的值"},
+		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant"}, nil, "", "", "执行[replace]时未找到名称为'tenant'的参数的值"},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "root")
@@ -93,17 +93,17 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 }
 
 func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session session.Session) error {
-	processor := NewSqlPreprocessor(c.sql)
+	processor := newSQLPreprocessor(c.sql)
 	result, err := processor.Prepare(session, c.actions, c.params)
 	if err != nil {
 		return err
 	}
 
 	require.Equal(t, c.resultExpect, result.String(), c.Source())
-	outSql := processor.preparedSql
-	require.NotContains(t, outSql, "{{tenant}}", c.Source())
-	if outSql != c.sql {
-		require.Equal(t, c.sqlExpect, outSql, c.Source())
+	outSQL := processor.preparedSQL
+	require.NotContains(t, outSQL, "{{tenant}}", c.Source())
+	if outSQL != c.sql {
+		require.Equal(t, c.sqlExpect, outSQL, c.Source())
 	}
 	return nil
 }
