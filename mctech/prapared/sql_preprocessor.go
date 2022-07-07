@@ -8,8 +8,6 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 )
 
-const SUPER_ADMIN_ROLE = "root"
-
 var rolePattern = regexp.MustCompile(`(?i)^([^_]+)_internal_(read|write)$`)
 
 func currentRoles(ctx sessionctx.Context) []string {
@@ -38,14 +36,14 @@ func findTenantCodeFromRole(ctx sessionctx.Context) (string, error) {
 
 	user := currentUser(ctx)
 	var isAdmin = user == "root"
-	if !isAdmin {
-		for _, role := range roleNames {
-			if role == SUPER_ADMIN_ROLE {
-				isAdmin = true
-				break
-			}
-		}
-	}
+	// if !isAdmin {
+	// 	for _, role := range roleNames {
+	// 		if role == "root" {
+	// 			isAdmin = true
+	// 			break
+	// 		}
+	// 	}
+	// }
 
 	tenantFromRolesLength := len(tenantFromRoles)
 	if !isAdmin && tenantFromRolesLength > 0 && tenantFromRolesLength != len(roleNames) {
@@ -75,26 +73,26 @@ func findTenantCodeFromRole(ctx sessionctx.Context) (string, error) {
 	return "", nil
 }
 
-var valueFormatters = map[string]ValueFormatter{
-	mctech.PARAM_GLOBAL: NewGlobalValueFormatter(),
+var valueFormatters = map[string]valueFormatter{
+	mctech.ParamGlobal: newGlobalValueFormatter(),
 }
 
-var resolveActions = map[string]Action{
-	"replace": &ReplaceAction{},
+var resolveActions = map[string]action{
+	"replace": &replaceAction{},
 }
 
-type SqlPreprocessor struct {
-	preparedSql string
+type sqlPreprocessor struct {
+	preparedSQL string
 }
 
-func NewSqlPreprocessor(stmt string) *SqlPreprocessor {
-	return &SqlPreprocessor{
-		preparedSql: stmt,
+func newSQLPreprocessor(stmt string) *sqlPreprocessor {
+	return &sqlPreprocessor{
+		preparedSQL: stmt,
 	}
 }
 
-func (p *SqlPreprocessor) Prepare(ctx sessionctx.Context,
-	actions map[string]string, params map[string]any) (*mctech.ResolveResult, error) {
+func (p *sqlPreprocessor) Prepare(ctx sessionctx.Context,
+	actions map[string]string, params map[string]any) (*mctech.PrapareResult, error) {
 	if len(params) > 0 {
 		for name, formatter := range valueFormatters {
 			value := params[name]
@@ -119,11 +117,11 @@ func (p *SqlPreprocessor) Prepare(ctx sessionctx.Context,
 				return nil, fmt.Errorf("不支持的action操作: %s", actionName)
 			}
 
-			sql, err := action.Resolve(p.preparedSql, args, params)
+			sql, err := action.Resolve(p.preparedSQL, args, params)
 			if err != nil {
 				return nil, err
 			}
-			p.preparedSql = sql
+			p.preparedSQL = sql
 		}
 	}
 
@@ -131,5 +129,5 @@ func (p *SqlPreprocessor) Prepare(ctx sessionctx.Context,
 	if err != nil {
 		return nil, err
 	}
-	return mctech.NewResolveResult(tenant, params)
+	return mctech.NewPrapareResult(tenant, params)
 }

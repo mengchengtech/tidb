@@ -44,8 +44,8 @@ func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []strin
 	return session
 }
 
-type RunTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, session session.Session) error
-type RunTestCaseType[T mctechTestCase] func(t *testing.T, c T) error
+type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, session session.Session) error
+type runTestCaseType[T mctechTestCase] func(t *testing.T, c T) error
 
 var dbMap = map[string]string{
 	"pf": "global_platform",
@@ -53,7 +53,7 @@ var dbMap = map[string]string{
 	"ac": "asset_component",
 }
 
-func doRunTest[T mctechTestCase](t *testing.T, runTestCase RunTestCaseType[T], cases []T) {
+func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], cases []T) {
 	for _, c := range cases {
 		err := runTestCase(t, c)
 		failure := c.Failure()
@@ -69,7 +69,7 @@ func doRunTest[T mctechTestCase](t *testing.T, runTestCase RunTestCaseType[T], c
 	}
 }
 
-func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase RunTestCaseWithSessionType[T], cases []T, user string, roles ...string) {
+func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T, user string, roles ...string) {
 	store, clean := testkit.CreateMockStore(t)
 	defer clean()
 	tk := initMock(t, store)
@@ -89,18 +89,18 @@ func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase RunTestCas
 	}
 }
 
-type GetDoFuncType func(req *http.Request) (*http.Response, error)
+type getDoFuncType func(req *http.Request) (*http.Response, error)
 
-var GetDoFunc GetDoFuncType
+var getDoFunc getDoFuncType
 
-type MockClient struct {
+type mockClient struct {
 }
 
-func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
-	return GetDoFunc(req)
+func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
+	return getDoFunc(req)
 }
 
-func createGetDoFunc(text string) GetDoFuncType {
+func createGetDoFunc(text string) getDoFuncType {
 	return func(req *http.Request) (*http.Response, error) {
 		res := &http.Response{
 			StatusCode: 200,
