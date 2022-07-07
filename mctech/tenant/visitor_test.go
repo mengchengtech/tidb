@@ -26,12 +26,12 @@ type mctechTestCase struct {
 }
 
 type testMCTechContext struct {
-	mctech.MCTechContext
+	mctech.Context
 	currentDb string
 }
 
 func (d *testMCTechContext) GetInfo() string {
-	info := d.MCTechContext.GetInfo()
+	info := d.Context.GetInfo()
 	return fmt.Sprintf("{%s,%s}", info, d.CurrentDB())
 }
 
@@ -47,12 +47,12 @@ func (s *testDBSelector) GetDbIndex() (mctech.DbIndex, error) {
 	return s.dbIndex, nil
 }
 
-func newTestMCTechContext(currentDb string, global bool, excludes []string) (mctech.MCTechContext, error) {
+func newTestMCTechContext(currentDb string, global bool, excludes []string) (mctech.Context, error) {
 	var tenant string
 	if !global {
 		tenant = "gslq4dev"
 	}
-	result, err := mctech.NewResolveResult(tenant, map[string]any{
+	result, err := mctech.NewPrapareResult(tenant, map[string]any{
 		"dbPrefix": "mock",
 		"global":   &mctech.GlobalValueInfo{Global: global, Excludes: excludes},
 	})
@@ -62,7 +62,7 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	}
 
 	context := &testMCTechContext{
-		MCTechContext: mctech.NewBaseMCTechContext(
+		Context: mctech.NewBaseContext(
 			result, &testDBSelector{dbIndex: 1}),
 	}
 
@@ -85,7 +85,7 @@ func doNodeVisitorRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc
 			sb.Reset()
 			context, err := newTestMCTechContext(dbMap[tbl.shortDb], tbl.global, tbl.excludes)
 			require.NoError(t, err, comment)
-			visitor := NewTenantVisitor(context, "", "")
+			visitor := newVisitor(context, "", "")
 			stmt.Accept(visitor)
 			err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
 			require.NoError(t, err, comment)
@@ -228,7 +228,7 @@ var cases = [][]mctechTestCase{
 	nopCases,
 }
 
-func TestTenantVisitor(t *testing.T) {
+func TestMCTechVisitor(t *testing.T) {
 	for _, lst := range cases {
 		doNodeVisitorRunTest(t, lst, true)
 	}

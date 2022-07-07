@@ -50,7 +50,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", "{{{,gslq,false,[{tenant,gslq}],{false,[]}}},public_data}", ""},   // replace
 		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "{{{,gslq,false,[{tenant,gslq}],{false,[]}}},public_data}", ""}, // replace
 		{"pd", "/*& $replace:tenant=mctech */ select * from company", "{{{,,false,[],{false,[]}}},public_data}", ""},
-		{"pd", "/*& $replace:tenant */ select * from company", "", "执行replace时未找到名称为'tenant'的参数的值"},
+		{"pd", "/*& $replace:tenant */ select * from company", "", "执行[replace]时未找到名称为'tenant'的参数的值"},
 	}
 
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
@@ -58,7 +58,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 
 func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
 	resolver := &mctechStatementResolver{
-		checker: NewMutexDatabaseChecker(),
+		checker: newMutexDatabaseChecker(),
 	}
 	db, ok := dbMap[c.shortDb]
 	if !ok {
@@ -67,7 +67,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 
 	sql := c.sql
 	session.GetSessionVars().CurrentDB = db
-	sql, err := resolver.PrepareSql(session, sql)
+	sql, err := resolver.PrepareSQL(session, sql)
 	if err != nil {
 		return err
 	}

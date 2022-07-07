@@ -5,16 +5,14 @@ import (
 	"strings"
 )
 
-const ACTION_NAME = "replace"
-
-type Action interface {
+type action interface {
 	Resolve(input string, args string, params map[string]any) (string, error)
 }
 
-type ReplaceAction struct {
+type replaceAction struct {
 }
 
-func (a *ReplaceAction) Resolve(input string, args string, params map[string]any) (string, error) {
+func (a *replaceAction) Resolve(input string, args string, params map[string]any) (string, error) {
 	var (
 		name  string
 		value string
@@ -37,7 +35,7 @@ func (a *ReplaceAction) Resolve(input string, args string, params map[string]any
 		}
 
 		if value == "" {
-			err := fmt.Errorf("执行%s时未找到名称为'%s'的参数的值", ACTION_NAME, name)
+			err := fmt.Errorf("执行[replace]时未找到名称为'%s'的参数的值", name)
 			return "", err
 		}
 	}

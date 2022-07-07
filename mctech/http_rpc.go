@@ -7,12 +7,13 @@ import (
 	"time"
 )
 
-type RpcClient interface {
+// RPCClient rpc invoke client
+type RPCClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
 var (
-	apiClient RpcClient
+	apiClient RPCClient
 )
 
 func init() {
@@ -24,14 +25,17 @@ func init() {
 	}
 }
 
-func SetRpcClientForTest(client RpcClient) {
+// SetRPCClientForTest for test
+func SetRPCClientForTest(client RPCClient) {
 	apiClient = client
 }
 
-func GetRpcClient() RpcClient {
+// GetRPCClient get rpc invoke client
+func GetRPCClient() RPCClient {
 	return apiClient
 }
 
+// DoRequest invoke rpc api
 func DoRequest(request *http.Request) ([]byte, error) {
 	var err error
 	retryCount := 3
