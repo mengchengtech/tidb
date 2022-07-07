@@ -75,11 +75,11 @@ func (r *mctechStatementResolver) CheckDB(dbs []string) error {
 }
 
 func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
-	resolveResult := r.context.PrapareResult()
+	prapareResult := r.context.PrapareResult()
 	// 执行到此处说明当前语句一定是DML或QUERY
 	// sql没有被改写，但是用到了global_xxx数据库，并且没有设置global为true
 	if !r.context.SQLRewrited() && r.context.SQLWithGlobalPrefixDB() &&
-		!resolveResult.Global() {
+		!prapareResult.Global() {
 		// 检查DML语句和QUERY语句改写状态
 		user := currentUser(ctx)
 		return fmt.Errorf("用户%s所属的角色无法确定租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
