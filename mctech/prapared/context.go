@@ -13,17 +13,17 @@ import (
 )
 
 type tidbSessionMCTechContext struct {
-	mctech.MCTechContext
+	mctech.Context
 	session sessionctx.Context
 }
 
-func NewMCTechContext(
+func newContext(
 	ctx sessionctx.Context,
-	resolveResult *mctech.ResolveResult,
-	dbdbSelector mctech.DBSelector) mctech.MCTechContext {
+	resolveResult *mctech.PrapareResult,
+	dbdbSelector mctech.DBSelector) mctech.Context {
 	return &tidbSessionMCTechContext{
-		MCTechContext: mctech.NewBaseMCTechContext(resolveResult, dbdbSelector),
-		session:       ctx,
+		Context: mctech.NewBaseContext(resolveResult, dbdbSelector),
+		session: ctx,
 	}
 }
 
@@ -32,12 +32,12 @@ func (d *tidbSessionMCTechContext) CurrentDB() string {
 }
 
 func (d *tidbSessionMCTechContext) GetInfo() string {
-	info := d.MCTechContext.GetInfo()
+	info := d.Context.GetInfo()
 	return fmt.Sprintf("{%s,%s}", info, d.CurrentDB())
 }
 
 const paramBackgroundKey = "background"
-const paramRequestIdKey = "requestId"
+const paramRequestIDKey = "requestId"
 
 // TODO: 暂时留下的占位参数值
 const localCacheKey = "global"
@@ -47,10 +47,10 @@ var currentMap = goCache.New(15*time.Second, 10*time.Second)
 
 type dbSelector struct {
 	// private final static URI BASE_URI;
-	resolveResult *mctech.ResolveResult
+	resolveResult *mctech.PrapareResult
 }
 
-func newDBSelector(resolveResult *mctech.ResolveResult) mctech.DBSelector {
+func newDBSelector(resolveResult *mctech.PrapareResult) mctech.DBSelector {
 	return &dbSelector{
 		resolveResult: resolveResult,
 	}
@@ -67,7 +67,7 @@ func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
 		// 强制使用后台库
 		dbIndex, err = d.forceBackground(env)
 	} else {
-		if ticket, ok := params[paramRequestIdKey]; ok {
+		if ticket, ok := params[paramRequestIDKey]; ok {
 			// 同一个ticket使用相同的后端库
 			dbIndex, err = d.getDbIndexByTicket(env, ticket.(string))
 		}
@@ -94,17 +94,17 @@ func (d *dbSelector) forceBackground(env string) (mctech.DbIndex, error) {
 	return bgIndex, nil
 }
 
-func (d *dbSelector) getDbIndexByTicket(env string, requestId string) (mctech.DbIndex, error) {
+func (d *dbSelector) getDbIndexByTicket(env string, requestID string) (mctech.DbIndex, error) {
 	// 从缓存中获取，如果不存在就创建一个
-	if value, ok := ticketMap.Get(requestId); ok {
+	if value, ok := ticketMap.Get(requestID); ok {
 		return value.(mctech.DbIndex), nil
 	}
 
-	value, err := d.getDbIndexByTicketFromService(env, requestId)
+	value, err := d.getDbIndexByTicketFromService(env, requestID)
 	if err != nil {
 		return -1, err
 	}
-	ticketMap.Set(requestId, value, 0)
+	ticketMap.Set(requestID, value, 0)
 	return value, nil
 }
 
@@ -128,9 +128,9 @@ func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) 
 
 func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	option := mctech.GetOption()
-	apiPrefix := option.DbChecker_ApiPrefix
-	apiUrl := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, env)
-	get, err := http.NewRequest("GET", apiUrl, nil)
+	apiPrefix := option.DbCheckerAPIPrefix
+	apiURL := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, env)
+	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return -1, err
 	}
@@ -148,11 +148,11 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	return js["current"], nil
 }
 
-func (d *dbSelector) getDbIndexByTicketFromService(env string, requestId string) (mctech.DbIndex, error) {
+func (d *dbSelector) getDbIndexByTicketFromService(env string, requestID string) (mctech.DbIndex, error) {
 	option := mctech.GetOption()
-	apiPrefix := option.DbChecker_ApiPrefix
-	apiUrl := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestId)
-	get, err := http.NewRequest("GET", apiUrl, nil)
+	apiPrefix := option.DbCheckerAPIPrefix
+	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestID)
+	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		return -1, err
 	}

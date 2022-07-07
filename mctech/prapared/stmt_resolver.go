@@ -15,18 +15,18 @@ import (
 var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*/`)
 
 type mctechStatementResolver struct {
-	context mctech.MCTechContext
-	checker *MutexDatabaseChecker
+	context mctech.Context
+	checker *mutexDatabaseChecker
 }
 
-func (r *mctechStatementResolver) Context() mctech.MCTechContext {
+func (r *mctechStatementResolver) Context() mctech.Context {
 	return r.context
 }
 
 /**
  * 预解析sql，解析的结果存到MCTechContext中
  */
-func (r *mctechStatementResolver) PrepareSql(ctx sessionctx.Context, sql string) (string, error) {
+func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string) (string, error) {
 	params := map[string]any{}
 	actions := map[string]string{}
 
@@ -48,16 +48,16 @@ func (r *mctechStatementResolver) PrepareSql(ctx sessionctx.Context, sql string)
 		}
 	}
 
-	preprocessor := NewSqlPreprocessor(sql)
-	var preparedSql string
+	preprocessor := newSQLPreprocessor(sql)
+	var preparedSQL string
 	result, err := preprocessor.Prepare(ctx, actions, params)
 	if err != nil {
-		return preparedSql, err
+		return preparedSQL, err
 	}
 
-	preparedSql = preprocessor.preparedSql
-	r.context = NewMCTechContext(ctx, result, newDBSelector(result))
-	return preparedSql, nil
+	preparedSQL = preprocessor.preparedSQL
+	r.context = newContext(ctx, result, newDBSelector(result))
+	return preparedSQL, nil
 }
 
 func (r *mctechStatementResolver) ResolveStmt(
@@ -75,10 +75,10 @@ func (r *mctechStatementResolver) CheckDB(dbs []string) error {
 }
 
 func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
-	resolveResult := r.context.ResolveResult()
+	resolveResult := r.context.PrapareResult()
 	// 执行到此处说明当前语句一定是DML或QUERY
 	// sql没有被改写，但是用到了global_xxx数据库，并且没有设置global为true
-	if !r.context.SqlRewrited() && r.context.SqlWithGlobalPrefixDB() &&
+	if !r.context.SQLRewrited() && r.context.SQLWithGlobalPrefixDB() &&
 		!resolveResult.Global() {
 		// 检查DML语句和QUERY语句改写状态
 		user := currentUser(ctx)
@@ -103,18 +103,18 @@ func (r *mctechStatementResolver) rewriteStmt(
 		return nil, false, nil
 	}
 
-	r.context.SetSqlWithGlobalPrefixDB(true)
-	result := r.context.ResolveResult()
+	r.context.SetSQLWithGlobalPrefixDB(true)
+	result := r.context.PrapareResult()
 	if result.Global() {
 		// 启用global时，允许跨任意数据库查询
 		return nil, false, nil
-	} else {
-		// 未启用global,租户code为空，留到后续Validate步骤统一校验
-		if result.Tenant() == "" {
-			return nil, false, nil
-		}
 	}
 
-	r.context.SetSqlRewrited(!skipped)
+	// 未启用global,租户code为空，留到后续Validate步骤统一校验
+	if result.Tenant() == "" {
+		return nil, false, nil
+	}
+
+	r.context.SetSQLRewrited(!skipped)
 	return dbs, false, nil
 }

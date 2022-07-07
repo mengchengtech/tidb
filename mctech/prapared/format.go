@@ -8,20 +8,20 @@ import (
 	"github.com/pingcap/tidb/mctech"
 )
 
-type ValueFormatter interface {
+type valueFormatter interface {
 	Format(name string, value string) (any, error)
 }
 
 var booleanValues = []string{"true", "false", "1", "0"}
 
-type BooleanValueFormatter struct {
+type booleanValueFormatter struct {
 }
 
-func (f *BooleanValueFormatter) Format(name string, value string) (any, error) {
+func (f *booleanValueFormatter) Format(name string, value string) (any, error) {
 	return f.format(name, value)
 }
 
-func (f *BooleanValueFormatter) format(name string, value string) (bool, error) {
+func (f *booleanValueFormatter) format(name string, value string) (bool, error) {
 	var index = -1
 	for i, item := range booleanValues {
 		if item == strings.ToLower(value) {
@@ -39,23 +39,23 @@ func (f *BooleanValueFormatter) format(name string, value string) (bool, error) 
 	return v == "true" || v == "1", nil
 }
 
-type GlobalValueFormatter struct {
-	boolFormatter ValueFormatter
+type globalValueFormatter struct {
+	boolFormatter valueFormatter
 }
 
 var tokenSplitterPattern = regexp.MustCompile(`,|\s+`)
 
-func NewGlobalValueFormatter() ValueFormatter {
-	return &GlobalValueFormatter{
-		boolFormatter: &BooleanValueFormatter{},
+func newGlobalValueFormatter() valueFormatter {
+	return &globalValueFormatter{
+		boolFormatter: &booleanValueFormatter{},
 	}
 }
 
-func (f *GlobalValueFormatter) Format(name string, value string) (any, error) {
+func (f *globalValueFormatter) Format(name string, value string) (any, error) {
 	return f.format(name, value)
 }
 
-func (f *GlobalValueFormatter) format(name string, value string) (*mctech.GlobalValueInfo, error) {
+func (f *globalValueFormatter) format(name string, value string) (*mctech.GlobalValueInfo, error) {
 	gv := new(mctech.GlobalValueInfo)
 	global, err := f.boolFormatter.Format(name, value)
 

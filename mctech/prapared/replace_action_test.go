@@ -30,7 +30,7 @@ func TestReplaceAction(t *testing.T) {
 	cases := []*replaceTestCase{
 		{"tenant='%s'", "gslq", nil, ""},
 		{"tenant=%s", "ztsj", nil, ""},
-		{"tenant", "", map[string]any{}, "执行replace时未找到名称为'%s'的参数的值"},
+		{"tenant", "", map[string]any{}, "执行[replace]时未找到名称为'%s'的参数的值"},
 		{"tenant", "ztsj", map[string]any{"tenant": "ztsj"}, ""},
 	}
 	doRunTest(t, testReplaceCase, cases)
@@ -42,14 +42,14 @@ func testReplaceCase(t *testing.T, c *replaceTestCase) error {
 	if strings.Contains(c.format, "%") {
 		args = fmt.Sprintf(c.format, c.tenant)
 	}
-	action := &ReplaceAction{}
-	outSql, err := action.Resolve(sql, args, c.params)
+	action := &replaceAction{}
+	outSQL, err := action.Resolve(sql, args, c.params)
 
 	if err != nil {
 		return err
 	}
 
-	require.NotContains(t, outSql, "{{tenant}}")
-	require.Contains(t, outSql, fmt.Sprintf("%s_", c.tenant), c.Source())
+	require.NotContains(t, outSQL, "{{tenant}}")
+	require.Contains(t, outSQL, fmt.Sprintf("%s_", c.tenant), c.Source())
 	return nil
 }

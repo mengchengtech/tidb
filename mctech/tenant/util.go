@@ -5,7 +5,8 @@ import (
 	"github.com/pingcap/tidb/parser/ast"
 )
 
-func ApplyTenantIsolation(context mctech.MCTechContext, node ast.Node,
+// ApplyTenantIsolation apply tenant condition
+func ApplyTenantIsolation(context mctech.Context, node ast.Node,
 	charset, collation string) (dbs []string, skipped bool, err error) {
 
 	var stmtNode ast.Node
@@ -27,8 +28,8 @@ func ApplyTenantIsolation(context mctech.MCTechContext, node ast.Node,
 }
 
 func doApplyTenantIsolation(
-	context mctech.MCTechContext, node ast.Node, charset, collation string) (dbs []string, err error) {
-	v := NewTenantVisitor(context, charset, collation)
+	context mctech.Context, node ast.Node, charset, collation string) (dbs []string, err error) {
+	v := newVisitor(context, charset, collation)
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)

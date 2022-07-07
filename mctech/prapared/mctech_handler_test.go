@@ -26,7 +26,7 @@ func (c *mctechHandlerTestCase) Source() any {
 	return fmt.Sprintf("[%t,%t,%t] %s", c.expectChanged, c.tenantEnabled, c.dbCheckerEnabled, c.sql)
 }
 
-func TestMctechHandler(t *testing.T) {
+func TestMCTechHandler(t *testing.T) {
 	cases := []*mctechHandlerTestCase{
 		{"select * from company", false, false, true, ""},
 		{"/*& tenant:gslq */ select * from company", false, false, true, ""},
@@ -43,13 +43,13 @@ func TestMctechHandler(t *testing.T) {
 
 func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session session.Session) error {
 	option := mctech.GetOption()
-	mctech.SetOptionForTest(&mctech.MCTechOption{
-		Tenant_Enabled:    c.tenantEnabled,
-		DbChecker_Enabled: c.dbCheckerEnabled,
+	mctech.SetOptionForTest(&mctech.Option{
+		TenantEnabled:    c.tenantEnabled,
+		DbCheckerEnabled: c.dbCheckerEnabled,
 	})
 	defer mctech.SetOptionForTest(option)
-	handler := CreateMctechHandler(session, c.sql)
-	if _, err := handler.PrapareSql(); err != nil {
+	handler := CreateMCTechHandler(session, c.sql)
+	if _, err := handler.PrapareSQL(); err != nil {
 		return err
 	}
 
@@ -59,7 +59,7 @@ func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session se
 	}
 
 	require.Equal(t, 1, len(stmts), c.Source())
-	changed, err := handler.ResolveAndValidate(stmts)
+	changed, err := handler.ApplyAndCheck(stmts)
 	if err != nil {
 		return err
 	}

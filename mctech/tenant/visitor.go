@@ -10,25 +10,19 @@ import (
 	"github.com/pingcap/tidb/parser/opcode"
 )
 
-type NodeScope[T any] struct {
+type nodeScope[T any] struct {
 	items *list.List
 }
 
-func NewNodeScope[T any]() *NodeScope[T] {
-	scope := new(NodeScope[T])
-	scope.items = list.New()
-	return scope
-}
-
-func (s NodeScope[T]) Size() int {
+func (s nodeScope[T]) Size() int {
 	return s.items.Len()
 }
 
-func (s NodeScope[T]) Push(item T) {
+func (s nodeScope[T]) Push(item T) {
 	s.items.PushFront(item)
 }
 
-func (s NodeScope[T]) Pop() T {
+func (s nodeScope[T]) Pop() T {
 	first := s.items.Front()
 	var v T
 	if first == nil {
@@ -39,7 +33,7 @@ func (s NodeScope[T]) Pop() T {
 	return v
 }
 
-func (s NodeScope[T]) Peek() T {
+func (s nodeScope[T]) Peek() T {
 	first := s.items.Front()
 	var v T
 	if first == nil {
@@ -48,12 +42,12 @@ func (s NodeScope[T]) Peek() T {
 	return first.Value.(T)
 }
 
-func (s NodeScope[T]) Entries() *list.List {
+func (s nodeScope[T]) Entries() *list.List {
 	return s.items
 }
 
-type DatabaseNameVisitor struct {
-	context mctech.MCTechContext
+type databaseNameVisitor struct {
+	context mctech.Context
 	dbNames map[string]bool // sql中用到的数据库名称
 }
 
@@ -62,7 +56,8 @@ type cteScopeItem struct {
 	cteNames  []string
 }
 
-func (v *DatabaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
+// Enter implements interface Visitor
+func (v *databaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	var err error
 	switch node := n.(type) {
 	case *ast.ColumnNameExpr:
@@ -74,7 +69,8 @@ func (v *DatabaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren boo
 	return n, false
 }
 
-func (v *DatabaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
+// Leave implements interface Visitor
+func (v *databaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	var err error
 	switch node := n.(type) {
 	case *ast.TableName:
@@ -86,7 +82,7 @@ func (v *DatabaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	return n, true
 }
 
-func (v *DatabaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) error {
+func (v *databaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) error {
 	dbName := node.Name.Schema.L
 	if dbName == "" {
 		return nil
@@ -102,7 +98,7 @@ func (v *DatabaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) erro
 	return err
 }
 
-func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) error {
+func (v *databaseNameVisitor) leaveTableName(node *ast.TableName) error {
 	dbName := node.Schema.L
 	if dbName != "" {
 		physicalDbName, err := v.context.ToPhysicalDbName(dbName)
@@ -118,30 +114,30 @@ func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) error {
 	return nil
 }
 
-type TenantVisitor struct {
-	*DatabaseNameVisitor
+type isolationConditionVisitor struct {
+	*databaseNameVisitor
 	tenant   ast.ValueExpr
 	enabled  bool // 是否启用追加租户条件
 	excludes []ast.ExprNode
 
-	withClauseScope     *NodeScope[*cteScopeItem]
-	columnModifiedScope *NodeScope[bool]
+	withClauseScope     *nodeScope[*cteScopeItem]
+	columnModifiedScope *nodeScope[bool]
 }
 
-const TENANT_FIELD_NAME = "tenant"
+const tenantFieldName = "tenant"
 
-func NewTenantVisitor(
-	context mctech.MCTechContext,
-	charset string, collation string) *TenantVisitor {
-	visitor := &TenantVisitor{
-		DatabaseNameVisitor: &DatabaseNameVisitor{
+func newVisitor(
+	context mctech.Context,
+	charset string, collation string) *isolationConditionVisitor {
+	visitor := &isolationConditionVisitor{
+		databaseNameVisitor: &databaseNameVisitor{
 			context: context,
 			dbNames: map[string]bool{},
 		},
-		withClauseScope:     NewNodeScope[*cteScopeItem](),
-		columnModifiedScope: NewNodeScope[bool](),
+		withClauseScope:     &nodeScope[*cteScopeItem]{items: list.New()},
+		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
-	result := context.ResolveResult()
+	result := context.PrapareResult()
 	if result.Tenant() != "" {
 		visitor.enabled = true
 		visitor.tenant = ast.NewValueExpr(result.Tenant(), charset, collation)
@@ -160,8 +156,9 @@ func NewTenantVisitor(
 	return visitor
 }
 
-func (v *TenantVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
-	v.DatabaseNameVisitor.Enter(n)
+// Enter implements interface Visitor
+func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
+	v.databaseNameVisitor.Enter(n)
 
 	if v.enabled {
 		switch node := n.(type) {
@@ -183,8 +180,9 @@ func (v *TenantVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	return n, false
 }
 
-func (v *TenantVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
-	v.DatabaseNameVisitor.Leave(n)
+// Leave implements interface Visitor
+func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
+	v.databaseNameVisitor.Leave(n)
 	if v.enabled {
 		switch node := n.(type) {
 		case
@@ -212,13 +210,13 @@ func (v *TenantVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	return n, true
 }
 
-func (v *TenantVisitor) enterWithScope(stmt ast.Node) {
+func (v *isolationConditionVisitor) enterWithScope(stmt ast.Node) {
 	v.withClauseScope.Push(&cteScopeItem{
 		statement: stmt,
 	})
 }
 
-func (v *TenantVisitor) setWithClause(withClause *ast.WithClause) {
+func (v *isolationConditionVisitor) setWithClause(withClause *ast.WithClause) {
 	cteNames := make([]string, len(withClause.CTEs))
 	for i, cte := range withClause.CTEs {
 		rawName := cte.Name.L
@@ -229,7 +227,7 @@ func (v *TenantVisitor) setWithClause(withClause *ast.WithClause) {
 	item.cteNames = cteNames
 }
 
-func (v *TenantVisitor) leaveWithScope(node ast.Node) {
+func (v *isolationConditionVisitor) leaveWithScope(node ast.Node) {
 	item := v.withClauseScope.Peek()
 	if item.statement != node {
 		return
@@ -237,7 +235,7 @@ func (v *TenantVisitor) leaveWithScope(node ast.Node) {
 	v.withClauseScope.Pop()
 }
 
-func (v *TenantVisitor) enterInsertStatement(node *ast.InsertStmt) {
+func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	source := node.Table.TableRefs.Left.(*ast.TableSource)
 	tableName := source.Source.(*ast.TableName)
 	dbName := tableName.Schema.L
@@ -248,7 +246,7 @@ func (v *TenantVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	}
 
 	// 只处理global_xxxx的表
-	if sd.ResolveResult().Global() || !sd.IsGlobalDb(dbName) {
+	if sd.PrapareResult().Global() || !sd.IsGlobalDb(dbName) {
 		return
 	}
 
@@ -259,7 +257,7 @@ func (v *TenantVisitor) enterInsertStatement(node *ast.InsertStmt) {
 			modified = v.processInsertColumns(node)
 		} else {
 			for _, set := range node.Setlist {
-				if set.Column.Name.L == TENANT_FIELD_NAME {
+				if set.Column.Name.L == tenantFieldName {
 					// 存在tenant字段，不处理
 					return
 				}
@@ -267,7 +265,7 @@ func (v *TenantVisitor) enterInsertStatement(node *ast.InsertStmt) {
 
 			node.Setlist = append(node.Setlist, &ast.Assignment{
 				Column: &ast.ColumnName{
-					Name: model.NewCIStr(TENANT_FIELD_NAME),
+					Name: model.NewCIStr(tenantFieldName),
 				},
 				Expr: v.tenant,
 			})
@@ -276,34 +274,34 @@ func (v *TenantVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	v.columnModifiedScope.Push(modified)
 }
 
-func (v *TenantVisitor) leaveInsertStatement(node *ast.InsertStmt) {
+func (v *isolationConditionVisitor) leaveInsertStatement(node *ast.InsertStmt) {
 	v.columnModifiedScope.Pop()
 }
 
-func (v *TenantVisitor) enterSubquery(node *ast.SubqueryExpr) {
+func (v *isolationConditionVisitor) enterSubquery(node *ast.SubqueryExpr) {
 	// 子查询不应该受 insert/upsert 的列修改影响
 	v.columnModifiedScope.Push(false)
 }
 
-func (v *TenantVisitor) leaveSubquery(node *ast.SubqueryExpr) {
+func (v *isolationConditionVisitor) leaveSubquery(node *ast.SubqueryExpr) {
 	v.columnModifiedScope.Pop()
 }
 
-func (v *TenantVisitor) enterTableSource(node *ast.TableSource) {
+func (v *isolationConditionVisitor) enterTableSource(node *ast.TableSource) {
 	if _, ok := node.Source.(*ast.TableName); !ok {
 		// 子查询不应该受 insert/upsert 的列修改影响
 		v.columnModifiedScope.Push(false)
 	}
 }
 
-func (v *TenantVisitor) leaveTableSource(node *ast.TableSource) {
+func (v *isolationConditionVisitor) leaveTableSource(node *ast.TableSource) {
 	if _, ok := node.Source.(*ast.TableName); !ok {
 		// 子查询不应该受 insert/upsert 的列修改影响
 		v.columnModifiedScope.Pop()
 	}
 }
 
-func (v *TenantVisitor) leaveDeleteStatement(node *ast.DeleteStmt) {
+func (v *isolationConditionVisitor) leaveDeleteStatement(node *ast.DeleteStmt) {
 	var condition ast.ExprNode
 	if node.TableRefs != nil {
 		condition = v.processFromClause(node.TableRefs)
@@ -311,7 +309,7 @@ func (v *TenantVisitor) leaveDeleteStatement(node *ast.DeleteStmt) {
 	node.Where = v.createAndCondition(condition, node.Where)
 }
 
-func (v *TenantVisitor) leaveUpdateStatement(node *ast.UpdateStmt) {
+func (v *isolationConditionVisitor) leaveUpdateStatement(node *ast.UpdateStmt) {
 	var condition ast.ExprNode
 	if node.TableRefs != nil {
 		condition = v.processFromClause(node.TableRefs)
@@ -319,7 +317,7 @@ func (v *TenantVisitor) leaveUpdateStatement(node *ast.UpdateStmt) {
 	node.Where = v.createAndCondition(condition, node.Where)
 }
 
-func (v *TenantVisitor) leaveSelectStatement(node *ast.SelectStmt) {
+func (v *isolationConditionVisitor) leaveSelectStatement(node *ast.SelectStmt) {
 	v.processSelectItems(node)
 	condition := v.processFromClause(node.From)
 	node.Where = v.createAndCondition(condition, node.Where)
@@ -327,7 +325,7 @@ func (v *TenantVisitor) leaveSelectStatement(node *ast.SelectStmt) {
 
 // -------------------------------------------------------------------------------
 
-func (v *TenantVisitor) createAndCondition(left ast.ExprNode, right ast.ExprNode) ast.ExprNode {
+func (v *isolationConditionVisitor) createAndCondition(left ast.ExprNode, right ast.ExprNode) ast.ExprNode {
 	if left == nil {
 		return right
 	} else if right == nil {
@@ -342,7 +340,7 @@ func (v *TenantVisitor) createAndCondition(left ast.ExprNode, right ast.ExprNode
 	}
 }
 
-func (v *TenantVisitor) processFromClause(fromClause *ast.TableRefsClause) ast.ExprNode {
+func (v *isolationConditionVisitor) processFromClause(fromClause *ast.TableRefsClause) ast.ExprNode {
 	var condition ast.ExprNode
 	if fromClause != nil {
 		tableRefs := fromClause.TableRefs
@@ -351,7 +349,7 @@ func (v *TenantVisitor) processFromClause(fromClause *ast.TableRefsClause) ast.E
 	return condition
 }
 
-func (v *TenantVisitor) processSelectItems(node *ast.SelectStmt) {
+func (v *isolationConditionVisitor) processSelectItems(node *ast.SelectStmt) {
 	modifiedColumns := v.columnModifiedScope.Peek()
 	if modifiedColumns {
 		// 作为insert/upsert的子查询才需要考虑添加'tenant'字段
@@ -364,10 +362,10 @@ func (v *TenantVisitor) processSelectItems(node *ast.SelectStmt) {
 			// SELECT tenant, ......
 			var hasTenantItem bool
 			if alias != "" {
-				hasTenantItem = TENANT_FIELD_NAME == alias
+				hasTenantItem = tenantFieldName == alias
 			} else {
 				if colExpr, ok := item.Expr.(*ast.ColumnNameExpr); ok {
-					hasTenantItem = TENANT_FIELD_NAME == colExpr.Name.Name.L
+					hasTenantItem = tenantFieldName == colExpr.Name.Name.L
 				}
 			}
 
@@ -381,13 +379,13 @@ func (v *TenantVisitor) processSelectItems(node *ast.SelectStmt) {
 		if !hasTenant {
 			node.Fields.Fields = append(items, &ast.SelectField{
 				Expr:   v.tenant,
-				AsName: model.NewCIStr(TENANT_FIELD_NAME),
+				AsName: model.NewCIStr(tenantFieldName),
 			})
 		}
 	}
 }
 
-func (v *TenantVisitor) processTableSource(
+func (v *isolationConditionVisitor) processTableSource(
 	source *ast.TableSource, condition ast.ExprNode) ast.ExprNode {
 	// 普通join方式，条件添加到每个ON后面
 	if table, ok := source.Source.(*ast.TableName); ok {
@@ -399,7 +397,7 @@ func (v *TenantVisitor) processTableSource(
 	return condition
 }
 
-func (v *TenantVisitor) processJoinClause(tableRefs *ast.Join) ast.ExprNode {
+func (v *isolationConditionVisitor) processJoinClause(tableRefs *ast.Join) ast.ExprNode {
 	// 无法添加到join on 里的条件
 	var condition ast.ExprNode
 	if source, ok := tableRefs.Right.(*ast.TableSource); ok {
@@ -429,7 +427,7 @@ func (v *TenantVisitor) processJoinClause(tableRefs *ast.Join) ast.ExprNode {
 	return condition
 }
 
-func (v *TenantVisitor) createTenantConditionFromTable(
+func (v *isolationConditionVisitor) createTenantConditionFromTable(
 	table *ast.TableName, alias model.CIStr) ast.ExprNode {
 	dbName := table.Schema.O
 	tableName := table.Name.L
@@ -458,7 +456,7 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 		// 只处理global_xxxx的表
 		return nil
 	}
-	colName := ast.ColumnName{Name: model.NewCIStr(TENANT_FIELD_NAME)}
+	colName := ast.ColumnName{Name: model.NewCIStr(tenantFieldName)}
 	if alias.O != "" {
 		colName.Table = alias
 	} else {
@@ -470,7 +468,7 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 	}
 
 	var condition ast.ExprNode
-	rt := sd.ResolveResult()
+	rt := sd.PrapareResult()
 	if rt.Global() {
 		if len(v.excludes) > 0 {
 			condition = &ast.PatternInExpr{
@@ -492,7 +490,7 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 /**
  * 处理insert/upsert的列，添加tenant字段
  */
-func (v *TenantVisitor) processInsertColumns(node *ast.InsertStmt) bool {
+func (v *isolationConditionVisitor) processInsertColumns(node *ast.InsertStmt) bool {
 	columns := node.Columns
 	if len(columns) == 0 {
 		panic(fmt.Errorf("insert/upsert语句缺少列定义，无法处理租户信息"))
@@ -500,7 +498,7 @@ func (v *TenantVisitor) processInsertColumns(node *ast.InsertStmt) bool {
 
 	var modified = true
 	for _, c := range columns {
-		if c.Name.L == TENANT_FIELD_NAME {
+		if c.Name.L == tenantFieldName {
 			modified = false
 			break
 		}
@@ -508,7 +506,7 @@ func (v *TenantVisitor) processInsertColumns(node *ast.InsertStmt) bool {
 
 	if modified {
 		node.Columns = append(node.Columns, &ast.ColumnName{
-			Name: model.NewCIStr(TENANT_FIELD_NAME),
+			Name: model.NewCIStr(tenantFieldName),
 		})
 
 		operands := node.Lists
