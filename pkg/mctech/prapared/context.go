@@ -19,10 +19,10 @@ type tidbSessionMCTechContext struct {
 
 func newContext(
 	ctx sessionctx.Context,
-	resolveResult *mctech.PrapareResult,
+	prapareResult *mctech.PrapareResult,
 	dbdbSelector mctech.DBSelector) mctech.Context {
 	return &tidbSessionMCTechContext{
-		Context: mctech.NewBaseContext(resolveResult, dbdbSelector),
+		Context: mctech.NewBaseContext(prapareResult, dbdbSelector),
 		session: ctx,
 	}
 }
@@ -51,17 +51,22 @@ var currentMap = goCache.New(15*time.Second, 10*time.Second)
 
 type dbSelector struct {
 	// private final static URI BASE_URI;
-	resolveResult *mctech.PrapareResult
+	prapareResult *mctech.PrapareResult
+	dbIndex       *mctech.DbIndex
 }
 
-func newDBSelector(resolveResult *mctech.PrapareResult) mctech.DBSelector {
+func newDBSelector(prapareResult *mctech.PrapareResult) mctech.DBSelector {
 	return &dbSelector{
-		resolveResult: resolveResult,
+		prapareResult: prapareResult,
 	}
 }
 
 func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
-	result := d.resolveResult
+	if d.dbIndex != nil {
+		return *d.dbIndex, nil
+	}
+
+	result := d.prapareResult
 	params := result.Params()
 	env := result.DbPrefix()
 	var dbIndex mctech.DbIndex = -1
@@ -83,6 +88,11 @@ func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
 
 	if dbIndex < 0 {
 		dbIndex, err = d.getDbIndex(true, env)
+	}
+
+	if dbIndex > 0 {
+		d.dbIndex = new(mctech.DbIndex)
+		*d.dbIndex = dbIndex
 	}
 	return dbIndex, err
 }
