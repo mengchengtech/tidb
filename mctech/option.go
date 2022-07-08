@@ -1,8 +1,6 @@
 package mctech
 
 import (
-	"encoding/json"
-	"fmt"
 	"net/url"
 	"strings"
 	"sync"
@@ -74,12 +72,6 @@ func initMCTechOption() *Option {
 		DbCheckerAcrossDbGroups:   opts.DbChecker.AcrossDbGroups,
 	}
 
-	content, err := json.Marshal(option)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Info(fmt.Sprintf("mctech options: %s", content))
 	return option
 }
 
