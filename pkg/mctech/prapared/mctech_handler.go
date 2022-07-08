@@ -37,6 +37,8 @@ func (h *MCTechHandler) PrapareSQL() (sql string, err error) {
 		return "", err
 	}
 
+	mctech.SetContext(h.session, h.resolver.context)
+
 	// 改写session上的数据库
 	vars := h.session.GetSessionVars()
 	currDb := vars.CurrentDB

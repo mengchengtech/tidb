@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+
+	"github.com/pingcap/tidb/pkg/sessionctx"
 )
 
 // Context mctech context interface
@@ -307,3 +309,24 @@ const (
 	// SECOND global_dw_*库的序号为2的索引
 	SECOND // 0x02
 )
+
+type sessionValueKey string
+
+func (s sessionValueKey) String() string {
+	return string(s)
+}
+
+const contextKey sessionValueKey = "$$MCTechContext"
+
+// GetContext get mctech context from session
+func GetContext(s sessionctx.Context) Context {
+	if ctx, ok := s.Value(contextKey).(Context); ok {
+		return ctx
+	}
+	return nil
+}
+
+// SetContext set mctech context to session
+func SetContext(s sessionctx.Context, ctx Context) {
+	s.SetValue(contextKey, ctx)
+}
