@@ -678,6 +678,10 @@ func (b *PlanBuilder) Build(ctx context.Context, node ast.Node) (Plan, error) {
 		return b.buildExecute(ctx, x)
 	case *ast.ExplainStmt:
 		return b.buildExplain(ctx, x)
+	// add by zhangbing
+	case *ast.MCTechStmt:
+		return b.buildMCTech(ctx, x)
+	// end add
 	case *ast.ExplainForStmt:
 		return b.buildExplainFor(x)
 	case *ast.TraceStmt:

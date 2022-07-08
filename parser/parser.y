@@ -127,6 +127,7 @@ import (
 	escaped           "ESCAPED"
 	exists            "EXISTS"
 	explain           "EXPLAIN"
+	mctech            "MCTECH"
 	except            "EXCEPT"
 	falseKwd          "FALSE"
 	fetch             "FETCH"
@@ -892,6 +893,7 @@ import (
 	EmptyStmt                  "empty statement"
 	ExecuteStmt                "Execute statement"
 	ExplainStmt                "EXPLAIN statement"
+	MCTechStmt                 "MCTECH statement"
 	ExplainableStmt            "explainable statement"
 	FlushStmt                  "Flush statement"
 	FlashbackTableStmt         "Flashback table statement"
@@ -4728,6 +4730,29 @@ ExplainFormatType:
 |	"BRIEF"
 |	"VERBOSE"
 |	"TRUE_CARD_COST"
+
+MCTechStmt:
+	"MCTECH" ExplainableStmt
+	{
+		$$ = &ast.MCTechStmt{
+			Stmt:   $2,
+			Format: "row",
+		}
+	}
+|	"MCTECH" "FORMAT" "=" ExplainFormatType ExplainableStmt
+	{
+		$$ = &ast.MCTechStmt{
+			Stmt:   $5,
+			Format: $4,
+		}
+	}
+|	"MCTECH" "FORMAT" "=" stringLit ExplainableStmt
+	{
+		$$ = &ast.MCTechStmt{
+			Stmt:   $5,
+			Format: $4,
+		}
+	}
 
 /*******************************************************************
  * Backup / restore / import statements
@@ -11037,6 +11062,7 @@ Statement:
 |	DeleteFromStmt
 |	ExecuteStmt
 |	ExplainStmt
+|	MCTechStmt
 |	ChangeStmt
 |	CreateDatabaseStmt
 |	CreateImportStmt

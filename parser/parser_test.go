@@ -6719,12 +6719,3 @@ func TestNonTransactionalDelete(t *testing.T) {
 
 	RunTest(t, cases, false)
 }
-
-func TestMCTechFunctionDelete(t *testing.T) {
-	cases := []testCase{
-		{"/*& tenant:gslq */ select mctech_sequence() as full_id", true,
-			"SELECT MCTECH_SEQUENCE() AS `full_id`"},
-	}
-
-	RunTest(t, cases, false)
-}
