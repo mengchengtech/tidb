@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"golang.org/x/exp/slices"
 )
 
