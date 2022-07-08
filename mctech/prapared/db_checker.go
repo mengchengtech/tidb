@@ -3,10 +3,10 @@ package prapared
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/pingcap/tidb/mctech"
-	"golang.org/x/exp/slices"
 )
 
 type dbGroup interface {
@@ -66,8 +66,8 @@ func (g *databaseGrouper) GroupBy(dbNames []string) []dbGroup {
 
 		if lst != nil {
 			if len(lst) > 1 {
-				slices.SortFunc(lst, func(a, b string) bool {
-					return strings.ToLower(a) < strings.ToLower(b)
+				slices.SortFunc(lst, func(a, b string) int {
+					return strings.Compare(strings.ToLower(a), strings.ToLower(b))
 				})
 				results = append(results, &multiDbGroup{dbNames: lst})
 			} else {

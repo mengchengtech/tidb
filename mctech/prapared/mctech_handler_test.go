@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pingcap/tidb/pkg/session"
+	"github.com/pingcap/tidb/pkg/session/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +41,7 @@ func TestMCTechHandler(t *testing.T) {
 		"mock_write", "gslq_internal_write", "gslq_internal_write")
 }
 
-func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session session.Session) error {
+func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session types.Session) error {
 	option := mctech.GetOption()
 	mctech.SetOptionForTest(&mctech.Option{
 		TenantEnabled:    c.tenantEnabled,

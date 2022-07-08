@@ -9,7 +9,7 @@ import (
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
-	"github.com/pingcap/tidb/pkg/session"
+	"github.com/pingcap/tidb/pkg/session/types"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
 )
@@ -29,7 +29,7 @@ type mctechTestCase interface {
 	Failure() string
 }
 
-func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []string) session.Session {
+func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []string) types.Session {
 	session := tk.Session()
 	vars := session.GetSessionVars()
 	vars.User = &auth.UserIdentity{Username: user, Hostname: "%"}
@@ -44,7 +44,7 @@ func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []strin
 	return session
 }
 
-type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, session session.Session) error
+type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, session types.Session) error
 type runTestCaseType[T mctechTestCase] func(t *testing.T, c T) error
 
 var dbMap = map[string]string{

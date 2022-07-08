@@ -3,7 +3,7 @@ package prapared
 import (
 	"testing"
 
-	"github.com/pingcap/tidb/pkg/session"
+	"github.com/pingcap/tidb/pkg/session/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -92,7 +92,7 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 		"mock_write", "gslq_internal_write", "gslq_internal_write")
 }
 
-func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session session.Session) error {
+func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session types.Session) error {
 	processor := newSQLPreprocessor(c.sql)
 	result, err := processor.Prepare(session, c.actions, c.params)
 	if err != nil {

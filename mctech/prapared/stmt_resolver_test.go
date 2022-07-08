@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pingcap/tidb/pkg/session"
+	"github.com/pingcap/tidb/pkg/session/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,7 +56,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
 }
 
-func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
+func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session types.Session) error {
 	resolver := &mctechStatementResolver{
 		checker: newMutexDatabaseChecker(),
 	}
