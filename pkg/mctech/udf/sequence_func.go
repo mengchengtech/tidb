@@ -294,7 +294,9 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 	}
 
 	url := s.serviceURLPrefix + "version"
-	log.Debug("version just pass url", zap.String("url", url))
+	if s.debug {
+		log.Debug("version just pass url", zap.String("url", url))
+	}
 	post, err := http.NewRequest(
 		"POST", url, strings.NewReader("{ \"diff\": -3 }"))
 	if err != nil {
@@ -368,7 +370,6 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 
 func (s *SequenceCache) loadSequence(count int64) error {
 	url := s.serviceURLPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
-	log.Debug("next sequence url", zap.String("url", url))
 	post, err := http.NewRequest("POST", url, &strings.Reader{})
 	if err != nil {
 		return err
