@@ -1,4 +1,4 @@
-package tenant
+package visitor
 
 import (
 	"container/list"
@@ -126,7 +126,7 @@ type isolationConditionVisitor struct {
 
 const tenantFieldName = "tenant"
 
-func newVisitor(
+func newIsolationConditionVisitor(
 	context mctech.Context,
 	charset string, collation string) *isolationConditionVisitor {
 	visitor := &isolationConditionVisitor{
