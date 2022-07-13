@@ -1,35 +1,37 @@
-package tenant
+package visitor
 
 import (
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 )
 
-// ApplyTenantIsolation apply tenant condition
-func ApplyTenantIsolation(context mctech.Context, node ast.Node,
+// ApplyMCTechExtension apply tenant condition
+func ApplyMCTechExtension(context mctech.Context, node ast.Node,
 	charset, collation string) (dbs []string, skipped bool, err error) {
-
+	skipped = false
 	switch stmtNode := node.(type) {
 	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt, *ast.InsertStmt,
 		*ast.SetOprSelectList, *ast.SetOprStmt:
-		dbs, err = doApplyTenantIsolation(context, stmtNode, charset, collation)
-		return dbs, false, err
+		dbs, err = doApplyDMLExtension(context, stmtNode, charset, collation)
 	case *ast.MCTechStmt:
 		// MCTechStmt只需要处理对应的子句就可以
-		dbs, err = doApplyTenantIsolation(context, stmtNode.Stmt, charset, collation)
-		return dbs, false, err
+		dbs, err = doApplyDMLExtension(context, stmtNode.Stmt, charset, collation)
 	case *ast.ExplainStmt:
 		// ExplainStmt只需要处理对应的子句就可以
-		dbs, err = doApplyTenantIsolation(context, stmtNode.Stmt, charset, collation)
-		return dbs, false, err
+		dbs, err = doApplyDMLExtension(context, stmtNode.Stmt, charset, collation)
+	case *ast.CreateTableStmt:
+		err = doApplyDDLExtension(stmtNode)
+		skipped = true
+	default:
+		skipped = true
 	}
 
-	return nil, true, nil
+	return dbs, false, err
 }
 
-func doApplyTenantIsolation(
+func doApplyDMLExtension(
 	context mctech.Context, node ast.Node, charset, collation string) (dbs []string, err error) {
-	v := newVisitor(context, charset, collation)
+	v := newIsolationConditionVisitor(context, charset, collation)
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -44,9 +46,16 @@ func doApplyTenantIsolation(
 		}
 		dbs = append(dbs, n)
 	}
-	// var sb strings.Builder
-	// node.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags|format.RestoreBracketAroundBinaryOperation, &sb))
-	// restoreSQL := sb.String()
-	// log.Info("<" + vars.CurrentDB + ">" + restoreSQL + "\r\n --> " + string(debug.Stack()))
 	return dbs, err
+}
+
+func doApplyDDLExtension(node ast.Node) (err error) {
+	v := newDDLExtensionVisitor()
+	defer func() {
+		if e := recover(); e != nil {
+			err = e.(error)
+		}
+	}()
+	node.Accept(v)
+	return err
 }
