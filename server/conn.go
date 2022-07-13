@@ -1827,7 +1827,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	// add by zhangbing
 	session := cc.ctx.Session
 	handler := prapared.CreateMCTechHandler(session, sql)
-	if _, err = handler.PrapareSQL(); err != nil {
+	if sql, err = handler.PrapareSQL(); err != nil {
 		return err
 	}
 	// add end
