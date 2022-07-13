@@ -33,6 +33,7 @@ func TestMCTechHandler(t *testing.T) {
 		{"/*& global:true */ select * from company", false, false, true, ""},
 		{"select * from company", false, false, false, ""},
 		{"/*& tenant:gslq */ select * from company", true, true, false, ""},
+		{"/*& $replace:tenant */ /*& tenant:cr19 */ SELECT * FROM {{tenant}}_custom.{{tenant}}g6_progress_month_setting", true, true, false, ""},
 		{"/*& global:1 */ select * from company", false, true, false, "存在tenant信息时，global不允许设置为true"},
 		{"select * from global_cq3.company a join global_sq.table2 b on a.id = b.id", true, true, true, "dbs not allow in the same statement"},
 	}
@@ -41,7 +42,7 @@ func TestMCTechHandler(t *testing.T) {
 		"mock_write", "gslq_internal_write", "gslq_internal_write")
 }
 
-func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session session.Session) error {
+func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session session.Session) (err error) {
 	option := mctech.GetOption()
 	mctech.SetOptionForTest(&mctech.Option{
 		TenantEnabled:    c.tenantEnabled,
@@ -49,11 +50,12 @@ func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session se
 	})
 	defer mctech.SetOptionForTest(option)
 	handler := CreateMCTechHandler(session, c.sql)
-	if _, err := handler.PrapareSQL(); err != nil {
+	var sql string
+	if sql, err = handler.PrapareSQL(); err != nil {
 		return err
 	}
 
-	stmts, err := session.Parse(context.Background(), c.sql)
+	stmts, err := session.Parse(context.Background(), sql)
 	if err != nil {
 		return err
 	}
