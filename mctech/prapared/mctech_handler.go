@@ -6,26 +6,15 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 )
 
-// MCTechHandler enhance tidb features
-type MCTechHandler struct {
+// Handler enhance tidb features
+type mctechHandler struct {
 	resolver *mctechStatementResolver
 	session  sessionctx.Context
 	sql      string
 }
 
-// CreateMCTechHandler create MCTechHandler
-func CreateMCTechHandler(session sessionctx.Context, sql string) *MCTechHandler {
-	return &MCTechHandler{
-		resolver: &mctechStatementResolver{
-			checker: newMutexDatabaseChecker(),
-		},
-		session: session,
-		sql:     sql,
-	}
-}
-
 // PrapareSQL prapare sql
-func (h *MCTechHandler) PrapareSQL() (sql string, err error) {
+func (h *mctechHandler) PrapareSQL() (sql string, err error) {
 	option := mctech.GetOption()
 	if !option.TenantEnabled {
 		// 禁用租户隔离
@@ -51,7 +40,7 @@ func (h *MCTechHandler) PrapareSQL() (sql string, err error) {
 }
 
 // ApplyAndCheck apply tenant isolation and check db policies
-func (h *MCTechHandler) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err error) {
+func (h *mctechHandler) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err error) {
 	option := mctech.GetOption()
 	charset, collation := h.session.GetSessionVars().GetCharsetInfo()
 	for _, stmt := range stmts {
@@ -92,4 +81,24 @@ func (h *MCTechHandler) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err e
 		}
 	}
 	return changed, nil
+}
+
+type handlerFactory struct {
+}
+
+// CreateHandler create Handler
+func (factory *handlerFactory) CreateHandler(session sessionctx.Context, sql string) mctech.Handler {
+	return &mctechHandler{
+		resolver: &mctechStatementResolver{
+			checker: newMutexDatabaseChecker(),
+		},
+		session: session,
+		sql:     sql,
+	}
+}
+
+var factory = &handlerFactory{}
+
+func GetHandlerFactory() mctech.HandlerFactory {
+	return factory
 }

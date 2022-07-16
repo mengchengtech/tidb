@@ -19,9 +19,6 @@ func ApplyMCTechExtension(context mctech.Context, node ast.Node,
 	case *ast.ExplainStmt:
 		// ExplainStmt只需要处理对应的子句就可以
 		dbs, err = doApplyDMLExtension(context, stmtNode.Stmt, charset, collation)
-	case *ast.CreateTableStmt:
-		err = doApplyDDLExtension(stmtNode)
-		skipped = true
 	default:
 		skipped = true
 	}
@@ -47,15 +44,4 @@ func doApplyDMLExtension(
 		dbs = append(dbs, n)
 	}
 	return dbs, err
-}
-
-func doApplyDDLExtension(node ast.Node) (err error) {
-	v := newDDLExtensionVisitor()
-	defer func() {
-		if e := recover(); e != nil {
-			err = e.(error)
-		}
-	}()
-	node.Accept(v)
-	return err
 }
