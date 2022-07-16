@@ -1,13 +1,8 @@
 package visitor
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
-	"github.com/pingcap/tidb/parser"
-	"github.com/pingcap/tidb/parser/ast"
-	. "github.com/pingcap/tidb/parser/format"
 	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/stretchr/testify/require"
 )
@@ -17,44 +12,26 @@ var dbMap = map[string]string{
 	"dw": "global_dw",
 }
 
-type mctechTestCase struct {
-	global   bool
-	excludes []string
-	shortDb  string
-	src      string
-	expect   string
+type mctechTestCase interface {
+	Source() any
+	Expect() string
+	Failure() string
 }
 
-type CreateVisitorFunc func(tbl *mctechTestCase) (ast.Visitor, error)
+type runTestCaseType[T mctechTestCase] func(t *testing.T, tbl T) error
 
-func doNodeVisitorRunTest(t *testing.T, cases []*mctechTestCase, enableWindowFunc bool, createVisitor CreateVisitorFunc) {
-	p := parser.New()
-	p.EnableWindowFunc(true)
-	for _, tbl := range cases {
-		stmts, _, err := p.Parse(tbl.src, "", "")
-		require.NoErrorf(t, err, "source %v", tbl.src)
-		var sb strings.Builder
-		p := parser.New()
-		p.EnableWindowFunc(enableWindowFunc)
-		comment := fmt.Sprintf("source %v", tbl.src)
-		restoreSQLs := ""
-		for _, stmt := range stmts {
-			sb.Reset()
-			visitor, err := createVisitor(tbl)
-			if err != nil {
-				require.NoError(t, err, comment)
-			}
-			stmt.Accept(visitor)
-			err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
-			require.NoError(t, err, comment)
-			restoreSQL := sb.String()
-			comment = fmt.Sprintf("source %v; restore %v", tbl.src, restoreSQL)
-			if restoreSQLs != "" {
-				restoreSQLs += "; "
-			}
-			restoreSQLs += restoreSQL
-
+func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], cases []T) {
+	for _, c := range cases {
+		err := runTestCase(t, c)
+		failure := c.Failure()
+		if err == nil && failure == "" {
+			continue
 		}
-		require.Equalf(t, tbl.expect, restoreSQLs, "restore %v; expect %v", restoreSQLs, tbl.expect)
+
+		if failure != "" {
+			require.ErrorContainsf(t, err, failure, "source %v", c.Source())
+		} else {
+			require.NoErrorf(t, err, "source %v", c.Source())
+		}
 	}
 }

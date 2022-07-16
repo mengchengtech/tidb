@@ -1,17 +1,3 @@
-// Copyright 2022 MCTech, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 package expression
 
 import (
@@ -35,6 +21,21 @@ var (
 	_ builtinFunc = &builtinMCTechDecryptSig{}
 	_ builtinFunc = &builtinMCTechEncryptSig{}
 )
+
+var sequenceCache *udf.SequenceCache
+
+func init() {
+	sequenceCache = udf.GetCache()
+
+	// mctech function.
+	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
+	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
+	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
+	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
+
+	// mctech function.
+	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
+}
 
 type mctechSequenceFunctionClass struct {
 	baseFunctionClass
@@ -64,7 +65,7 @@ func (b *builtinMCTechSequenceSig) Clone() builtinFunc {
 }
 
 func (b *builtinMCTechSequenceSig) evalInt(row chunk.Row) (int64, bool, error) {
-	v, err := udf.GetCache().Next()
+	v, err := sequenceCache.Next()
 	if err != nil {
 		return 0, true, err
 	}
@@ -99,7 +100,7 @@ func (b *builtinMCTechVersionJustPassSig) Clone() builtinFunc {
 }
 
 func (b *builtinMCTechVersionJustPassSig) evalInt(row chunk.Row) (int64, bool, error) {
-	v, err := udf.GetCache().VersionJustPass()
+	v, err := sequenceCache.VersionJustPass()
 	if err != nil {
 		return 0, true, err
 	}
@@ -186,15 +187,4 @@ func (b *builtinMCTechEncryptSig) evalString(row chunk.Row) (string, bool, error
 	}
 
 	return cipher, false, nil
-}
-
-func init() {
-	// mctech function.
-	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
-	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
-	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
-	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
-
-	// mctech function.
-	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
 }
