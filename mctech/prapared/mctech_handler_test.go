@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type mctechHandlerTestCase struct {
+type handlerTestCase struct {
 	sql              string
 	expectChanged    bool
 	tenantEnabled    bool
@@ -18,16 +18,16 @@ type mctechHandlerTestCase struct {
 	failure          string
 }
 
-func (c *mctechHandlerTestCase) Failure() string {
+func (c *handlerTestCase) Failure() string {
 	return c.failure
 }
 
-func (c *mctechHandlerTestCase) Source() any {
+func (c *handlerTestCase) Source() any {
 	return fmt.Sprintf("[%t,%t,%t] %s", c.expectChanged, c.tenantEnabled, c.dbCheckerEnabled, c.sql)
 }
 
-func TestMCTechHandler(t *testing.T) {
-	cases := []*mctechHandlerTestCase{
+func TestHandler(t *testing.T) {
+	cases := []*handlerTestCase{
 		{"select * from company", false, false, true, ""},
 		{"/*& tenant:gslq */ select * from company", false, false, true, ""},
 		{"/*& global:true */ select * from company", false, false, true, ""},
@@ -38,18 +38,18 @@ func TestMCTechHandler(t *testing.T) {
 		{"select * from global_cq3.company a join global_sq.table2 b on a.id = b.id", true, true, true, "dbs not allow in the same statement"},
 	}
 
-	doRunWithSessionTest(t, mctechHandlerRunTestCase, cases,
+	doRunWithSessionTest(t, handlerRunTestCase, cases,
 		"mock_write", "gslq_internal_write", "gslq_internal_write")
 }
 
-func mctechHandlerRunTestCase(t *testing.T, c *mctechHandlerTestCase, session session.Session) (err error) {
+func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Session) (err error) {
 	option := mctech.GetOption()
 	mctech.SetOptionForTest(&mctech.Option{
 		TenantEnabled:    c.tenantEnabled,
 		DbCheckerEnabled: c.dbCheckerEnabled,
 	})
 	defer mctech.SetOptionForTest(option)
-	handler := CreateMCTechHandler(session, c.sql)
+	handler := GetHandlerFactory().CreateHandler(session, c.sql)
 	var sql string
 	if sql, err = handler.PrapareSQL(); err != nil {
 		return err
