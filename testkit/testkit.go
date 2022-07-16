@@ -24,6 +24,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/terror"
 	"github.com/pingcap/tidb/session"
@@ -198,10 +199,33 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 	if len(args) == 0 {
 		sc := tk.session.GetSessionVars().StmtCtx
 		prevWarns := sc.GetWarnings()
+
+		// add by zhangbing
+		var handler mctech.Handler
+		factory := mctech.GetHandlerFactory(tk.session)
+		if factory != nil {
+			var err error
+			session := tk.session
+			handler = factory.CreateHandler(session, sql)
+			if sql, err = handler.PrapareSQL(); err != nil {
+				return nil, err
+			}
+		}
+		// add end
+
 		stmts, err := tk.session.Parse(ctx, sql)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
+
+		// add by zhangbing
+		if handler != nil {
+			if _, err = handler.ApplyAndCheck(stmts); err != nil {
+				return nil, err
+			}
+		}
+		// add end
+
 		warns := sc.GetWarnings()
 		parserWarns := warns[len(prevWarns):]
 		var rs0 sqlexec.RecordSet
