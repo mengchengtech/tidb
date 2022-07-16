@@ -159,3 +159,13 @@ func createDatum(value any) *types.Datum {
 	d.SetValueWithDefaultCollation(value)
 	return d
 }
+
+// isDefaultValMCSymFunc checks whether default value is a MCTECH_SEQUENCE() builtin function.
+func isDefaultValMCSymFunc(expr ast.ExprNode) bool {
+	if funcCall, ok := expr.(*ast.FuncCallExpr); ok {
+		if funcCall.FnName.L == ast.MCTechSequence {
+			return true
+		}
+	}
+	return false
+}

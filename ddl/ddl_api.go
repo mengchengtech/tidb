@@ -996,6 +996,12 @@ func columnDefToCol(ctx sessionctx.Context, offset int, colDef *ast.ColumnDef, o
 					if !expression.IsValidCurrentTimestampExpr(v.Expr, colDef.Tp) {
 						return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 					}
+					// add by zhangbing
+				} else if col.GetType() == mysql.TypeLonglong {
+					if !expression.IsValidMCTechSequenceExpr(v.Expr, colDef.Tp) {
+						return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
+					}
+					// add end
 				} else {
 					return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 				}
@@ -1051,6 +1057,11 @@ func getFuncCallDefaultValue(col *table.Column, option *ast.ColumnOption, expr *
 			}
 		}
 		return nil, false, nil
+	// add by zhangbing
+	case ast.MCTechSequence:
+		col.DefaultIsExpr = true
+		return nil, false, nil
+	// add end
 	case ast.NextVal:
 		// handle default next value of sequence. (keep the expr string)
 		str, err := getSequenceDefaultValue(option)
@@ -1106,7 +1117,15 @@ func getDefaultValue(ctx sessionctx.Context, col *table.Column, option *ast.Colu
 		if vv, ok := value.(types.Time); ok {
 			return vv.String(), false, nil
 		}
-
+		// add by zhangbing
+		return value, false, nil
+	} else if tp == mysql.TypeLonglong {
+		vd, err := expression.GetBigIntValue(ctx, option.Expr, tp, fsp)
+		if err != nil {
+			return nil, true, dbterror.ErrInvalidDefaultValue.GenWithStackByArgs(col.Name.O)
+		}
+		value := vd.GetValue()
+		// add end
 		return value, false, nil
 	}
 

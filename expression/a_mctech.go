@@ -1,12 +1,17 @@
 package expression
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/pingcap/tidb/mctech/udf"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
+
+	driver "github.com/pingcap/tidb/types/parser_driver"
 )
 
 var (
@@ -25,6 +30,7 @@ var (
 var sequenceCache *udf.SequenceCache
 
 func init() {
+	DeferredFunctions[ast.MCTechSequence] = struct{}{}
 	sequenceCache = udf.GetCache()
 
 	// mctech function.
@@ -187,4 +193,72 @@ func (b *builtinMCTechEncryptSig) evalString(row chunk.Row) (string, bool, error
 	}
 
 	return cipher, false, nil
+}
+
+// IsValidMCTechSequenceExpr returns true if exprNode is a valid MCTechSequence expression.
+// Here `valid` means it is consistent with the given fieldType's decimal.
+func IsValidMCTechSequenceExpr(exprNode ast.ExprNode, fieldType *types.FieldType) bool {
+	fn, isFuncCall := exprNode.(*ast.FuncCallExpr)
+	if !isFuncCall || fn.FnName.L != ast.MCTechSequence {
+		return false
+	}
+	return true
+}
+
+func getNextSequence() (int64, error) {
+	return sequenceCache.Next()
+}
+
+// GetBigIntValue gets the time value with type tp.
+func GetBigIntValue(ctx sessionctx.Context, v interface{}, tp byte, fsp int) (d types.Datum, err error) {
+	var value int64
+	switch x := v.(type) {
+	case string:
+		upperX := strings.ToUpper(x)
+		if upperX == strings.ToUpper(ast.MCTechSequence) {
+			if value, err = getNextSequence(); err != nil {
+				return d, err
+			}
+		} else {
+			if value, err = strconv.ParseInt(x, 10, 64); err != nil {
+				return d, err
+			}
+		}
+	case *driver.ValueExpr:
+		switch x.Kind() {
+		case types.KindString:
+			if value, err = strconv.ParseInt(x.GetString(), 10, 64); err != nil {
+				return d, err
+			}
+		case types.KindInt64:
+			value = x.GetInt64()
+		case types.KindNull:
+			return d, nil
+		default:
+			return d, errDefaultValue
+		}
+	case *ast.FuncCallExpr:
+		if x.FnName.L == ast.MCTechSequence {
+			d.SetString(strings.ToUpper(ast.MCTechSequence), mysql.DefaultCollationName)
+			return d, nil
+		}
+		return d, errDefaultValue
+	case *ast.UnaryOperationExpr:
+		// support some expression, like `-1`
+		v, err := EvalAstExpr(ctx, x)
+		if err != nil {
+			return d, err
+		}
+		ft := types.NewFieldType(mysql.TypeLonglong)
+		xval, err := v.ConvertTo(ctx.GetSessionVars().StmtCtx, ft)
+		if err != nil {
+			return d, err
+		}
+
+		value = xval.GetInt64()
+	default:
+		return d, nil
+	}
+	d.SetInt64(value)
+	return d, nil
 }

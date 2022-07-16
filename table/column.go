@@ -390,7 +390,16 @@ func NewColDesc(col *Column) *ColDesc {
 	} else if mysql.HasOnUpdateNowFlag(col.GetFlag()) {
 		// in order to match the rules of mysql 8.0.16 version
 		// see https://github.com/pingcap/tidb/issues/10337
-		extra = "DEFAULT_GENERATED on update CURRENT_TIMESTAMP" + OptionalFsp(&col.FieldType)
+		// add by zhangbing
+		switch col.GetType() {
+		case mysql.TypeTimestamp:
+			extra = "DEFAULT_GENERATED on update CURRENT_TIMESTAMP" + OptionalFsp(&col.FieldType)
+		case mysql.TypeLonglong:
+			extra = "DEFAULT_GENERATED on update MCTECH_SEQUENCE" + OptionalFsp(&col.FieldType)
+		default:
+			panic(fmt.Errorf("[ON UPDATE]: not support type %d", col.GetType()))
+		}
+		// add end
 	} else if col.IsGenerated() {
 		if col.GeneratedStored {
 			extra = "STORED GENERATED"
@@ -536,13 +545,26 @@ func getColDefaultValue(ctx sessionctx.Context, col *model.ColumnInfo, defaultVa
 		return getColDefaultValueFromNil(ctx, col)
 	}
 
-	if col.GetType() != mysql.TypeTimestamp && col.GetType() != mysql.TypeDatetime {
+	if // add by zhangbing
+	col.GetType() != mysql.TypeLonglong &&
+		// add end
+		col.GetType() != mysql.TypeTimestamp && col.GetType() != mysql.TypeDatetime {
 		value, err := CastValue(ctx, types.NewDatum(defaultVal), col, false, false)
 		if err != nil {
 			return types.Datum{}, err
 		}
 		return value, nil
 	}
+
+	// add by zhangbing
+	if col.GetType() == mysql.TypeLonglong {
+		value, err := expression.GetBigIntValue(ctx, defaultVal, col.GetType(), col.GetDecimal())
+		if err != nil {
+			return types.Datum{}, errGetDefaultFailed.GenWithStackByArgs(col.Name)
+		}
+		return value, nil
+	}
+	// add end
 
 	// Check and get timestamp/datetime default value.
 	sc := ctx.GetSessionVars().StmtCtx
