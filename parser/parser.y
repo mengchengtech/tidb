@@ -101,6 +101,7 @@ import (
 	currentDate       "CURRENT_DATE"
 	currentTime       "CURRENT_TIME"
 	currentTs         "CURRENT_TIMESTAMP"
+	mcSequence        "MCTECH_SEQUENCE"
 	currentUser       "CURRENT_USER"
 	currentRole       "CURRENT_ROLE"
 	database          "DATABASE"
@@ -840,6 +841,8 @@ import (
 	DefaultValueExpr                "DefaultValueExpr(Now or Signed Literal)"
 	NowSymOptionFraction            "NowSym with optional fraction part"
 	NowSymOptionFractionParentheses "NowSym with optional fraction part within potential parentheses"
+	MCSymOptionFraction             "MCSym with optional fraction part"
+	MCSymOptionFractionParentheses  "MCSym with optional fraction part within potential parentheses"
 	CharsetNameOrDefault            "Character set name or default"
 	NextValueForSequence            "Default nextval expression"
 	BuiltinFunction                 "Default builtin functions for columns"
@@ -1030,6 +1033,7 @@ import (
 	FieldItem                              "Field item for load data clause"
 	FieldItemList                          "Field items for load data clause"
 	FuncDatetimePrec                       "Function datetime precision"
+	FuncMCPrec                             "Function mctech_sequence precision"
 	GetFormatSelector                      "{DATE|DATETIME|TIME|TIMESTAMP}"
 	GlobalScope                            "The scope of variable"
 	StatementScope                         "The scope of statement"
@@ -1338,6 +1342,8 @@ import (
 	PrimaryOpt        "Optional primary keyword"
 	NowSym            "CURRENT_TIMESTAMP/LOCALTIME/LOCALTIMESTAMP"
 	NowSymFunc        "CURRENT_TIMESTAMP/LOCALTIME/LOCALTIMESTAMP/NOW"
+	MCSym             "MCTECH_SEQUENCE keyword"
+	MCSymFunc         "MCTECH_SEQUENCE function"
 	DefaultKwdOpt     "optional DEFAULT keyword"
 	DatabaseSym       "DATABASE or SCHEMA"
 	ExplainSym        "EXPLAIN or DESCRIBE or DESC"
@@ -3019,6 +3025,10 @@ ColumnOption:
 	{
 		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionOnUpdate, Expr: $3}
 	}
+|	"ON" "UPDATE" MCSymOptionFraction
+	{
+		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionOnUpdate, Expr: $3}
+	}
 |	"COMMENT" stringLit
 	{
 		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionComment, Expr: ast.NewValueExpr($2, "", "")}
@@ -3351,6 +3361,7 @@ ReferOpt:
  */
 DefaultValueExpr:
 	NowSymOptionFractionParentheses
+|	MCSymOptionFractionParentheses
 |	SignedLiteral
 |	NextValueForSequence
 |	BuiltinFunction
@@ -3395,6 +3406,23 @@ NowSymOptionFraction:
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr("CURRENT_TIMESTAMP"), Args: []ast.ExprNode{ast.NewValueExpr($3, parser.charset, parser.collation)}}
 	}
 
+MCSymOptionFractionParentheses:
+	'(' MCSymOptionFractionParentheses ')'
+	{
+		$$ = $2.(*ast.FuncCallExpr)
+	}
+|	MCSymOptionFraction
+
+MCSymOptionFraction:
+	MCSym
+	{
+		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr("MCTECH_SEQUENCE")}
+	}
+|	MCSymFunc '(' ')'
+	{
+		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr("MCTECH_SEQUENCE")}
+	}
+
 NextValueForSequence:
 	"NEXT" "VALUE" forKwd TableName
 	{
@@ -3431,6 +3459,12 @@ NowSym:
 	"CURRENT_TIMESTAMP"
 |	"LOCALTIME"
 |	"LOCALTIMESTAMP"
+
+MCSym:
+	"MCTECH_SEQUENCE"
+
+MCSymFunc:
+	"MCTECH_SEQUENCE"
 
 SignedLiteral:
 	Literal
@@ -7115,6 +7149,10 @@ FunctionCallKeyword:
 		}
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr($1), Args: args}
 	}
+|	"MCTECH_SEQUENCE" FuncMCPrec
+	{
+		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr(ast.MCTechSequence)}
+	}
 |	"CHAR" '(' ExpressionList ')'
 	{
 		nilVal := ast.NewValueExpr(nil, parser.charset, parser.collation)
@@ -7646,6 +7684,15 @@ FuncDatetimePrec:
 	{
 		expr := ast.NewValueExpr($2, parser.charset, parser.collation)
 		$$ = expr
+	}
+
+FuncMCPrec:
+	{
+		$$ = nil
+	}
+|	'(' ')'
+	{
+		$$ = nil
 	}
 
 TimeUnit:
