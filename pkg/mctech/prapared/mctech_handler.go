@@ -99,6 +99,7 @@ func (factory *handlerFactory) CreateHandler(session sessionctx.Context, sql str
 
 var factory = &handlerFactory{}
 
+// GetHandlerFactory get MCTechHandler factory
 func GetHandlerFactory() mctech.HandlerFactory {
 	return factory
 }
