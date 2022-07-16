@@ -5,6 +5,7 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 )
 
+// Handler mctech enhance interface
 type Handler interface {
 	// PrapareSQL prapare sql
 	PrapareSQL() (sql string, err error)
@@ -19,7 +20,7 @@ type HandlerFactory interface {
 
 const handlerFactoryKey sessionValueKey = "$$MCTechContext"
 
-// GetContext get HandlerFactory from session
+// GetHandlerFactory get HandlerFactory from session
 func GetHandlerFactory(s sessionctx.Context) HandlerFactory {
 	if factory, ok := s.Value(handlerFactoryKey).(HandlerFactory); ok {
 		return factory
