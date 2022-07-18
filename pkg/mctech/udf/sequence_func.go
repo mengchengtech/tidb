@@ -394,6 +394,10 @@ var sequenceInitOnce sync.Once
 
 // GetCache 获取带缓存的序列服务客户端
 func GetCache() *SequenceCache {
+	if cache != nil {
+		return cache
+	}
+
 	sequenceInitOnce.Do(func() {
 		cache = newSequenceCache()
 		if cache.debug {
