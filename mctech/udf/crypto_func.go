@@ -177,6 +177,10 @@ var cryptoInitOnce sync.Once
 
 // GetClient get crypto client
 func GetClient() *aesCryptoClient {
+	if client != nil {
+		return client
+	}
+
 	cryptoInitOnce.Do(func() {
 		client = newAesCryptoClientFromService()
 		log.Debug("init crypto client")
