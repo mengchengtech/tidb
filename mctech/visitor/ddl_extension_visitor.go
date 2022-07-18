@@ -12,37 +12,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-const versionColumnName = "__version"
-
-var versionDef = &ast.ColumnDef{
-	Name: &ast.ColumnName{Name: model.NewCIStr(versionColumnName)},
-	Tp:   types.NewFieldType(mysql.TypeLonglong),
-	Options: []*ast.ColumnOption{
-		{Tp: ast.ColumnOptionNotNull},
-		{
-			Tp: ast.ColumnOptionDefaultValue,
-			Expr: &ast.FuncCallExpr{
-				Tp:     ast.FuncCallExprTypeGeneric,
-				Schema: model.CIStr{},
-				FnName: model.NewCIStr("MCTECH_SEQUENCE"),
-				Args:   []ast.ExprNode{},
-			},
-		},
-		{Tp: ast.ColumnOptionOnUpdate,
-			Expr: &ast.FuncCallExpr{
-				Tp:     ast.FuncCallExprTypeGeneric,
-				Schema: model.CIStr{},
-				FnName: model.NewCIStr("MCTECH_SEQUENCE"),
-				Args:   []ast.ExprNode{},
-			},
-		},
-	},
-}
-
-func isVersionColumn(colName *ast.ColumnName) bool {
-	return colName.Name.L == versionColumnName
-}
-
 func compareDefaultValue(expr ast.ExprNode) (match bool) {
 	if fcallExpr, ok := expr.(*ast.FuncCallExpr); ok {
 		// 函数调用名，函数参数都相同
@@ -57,8 +26,59 @@ func compareDefaultValue(expr ast.ExprNode) (match bool) {
 	return match
 }
 
-func isVersionColumnSpec(tp *types.FieldType, options []*ast.ColumnOption) bool {
-	if tp.GetType() != versionDef.Tp.GetType() {
+type ddlExtensionVisitor struct {
+	versionColumnName string
+	versionColumn     *ast.ColumnDef
+}
+
+func newDDLExtensionVisitor(columnName string) *ddlExtensionVisitor {
+	funcExpr := &ast.FuncCallExpr{
+		Tp:     ast.FuncCallExprTypeGeneric,
+		Schema: model.CIStr{},
+		FnName: model.NewCIStr("MCTECH_SEQUENCE"),
+		Args:   []ast.ExprNode{},
+	}
+
+	versionDef := &ast.ColumnDef{
+		Name: &ast.ColumnName{Name: model.NewCIStr(columnName)},
+		Tp:   types.NewFieldType(mysql.TypeLonglong),
+		Options: []*ast.ColumnOption{
+			{Tp: ast.ColumnOptionNotNull},
+			{Tp: ast.ColumnOptionDefaultValue, Expr: funcExpr},
+			{Tp: ast.ColumnOptionOnUpdate, Expr: funcExpr},
+		},
+	}
+	return &ddlExtensionVisitor{
+		versionColumn: versionDef,
+	}
+}
+
+func (v *ddlExtensionVisitor) isVersionColumn(colName *ast.ColumnName) bool {
+	return colName.Name.L == v.versionColumnName
+}
+
+// Enter implements interface Visitor
+func (v *ddlExtensionVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
+	var err error
+	switch node := n.(type) {
+	case *ast.CreateTableStmt:
+		err = v.addVersionColumn(node)
+	case *ast.AlterTableStmt:
+		err = v.checkAlterTableSpecs(node)
+	}
+	if err != nil {
+		panic(err)
+	}
+	return n, false
+}
+
+// Leave implements interface Visitor
+func (v *ddlExtensionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
+	return n, true
+}
+
+func (v *ddlExtensionVisitor) isVersionColumnSpec(tp *types.FieldType, options []*ast.ColumnOption) bool {
+	if tp.GetType() != v.versionColumn.Tp.GetType() {
 		return false
 	}
 
@@ -88,35 +108,7 @@ func isVersionColumnSpec(tp *types.FieldType, options []*ast.ColumnOption) bool 
 		}
 	}
 
-	return match && count == len(versionDef.Options)
-}
-
-type ddlExtensionVisitor struct {
-	versionColumn *ast.ColumnDef
-}
-
-func newDDLExtensionVisitor() *ddlExtensionVisitor {
-	return &ddlExtensionVisitor{versionColumn: versionDef}
-}
-
-// Enter implements interface Visitor
-func (v *ddlExtensionVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
-	var err error
-	switch node := n.(type) {
-	case *ast.CreateTableStmt:
-		err = v.addVersionColumn(node)
-	case *ast.AlterTableStmt:
-		err = v.checkAlterTableSpecs(node)
-	}
-	if err != nil {
-		panic(err)
-	}
-	return n, false
-}
-
-// Leave implements interface Visitor
-func (v *ddlExtensionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
-	return n, true
+	return match && count == len(v.versionColumn.Options)
 }
 
 func (v *ddlExtensionVisitor) checkAlterTableSpecs(node *ast.AlterTableStmt) (err error) {
@@ -124,54 +116,54 @@ func (v *ddlExtensionVisitor) checkAlterTableSpecs(node *ast.AlterTableStmt) (er
 		switch spec.Tp {
 		case ast.AlterTableAddColumns, ast.AlterTableModifyColumn:
 			index := slices.IndexFunc(spec.NewColumns, func(def *ast.ColumnDef) bool {
-				return isVersionColumn(def.Name)
+				return v.isVersionColumn(def.Name)
 			})
 			if index >= 0 {
 				def := spec.NewColumns[index]
-				if !isVersionColumnSpec(def.Tp, def.Options) {
+				if !v.isVersionColumnSpec(def.Tp, def.Options) {
 					var sb strings.Builder
-					err = versionDef.Restore(f.NewRestoreCtx(f.RestoreKeyWordUppercase, &sb))
+					err = v.versionColumn.Restore(f.NewRestoreCtx(f.RestoreKeyWordUppercase, &sb))
 					if err == nil {
-						err = fmt.Errorf("'%s' 字段定义不正确，允许的定义为 -> %s", versionColumnName, sb.String())
+						err = fmt.Errorf("'%s' 字段定义不正确，允许的定义为 -> %s", v.versionColumnName, sb.String())
 					}
 				}
 			}
 		case ast.AlterTableRenameColumn:
-			if isVersionColumn(spec.OldColumnName) {
-				err = fmt.Errorf("'%s' 字段不支持修改名称", versionColumnName)
-			} else if isVersionColumn(spec.NewColumnName) {
-				err = fmt.Errorf("不支持把其它字段名称修改为'%s'", versionColumnName)
+			if v.isVersionColumn(spec.OldColumnName) {
+				err = fmt.Errorf("'%s' 字段不支持修改名称", v.versionColumnName)
+			} else if v.isVersionColumn(spec.NewColumnName) {
+				err = fmt.Errorf("不支持把其它字段名称修改为'%s'", v.versionColumnName)
 			}
 		case ast.AlterTableDropColumn:
-			if isVersionColumn(spec.OldColumnName) {
-				err = fmt.Errorf("'%s' 字段不允许删除", versionColumnName)
+			if v.isVersionColumn(spec.OldColumnName) {
+				err = fmt.Errorf("'%s' 字段不允许删除", v.versionColumnName)
 			}
 		case ast.AlterTableChangeColumn:
 			def := spec.NewColumns[0] // 只会有一个列定义
-			if isVersionColumn(spec.OldColumnName) {
-				if !isVersionColumn(def.Name) {
-					err = fmt.Errorf("'%s' 字段不支持修改名称", versionColumnName)
-				} else if !isVersionColumnSpec(def.Tp, def.Options) {
+			if v.isVersionColumn(spec.OldColumnName) {
+				if !v.isVersionColumn(def.Name) {
+					err = fmt.Errorf("'%s' 字段不支持修改名称", v.versionColumnName)
+				} else if !v.isVersionColumnSpec(def.Tp, def.Options) {
 					var sb strings.Builder
-					err = versionDef.Restore(f.NewRestoreCtx(f.RestoreKeyWordUppercase, &sb))
+					err = v.versionColumn.Restore(f.NewRestoreCtx(f.RestoreKeyWordUppercase, &sb))
 					if err == nil {
-						err = fmt.Errorf("'%s' 字段定义不正确，允许的定义为 -> %s", versionColumnName, sb.String())
+						err = fmt.Errorf("'%s' 字段定义不正确，允许的定义为 -> %s", v.versionColumnName, sb.String())
 					}
 				}
-			} else if isVersionColumn(def.Name) {
-				err = fmt.Errorf("不支持把其它字段名称修改为'%s'", versionColumnName)
+			} else if v.isVersionColumn(def.Name) {
+				err = fmt.Errorf("不支持把其它字段名称修改为'%s'", v.versionColumnName)
 			}
 		case ast.AlterTableAlterColumn:
 			// alter column 子语句只支持修改一列的默认值
 			def := spec.NewColumns[0]
-			if isVersionColumn(def.Name) {
+			if v.isVersionColumn(def.Name) {
 				if len(def.Options) == 0 {
-					err = fmt.Errorf("'%s' 字段不允删除默认值", versionColumnName)
+					err = fmt.Errorf("'%s' 字段不允删除默认值", v.versionColumnName)
 				} else {
 					opt := def.Options[0]
 					// 此处只能是修改默认值表达式
 					if !compareDefaultValue(opt.Expr) {
-						err = fmt.Errorf("'%s' 字段不允修改默认值", versionColumnName)
+						err = fmt.Errorf("'%s' 字段不允修改默认值", v.versionColumnName)
 					}
 				}
 			}
@@ -182,7 +174,7 @@ func (v *ddlExtensionVisitor) checkAlterTableSpecs(node *ast.AlterTableStmt) (er
 
 func (v *ddlExtensionVisitor) addVersionColumn(node *ast.CreateTableStmt) error {
 	index := slices.IndexFunc(node.Cols, func(n *ast.ColumnDef) bool {
-		return n.Name.Name.L == versionColumnName
+		return n.Name.Name.L == v.versionColumnName
 	})
 
 	if index >= 0 {
