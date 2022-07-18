@@ -1,7 +1,8 @@
-package visitor
+package isolation
 
 import (
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/ddl"
 	"github.com/pingcap/tidb/parser/ast"
 )
 
@@ -20,7 +21,7 @@ func ApplyMCTechExtension(context mctech.Context, node ast.Node,
 		// ExplainStmt只需要处理对应的子句就可以
 		dbs, err = doApplyDMLExtension(context, stmtNode.Stmt, charset, collation)
 	case *ast.CreateTableStmt, *ast.AlterTableStmt:
-		err = doApplyDDLExtension(stmtNode)
+		err = ddl.ApplyDDLExtension(stmtNode)
 		skipped = true
 	default:
 		skipped = true
@@ -47,20 +48,4 @@ func doApplyDMLExtension(
 		dbs = append(dbs, n)
 	}
 	return dbs, err
-}
-
-func doApplyDDLExtension(node ast.Node) (err error) {
-	option := mctech.GetOption()
-	if !option.DDLVersionColumnEnabled {
-		return
-	}
-
-	v := newDDLExtensionVisitor(option.DDLVersionColumnName)
-	defer func() {
-		if e := recover(); e != nil {
-			err = e.(error)
-		}
-	}()
-	node.Accept(v)
-	return err
 }
