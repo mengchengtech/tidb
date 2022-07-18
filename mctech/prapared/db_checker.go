@@ -2,8 +2,8 @@ package prapared
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/pingcap/tidb/mctech"
 	"golang.org/x/exp/slices"
@@ -88,48 +88,6 @@ func (g *databaseGrouper) GroupBy(dbNames []string) []dbGroup {
 	return results
 }
 
-type stringFilter struct {
-	pattern string
-	action  string
-}
-
-func newStringFilter(pattern string) *stringFilter {
-	index := strings.Index(pattern, ":")
-	filter := &stringFilter{}
-	if index > 0 {
-		filter.action = pattern[0:index]
-		filter.pattern = pattern[index+1:]
-	} else {
-		filter.action = ""
-		filter.pattern = pattern
-	}
-
-	if filter.action == "regex" {
-		filter.pattern = "(?i)" + filter.pattern
-	}
-	return filter
-}
-
-func (f *stringFilter) Match(text string) (bool, error) {
-	var (
-		matched bool
-		err     error
-	)
-	switch f.action {
-	case "starts-with":
-		matched = strings.HasPrefix(text, f.pattern)
-	case "ends-with":
-		matched = strings.HasSuffix(text, f.pattern)
-	case "contains":
-		matched = strings.Contains(text, f.pattern)
-	case "regex":
-		matched, err = regexp.MatchString(f.pattern, text)
-	default:
-		matched = f.pattern == text
-	}
-	return matched, err
-}
-
 // mutexDatabaseChecker 检查sql中用到的数据库是否存在互斥的库名
 /**
  *
@@ -138,33 +96,47 @@ func (f *stringFilter) Match(text string) (bool, error) {
  * 最后合并分组，同一分组内的数据库可以互相访问
  */
 type mutexDatabaseChecker struct {
-	mutexFilters   []*stringFilter
-	excludeFilters []*stringFilter
+	mutexFilters   []mctech.Filter
+	excludeFilters []mctech.Filter
 	grouper        *databaseGrouper
 }
 
-func newMutexDatabaseChecker() *mutexDatabaseChecker {
-	option := mctech.GetOption()
-	return newMutexDatabaseCheckerWithParams(
-		option.DbCheckerMutexAcrossDbs,
-		option.DbCheckerExcludeAcrossDbs,
-		option.DbCheckerAcrossDbGroups)
+var dbChecker *mutexDatabaseChecker
+var dbCheckerInitOne sync.Once
+
+func getMutexDatabaseChecker() *mutexDatabaseChecker {
+	if dbChecker != nil {
+		return dbChecker
+	}
+
+	dbCheckerInitOne.Do(func() {
+		option := mctech.GetOption()
+		dbChecker = newMutexDatabaseCheckerWithParams(
+			option.DbCheckerMutexAcrossDbs,
+			option.DbCheckerExcludeAcrossDbs,
+			option.DbCheckerAcrossDbGroups)
+	})
+	return dbChecker
 }
 
 func newMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDbs []string) *mutexDatabaseChecker {
-	mutexAcrossDbs = append(slices.Clone(mutexAcrossDbs),
-		"starts-with:global_", "starts-with:asset_", "starts-with:public_")
-	mutexFilters := make([]*stringFilter, len(mutexAcrossDbs))
+	mutexAcrossDbs = append(
+		slices.Clone(mutexAcrossDbs),
+		mctech.PrefixFilterPattern(mctech.DbGlobalPrefix),
+		mctech.PrefixFilterPattern(mctech.DbAssetPrefix),
+		mctech.PrefixFilterPattern(mctech.DbPublicPrefix),
+	)
+	mutexFilters := make([]mctech.Filter, len(mutexAcrossDbs))
 	for i, t := range mutexAcrossDbs {
-		mutexFilters[i] = newStringFilter(t)
+		mutexFilters[i] = mctech.NewStringFilter(t)
 	}
 
 	// 在mutex filters过滤结果中中可与其它数据库共同查询的表
 	excludeAcrossDbs = append(slices.Clone(excludeAcrossDbs),
 		"global_platform", "global_ipm", "starts-with:global_dw_", "global_dwb")
-	excludeFilters := make([]*stringFilter, len(excludeAcrossDbs))
+	excludeFilters := make([]mctech.Filter, len(excludeAcrossDbs))
 	for i, t := range excludeAcrossDbs {
-		excludeFilters[i] = newStringFilter(t)
+		excludeFilters[i] = mctech.NewStringFilter(t)
 	}
 
 	// 数据库分组，组内的数据库可以互机访问

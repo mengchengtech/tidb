@@ -227,7 +227,7 @@ func doRunTenantMCTechTestCase(t *testing.T, c *tenantMCTechTestCase) error {
 			return err
 		}
 
-		if _, err = doApplyDMLExtension(context, stmt, "", ""); err != nil {
+		if _, err = doApplyExtension(context, stmt, "", ""); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))

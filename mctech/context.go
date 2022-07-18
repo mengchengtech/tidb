@@ -152,9 +152,9 @@ type mctechContext struct {
 	sqlWithGlobalPrefixDB bool
 }
 
-const dbPublicPrefix = "public_"
-const dbAssetPrefix = "asset_"
-const dbGlobalPrefix = "global_"
+const DbPublicPrefix = "public_"
+const DbAssetPrefix = "asset_"
+const DbGlobalPrefix = "global_"
 
 // NewBaseContext create mctechContext (Context)
 func NewBaseContext(prapareResult *PrapareResult, dbSelector DBSelector) Context {
@@ -258,13 +258,13 @@ func (d *mctechContext) ToLogicDbName(db string) string {
 
 func (d *mctechContext) IsGlobalDb(db string) bool {
 	result := d.PrapareResult()
-	if strings.HasPrefix(db, dbGlobalPrefix) {
+	if strings.HasPrefix(db, DbGlobalPrefix) {
 		return true
 	}
 
 	dbPrefix := result.DbPrefix()
 	if dbPrefix != "" {
-		return strings.HasPrefix(db, dbPrefix+"_"+dbGlobalPrefix)
+		return strings.HasPrefix(db, dbPrefix+"_"+DbGlobalPrefix)
 	}
 	return false
 }
@@ -280,9 +280,9 @@ func (d *mctechContext) GetDbIndex() (DbIndex, error) {
  * @return
  */
 func isProductDatabase(logicDb string) bool {
-	return strings.HasPrefix(logicDb, dbGlobalPrefix) || // global_*是租户相关的
-		strings.HasPrefix(logicDb, dbPublicPrefix) || // public_data给将来留的，不花钱的给将来留的，不花钱的
-		strings.HasPrefix(logicDb, dbAssetPrefix) // asset_* 是花钱的
+	return strings.HasPrefix(logicDb, DbGlobalPrefix) || // global_*是租户相关的
+		strings.HasPrefix(logicDb, DbPublicPrefix) || // public_data给将来留的，不花钱的给将来留的，不花钱的
+		strings.HasPrefix(logicDb, DbAssetPrefix) // asset_* 是花钱的
 }
 
 // DbIndex 表示数据库后缀索引的类型
