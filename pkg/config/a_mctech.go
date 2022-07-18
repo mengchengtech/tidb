@@ -8,6 +8,7 @@ type MCTech struct {
 	Encryption Encryption `toml:"encryption" json:"encryption"`
 	DbChecker  DbChecker  `toml:"db-checker" json:"db-checker"`
 	Tenant     Tenant     `toml:"tenant" json:"tenant"`
+	DDL        DDL        `toml:"ddl" json:"ddl"`
 }
 
 // Sequence mctech_sequence functions used
@@ -40,6 +41,17 @@ type Encryption struct {
 	AccessID  string `toml:"access-id" json:"access-id"`
 }
 
+// DDL custom ddl config
+type DDL struct {
+	Version VersionColumn `toml:"version" json:"version"`
+}
+
+// VersionColumn auto add version column
+type VersionColumn struct {
+	Enabled bool   `toml:"enabled" json:"enabled"`
+	Name    string `toml:"name" json:"name"`
+}
+
 func init() {
 	defaultConf.MCTech = MCTech{
 		Sequence: Sequence{
@@ -63,6 +75,12 @@ func init() {
 		},
 		Tenant: Tenant{
 			Enabled: true,
+		},
+		DDL: DDL{
+			Version: VersionColumn{
+				Enabled: true,
+				Name:    "__version",
+			},
 		},
 	}
 }
