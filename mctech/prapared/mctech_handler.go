@@ -90,7 +90,7 @@ type handlerFactory struct {
 func (factory *handlerFactory) CreateHandler(session sessionctx.Context, sql string) mctech.Handler {
 	return &mctechHandler{
 		resolver: &mctechStatementResolver{
-			checker: newMutexDatabaseChecker(),
+			checker: getMutexDatabaseChecker(),
 		},
 		session: session,
 		sql:     sql,

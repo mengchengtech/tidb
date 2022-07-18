@@ -2,27 +2,23 @@ package isolation
 
 import (
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pingcap/tidb/mctech/ddl"
 	"github.com/pingcap/tidb/parser/ast"
 )
 
-// ApplyMCTechExtension apply tenant condition
-func ApplyMCTechExtension(context mctech.Context, node ast.Node,
+// ApplyExtension apply tenant condition
+func ApplyExtension(context mctech.Context, node ast.Node,
 	charset, collation string) (dbs []string, skipped bool, err error) {
 	skipped = false
 	switch stmtNode := node.(type) {
 	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt, *ast.InsertStmt,
 		*ast.SetOprSelectList, *ast.SetOprStmt:
-		dbs, err = doApplyDMLExtension(context, stmtNode, charset, collation)
+		dbs, err = doApplyExtension(context, stmtNode, charset, collation)
 	case *ast.MCTechStmt:
 		// MCTechStmt只需要处理对应的子句就可以
-		dbs, err = doApplyDMLExtension(context, stmtNode.Stmt, charset, collation)
+		dbs, err = doApplyExtension(context, stmtNode.Stmt, charset, collation)
 	case *ast.ExplainStmt:
 		// ExplainStmt只需要处理对应的子句就可以
-		dbs, err = doApplyDMLExtension(context, stmtNode.Stmt, charset, collation)
-	case *ast.CreateTableStmt, *ast.AlterTableStmt:
-		err = ddl.ApplyDDLExtension(stmtNode)
-		skipped = true
+		dbs, err = doApplyExtension(context, stmtNode.Stmt, charset, collation)
 	default:
 		skipped = true
 	}
@@ -30,7 +26,7 @@ func ApplyMCTechExtension(context mctech.Context, node ast.Node,
 	return dbs, false, err
 }
 
-func doApplyDMLExtension(
+func doApplyExtension(
 	context mctech.Context, node ast.Node, charset, collation string) (dbs []string, err error) {
 	v := newIsolationConditionVisitor(context, charset, collation)
 	defer func() {
