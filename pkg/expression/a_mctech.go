@@ -29,11 +29,8 @@ var (
 	_ builtinFunc = &builtinMCTechEncryptSig{}
 )
 
-var sequenceCache *udf.SequenceCache
-
 func init() {
 	DeferredFunctions[ast.MCTechSequence] = struct{}{}
-	sequenceCache = udf.GetCache()
 
 	// mctech function.
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
@@ -73,7 +70,7 @@ func (b *builtinMCTechSequenceSig) Clone() builtinFunc {
 }
 
 func (b *builtinMCTechSequenceSig) evalInt(row chunk.Row) (int64, bool, error) {
-	v, err := sequenceCache.Next()
+	v, err := udf.GetCache().Next()
 	if err != nil {
 		return 0, true, err
 	}
@@ -108,7 +105,7 @@ func (b *builtinMCTechVersionJustPassSig) Clone() builtinFunc {
 }
 
 func (b *builtinMCTechVersionJustPassSig) evalInt(row chunk.Row) (int64, bool, error) {
-	v, err := sequenceCache.VersionJustPass()
+	v, err := udf.GetCache().VersionJustPass()
 	if err != nil {
 		return 0, true, err
 	}
@@ -208,7 +205,7 @@ func IsValidMCTechSequenceExpr(exprNode ast.ExprNode, fieldType *types.FieldType
 }
 
 func getNextSequence() (int64, error) {
-	return sequenceCache.Next()
+	return udf.GetCache().Next()
 }
 
 // GetBigIntValue gets the time value with type tp.
