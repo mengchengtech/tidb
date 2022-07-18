@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/ddl"
 	"github.com/pingcap/tidb/mctech/isolation"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
@@ -89,7 +90,8 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 
 func (r *mctechStatementResolver) rewriteStmt(
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = isolation.ApplyMCTechExtension(r.context, stmt, charset, collation)
+	err = ddl.ApplyExtension(r.context, stmt)
+	dbs, skipped, err = isolation.ApplyExtension(r.context, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, skipped, err
 	}
