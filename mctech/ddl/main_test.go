@@ -1,16 +1,11 @@
-package visitor
+package ddl
 
 import (
 	"testing"
 
-	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
+	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/stretchr/testify/require"
 )
-
-var dbMap = map[string]string{
-	"pf": "global_platform",
-	"dw": "global_dw",
-}
 
 type mctechTestCase interface {
 	Source() any
