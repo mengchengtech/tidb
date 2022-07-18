@@ -50,7 +50,12 @@ func doApplyDMLExtension(
 }
 
 func doApplyDDLExtension(node ast.Node) (err error) {
-	v := newDDLExtensionVisitor()
+	option := mctech.GetOption()
+	if !option.DDLVersionColumnEnabled {
+		return
+	}
+
+	v := newDDLExtensionVisitor(option.DDLVersionColumnName)
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)

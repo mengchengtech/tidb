@@ -30,6 +30,9 @@ type Option struct {
 	DbCheckerMutexAcrossDbs   []string
 	DbCheckerExcludeAcrossDbs []string
 	DbCheckerAcrossDbGroups   []string
+
+	DDLVersionColumnEnabled bool
+	DDLVersionColumnName    string
 }
 
 var mctechOpts *Option
@@ -70,6 +73,9 @@ func initMCTechOption() *Option {
 		DbCheckerMutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
 		DbCheckerExcludeAcrossDbs: opts.DbChecker.ExcludeAcrossDbs,
 		DbCheckerAcrossDbGroups:   opts.DbChecker.AcrossDbGroups,
+
+		DDLVersionColumnEnabled: opts.DDL.Version.Enabled,
+		DDLVersionColumnName:    opts.DDL.Version.Name,
 	}
 
 	return option

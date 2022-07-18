@@ -932,6 +932,12 @@ var defaultConf = Config{
 		Tenant: Tenant{
 			Enabled: true,
 		},
+		DDL: DDL{
+			Version: VersionColumn{
+				Enabled: true,
+				Name:    "__version",
+			},
+		},
 	},
 }
 
