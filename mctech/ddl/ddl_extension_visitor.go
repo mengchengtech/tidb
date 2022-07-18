@@ -1,9 +1,10 @@
-package visitor
+package ddl
 
 import (
 	"fmt"
 	"strings"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	f "github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/model"
@@ -183,4 +184,20 @@ func (v *ddlExtensionVisitor) addVersionColumn(node *ast.CreateTableStmt) error 
 
 	node.Cols = append(node.Cols, v.versionColumn)
 	return nil
+}
+
+func ApplyDDLExtension(node ast.Node) (err error) {
+	option := mctech.GetOption()
+	if !option.DDLVersionColumnEnabled {
+		return
+	}
+
+	v := newDDLExtensionVisitor(option.DDLVersionColumnName)
+	defer func() {
+		if e := recover(); e != nil {
+			err = e.(error)
+		}
+	}()
+	node.Accept(v)
+	return err
 }

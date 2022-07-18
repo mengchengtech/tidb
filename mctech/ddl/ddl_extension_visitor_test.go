@@ -1,4 +1,4 @@
-package visitor
+package ddl
 
 import (
 	"strings"
@@ -102,7 +102,7 @@ func doRunDDLMCTechTestCase(t *testing.T, c *ddlMCTechTestCase) error {
 	restoreSQLs := ""
 	for _, stmt := range stmts {
 		sb.Reset()
-		if err := doApplyDDLExtension(stmt); err != nil {
+		if err := ApplyDDLExtension(stmt); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))

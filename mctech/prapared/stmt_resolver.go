@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pingcap/tidb/mctech/visitor"
+	"github.com/pingcap/tidb/mctech/isolation"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
 	"golang.org/x/exp/slices"
@@ -89,7 +89,7 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 
 func (r *mctechStatementResolver) rewriteStmt(
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = visitor.ApplyMCTechExtension(r.context, stmt, charset, collation)
+	dbs, skipped, err = isolation.ApplyMCTechExtension(r.context, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, skipped, err
 	}
