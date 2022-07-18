@@ -1,4 +1,4 @@
-package visitor
+package isolation
 
 import (
 	"fmt"
