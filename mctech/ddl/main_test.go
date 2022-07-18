@@ -3,9 +3,15 @@ package ddl
 import (
 	"testing"
 
-	_ "github.com/pingcap/tidb/parser/test_driver"
+	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 	"github.com/stretchr/testify/require"
 )
+
+var dbMap = map[string]string{
+	"pf": "global_platform",
+	"pd": "public_data",
+	"ac": "asset_component",
+}
 
 type mctechTestCase interface {
 	Source() any
