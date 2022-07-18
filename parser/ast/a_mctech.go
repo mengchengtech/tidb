@@ -13,10 +13,20 @@ var (
 
 const (
 	// mctech function.
+
+	// 别名
+	MCSeq             = "mc_seq"
+	MCVersionJustPass = "mc_version_just_pass"
+	MCDecrypt         = "mc_decrypt"
+	MCEncrypt         = "mc_encrypt"
+	MCSeqDecode       = "mc_seq_decode"
+
+	// 全名
 	MCTechSequence        = "mctech_sequence"
 	MCTechVersionJustPass = "mctech_version_just_pass"
 	MCTechDecrypt         = "mctech_decrypt"
 	MCTechEncrypt         = "mctech_encrypt"
+	MCTechSequenceDecode  = "mctech_sequence_decode"
 )
 
 type MCTechStmt struct {

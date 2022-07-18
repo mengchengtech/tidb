@@ -13,6 +13,7 @@ import (
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -418,6 +419,18 @@ func GetCache() *SequenceCache {
 		log.Info("init sequence cache")
 	})
 	return cache
+}
+
+func SequenceDecode(id int64) (int64, error) {
+	var ep int64 = 1497220815106
+	var timeSegmentShift = 13
+
+	if id < 0 {
+		return 0, errors.Errorf("Invalid negative %d specified", id)
+	}
+
+	delta := id >> timeSegmentShift
+	return ep + delta, nil
 }
 
 func renderSequenceMetrics(startNano int64) {

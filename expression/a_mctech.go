@@ -3,7 +3,9 @@ package expression
 import (
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/mctech/udf"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/mysql"
@@ -19,26 +21,85 @@ var (
 	_ functionClass = &mctechVersionJustPassFunctionClass{}
 	_ functionClass = &mctechDecryptFunctionClass{}
 	_ functionClass = &mctechEncryptFunctionClass{}
+	_ functionClass = &mctechSequenceDecodeFunctionClass{}
 )
 var (
 	_ builtinFunc = &builtinMCTechSequenceSig{}
 	_ builtinFunc = &builtinMCTechVersionJustPassSig{}
 	_ builtinFunc = &builtinMCTechDecryptSig{}
 	_ builtinFunc = &builtinMCTechEncryptSig{}
+	_ builtinFunc = &builtinMCTechSequenceDecodeSig{}
 )
 
 func init() {
 	DeferredFunctions[ast.MCTechSequence] = struct{}{}
 
 	// mctech function.
+	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
+	funcs[ast.MCVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
+	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
+	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
+	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
+
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
+	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
 
 	// mctech function.
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
 }
+
+type mctechSequenceDecodeFunctionClass struct {
+	baseFunctionClass
+}
+
+func (c *mctechSequenceDecodeFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
+	if err := c.verifyArgs(args); err != nil {
+		return nil, err
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETDatetime, types.ETInt)
+	if err != nil {
+		return nil, err
+	}
+	sig := &builtinMCTechSequenceDecodeSig{bf}
+	bf.tp.SetFlen(mysql.MaxDatetimeFullWidth)
+	return sig, nil
+}
+
+type builtinMCTechSequenceDecodeSig struct {
+	baseBuiltinFunc
+}
+
+func (b *builtinMCTechSequenceDecodeSig) Clone() builtinFunc {
+	newSig := &builtinMCTechSequenceDecodeSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinMCTechSequenceDecodeSig) evalTime(row chunk.Row) (types.Time, bool, error) {
+	id, isNull, err := b.args[0].EvalInt(b.ctx, row)
+
+	if err != nil {
+		return types.ZeroTime, true, err
+	}
+
+	if isNull {
+		return types.ZeroTime, true, errors.New("sequence not allow null")
+	}
+
+	result, err := udf.SequenceDecode(id)
+	if err != nil {
+		return types.ZeroTime, true, err
+	}
+
+	dt := types.NewTime(types.FromGoTime(time.UnixMilli(result)),
+		mysql.TypeTimestamp, 0)
+	return dt, false, nil
+}
+
+// --------------------------------------------------------------
 
 type mctechSequenceFunctionClass struct {
 	baseFunctionClass
@@ -75,6 +136,8 @@ func (b *builtinMCTechSequenceSig) evalInt(row chunk.Row) (int64, bool, error) {
 	return v, false, nil
 }
 
+// --------------------------------------------------------------
+
 type mctechVersionJustPassFunctionClass struct {
 	baseFunctionClass
 }
@@ -109,6 +172,8 @@ func (b *builtinMCTechVersionJustPassSig) evalInt(row chunk.Row) (int64, bool, e
 	}
 	return v, false, nil
 }
+
+// --------------------------------------------------------------
 
 type mctechDecryptFunctionClass struct {
 	baseFunctionClass
@@ -151,6 +216,8 @@ func (b *builtinMCTechDecryptSig) evalString(row chunk.Row) (string, bool, error
 	return plain, false, nil
 }
 
+// --------------------------------------------------------------
+
 type mctechEncryptFunctionClass struct {
 	baseFunctionClass
 }
@@ -191,6 +258,8 @@ func (b *builtinMCTechEncryptSig) evalString(row chunk.Row) (string, bool, error
 
 	return cipher, false, nil
 }
+
+// --------------------------------------------------------------
 
 // IsValidMCTechSequenceExpr returns true if exprNode is a valid MCTechSequence expression.
 // Here `valid` means it is consistent with the given fieldType's decimal.
