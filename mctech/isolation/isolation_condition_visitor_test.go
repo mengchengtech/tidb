@@ -76,6 +76,10 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	return context, err
 }
 
+var truncateStmtCases = []*tenantMCTechTestCase{
+	{false, nil, "pf", "truncate table global_dw.component", "TRUNCATE TABLE `mock_global_dw_1`.`component`"},
+}
+
 var mctechShowStmtCases = []*tenantMCTechTestCase{
 	{false, nil, "pf", "mctech select * from company", "MCTECH SELECT * FROM `company` WHERE (`company`.`tenant`='gslq4dev')"},
 }
@@ -207,6 +211,7 @@ func TestIsolationConditionVisitor(t *testing.T) {
 		updateSingleTableCases, updateMultipleTableCases, updateWithSubqueryCases, updateWithCTECases,
 		nopCases,
 		mctechShowStmtCases,
+		truncateStmtCases,
 	}
 
 	for _, lst := range cases {
@@ -227,7 +232,7 @@ func doRunTenantMCTechTestCase(t *testing.T, c *tenantMCTechTestCase) error {
 			return err
 		}
 
-		if _, err = doApplyExtension(context, stmt, "", ""); err != nil {
+		if _, _, err = ApplyExtension(context, stmt, "", ""); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
