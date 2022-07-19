@@ -9,27 +9,25 @@ import (
 // Handler enhance tidb features
 type mctechHandler struct {
 	resolver *mctechStatementResolver
-	session  sessionctx.Context
-	sql      string
 }
 
 // PrapareSQL prapare sql
-func (h *mctechHandler) PrapareSQL() (sql string, err error) {
+func (h *mctechHandler) PrapareSQL(session sessionctx.Context, rawSql string) (sql string, err error) {
 	option := mctech.GetOption()
 	if !option.TenantEnabled {
 		// 禁用租户隔离
-		return h.sql, nil
+		return rawSql, nil
 	}
 
-	sql, err = h.resolver.PrepareSQL(h.session, h.sql)
+	sql, err = h.resolver.PrepareSQL(session, rawSql)
 	if err != nil {
 		return "", err
 	}
 
-	mctech.SetContext(h.session, h.resolver.context)
+	mctech.SetContext(session, h.resolver.context)
 
 	// 改写session上的数据库
-	vars := h.session.GetSessionVars()
+	vars := session.GetSessionVars()
 	currDb := vars.CurrentDB
 	currDb, err = h.resolver.Context().ToPhysicalDbName(currDb)
 	if err != nil {
@@ -40,9 +38,9 @@ func (h *mctechHandler) PrapareSQL() (sql string, err error) {
 }
 
 // ApplyAndCheck apply tenant isolation and check db policies
-func (h *mctechHandler) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err error) {
+func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.StmtNode) (changed bool, err error) {
 	option := mctech.GetOption()
-	charset, collation := h.session.GetSessionVars().GetCharsetInfo()
+	charset, collation := session.GetSessionVars().GetCharsetInfo()
 	for _, stmt := range stmts {
 		var (
 			dbs     []string
@@ -74,7 +72,7 @@ func (h *mctechHandler) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err e
 
 		if option.TenantEnabled {
 			// 启用租户隔离，改写SQL，检查租户隔离信息
-			err = h.resolver.Validate(h.session)
+			err = h.resolver.Validate(session)
 			if err != nil {
 				return changed, err
 			}
@@ -87,13 +85,21 @@ type handlerFactory struct {
 }
 
 // CreateHandler create Handler
-func (factory *handlerFactory) CreateHandler(session sessionctx.Context, sql string) mctech.Handler {
+func (factory *handlerFactory) CreateHandler() mctech.Handler {
 	return &mctechHandler{
 		resolver: &mctechStatementResolver{
 			checker: getMutexDatabaseChecker(),
 		},
-		session: session,
-		sql:     sql,
+	}
+}
+
+// CreateHandlerWithContext create Handler
+func (factory *handlerFactory) CreateHandlerWithContext(ctx mctech.Context) mctech.Handler {
+	return &mctechHandler{
+		resolver: &mctechStatementResolver{
+			context: ctx,
+			checker: getMutexDatabaseChecker(),
+		},
 	}
 }
 

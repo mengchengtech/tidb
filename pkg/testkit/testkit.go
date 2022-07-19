@@ -349,9 +349,8 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 		factory := mctech.GetHandlerFactory(tk.session)
 		if factory != nil {
 			var err error
-			session := tk.session
-			handler = factory.CreateHandler(session, sql)
-			if sql, err = handler.PrapareSQL(); err != nil {
+			handler = factory.CreateHandler()
+			if sql, err = handler.PrapareSQL(tk.session, sql); err != nil {
 				return nil, err
 			}
 		}
@@ -368,7 +367,7 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 
 		// add by zhangbing
 		if handler != nil {
-			if _, err = handler.ApplyAndCheck(stmts); err != nil {
+			if _, err = handler.ApplyAndCheck(tk.session, stmts); err != nil {
 				return nil, err
 			}
 		}

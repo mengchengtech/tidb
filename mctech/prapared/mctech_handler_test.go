@@ -49,9 +49,9 @@ func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Sessio
 		DbCheckerEnabled: c.dbCheckerEnabled,
 	})
 	defer mctech.SetOptionForTest(option)
-	handler := GetHandlerFactory().CreateHandler(session, c.sql)
+	handler := GetHandlerFactory().CreateHandler()
 	var sql string
-	if sql, err = handler.PrapareSQL(); err != nil {
+	if sql, err = handler.PrapareSQL(session, c.sql); err != nil {
 		return err
 	}
 
@@ -61,7 +61,7 @@ func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Sessio
 	}
 
 	require.Equal(t, 1, len(stmts), c.Source())
-	changed, err := handler.ApplyAndCheck(stmts)
+	changed, err := handler.ApplyAndCheck(session, stmts)
 	if err != nil {
 		return err
 	}
