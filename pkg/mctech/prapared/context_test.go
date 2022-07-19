@@ -43,7 +43,7 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	defer mctech.SetRPCClientForTest(rpcClient)
 	getDoFunc = createGetDoFunc(c.response)
 
-	result, err := mctech.NewPrapareResult("gslq", c.params)
+	result, err := mctech.NewPrepareResult("gslq", c.params)
 	if err != nil {
 		return err
 	}
