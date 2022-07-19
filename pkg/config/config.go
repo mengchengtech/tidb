@@ -1098,7 +1098,8 @@ var defaultConf = Config{
 			AcrossDbGroups:   []string{},
 		},
 		Tenant: Tenant{
-			Enabled: true,
+			Enabled:          true,
+			ForbiddenPrepare: true,
 		},
 		DDL: DDL{
 			Version: VersionColumn{
