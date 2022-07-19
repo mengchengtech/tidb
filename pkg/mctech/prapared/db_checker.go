@@ -153,7 +153,7 @@ func newMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDb
 }
 
 func (c *mutexDatabaseChecker) Check(context mctech.Context, dbs []string) error {
-	result := context.PrapareResult()
+	result := context.PrepareResult()
 	if !result.TenantFromRole() {
 		return nil
 	}
