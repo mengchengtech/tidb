@@ -1,6 +1,7 @@
 package prapared
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -28,6 +29,10 @@ func (r *mctechStatementResolver) Context() mctech.Context {
  * 预解析sql，解析的结果存到MCTechContext中
  */
 func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string) (string, error) {
+	if r.context != nil {
+		return "", errors.New("[mctech] PrepareSQL failure, Context exists")
+	}
+
 	params := map[string]any{}
 	actions := map[string]string{}
 
@@ -91,6 +96,10 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 func (r *mctechStatementResolver) rewriteStmt(
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
 	err = ddl.ApplyExtension(r.context, stmt)
+	if err != nil {
+		return dbs, skipped, err
+	}
+
 	dbs, skipped, err = isolation.ApplyExtension(r.context, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, skipped, err
