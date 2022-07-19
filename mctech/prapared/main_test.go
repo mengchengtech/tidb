@@ -105,7 +105,7 @@ func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func createGetDoFunc(text string) getDoFuncType {
-	return func(req *http.Request) (*http.Response, error) {
+	return func(_ *http.Request) (*http.Response, error) {
 		res := &http.Response{
 			StatusCode: 200,
 			Body:       ioutil.NopCloser(bytes.NewReader([]byte(text))),
