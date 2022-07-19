@@ -11,7 +11,8 @@ func ApplyExtension(context mctech.Context, node ast.Node,
 	skipped = false
 	switch stmtNode := node.(type) {
 	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt, *ast.InsertStmt,
-		*ast.SetOprSelectList, *ast.SetOprStmt:
+		*ast.SetOprSelectList, *ast.SetOprStmt,
+		*ast.TruncateTableStmt:
 		dbs, err = doApplyExtension(context, stmtNode, charset, collation)
 	case *ast.MCTechStmt:
 		// MCTechStmt只需要处理对应的子句就可以
