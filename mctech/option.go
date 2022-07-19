@@ -23,7 +23,8 @@ type Option struct {
 	EncryptionAccessID  string
 	EncryptionAPIPrefix string
 
-	TenantEnabled bool
+	TenantEnabled    bool
+	ForbiddenPrepare bool
 
 	DbCheckerEnabled          bool
 	DbCheckerAPIPrefix        string
@@ -69,6 +70,7 @@ func initMCTechOption() *Option {
 		EncryptionAPIPrefix: formatURL(opts.Encryption.APIPrefix),
 
 		TenantEnabled:             opts.Tenant.Enabled,
+		ForbiddenPrepare:          opts.Tenant.ForbiddenPrepare,
 		DbCheckerEnabled:          opts.DbChecker.Enabled,
 		DbCheckerAPIPrefix:        formatURL(opts.DbChecker.APIPrefix),
 		DbCheckerMutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
