@@ -29,7 +29,8 @@ type DbChecker struct {
 
 // Tenant append tenant condition used
 type Tenant struct {
-	Enabled bool `toml:"enabled" json:"enabled"`
+	Enabled          bool `toml:"enabled" json:"enabled"`
+	ForbiddenPrepare bool `toml:"forbidden-prepare" json:"forbidden-prepare"`
 }
 
 // Encryption custom crypto function used
