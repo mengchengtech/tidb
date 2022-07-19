@@ -1699,8 +1699,8 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	prevWarns := sc.GetWarnings()
 	// add by zhangbing
 	session := cc.ctx.Session
-	handler := mctech.GetHandlerFactory(session).CreateHandler(session, sql)
-	if sql, err = handler.PrapareSQL(); err != nil {
+	handler := mctech.GetHandlerFactory(session).CreateHandler()
+	if sql, err = handler.PrapareSQL(session, sql); err != nil {
 		return err
 	}
 	// add end
@@ -1715,7 +1715,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		return cc.writeOK(ctx)
 	}
 	// add by zhangbing
-	if _, err = handler.ApplyAndCheck(stmts); err != nil {
+	if _, err = handler.ApplyAndCheck(session, stmts); err != nil {
 		return err
 	}
 	// add end
