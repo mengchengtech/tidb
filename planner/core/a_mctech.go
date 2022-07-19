@@ -117,7 +117,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	)
 
 	if mctechctx != nil {
-		pr := mctechctx.PrapareResult()
+		pr := mctechctx.PrepareResult()
 		global = pr.Global()
 		params = pr.Params()
 		excludes = pr.Excludes()
