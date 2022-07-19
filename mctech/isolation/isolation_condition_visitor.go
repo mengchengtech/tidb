@@ -137,7 +137,7 @@ func newIsolationConditionVisitor(
 		withClauseScope:     &nodeScope[*cteScopeItem]{items: list.New()},
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
-	result := context.PrapareResult()
+	result := context.PrepareResult()
 	if result.Tenant() != "" {
 		visitor.enabled = true
 		visitor.tenant = ast.NewValueExpr(result.Tenant(), charset, collation)
@@ -246,7 +246,7 @@ func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	}
 
 	// 只处理global_xxxx的表
-	if sd.PrapareResult().Global() || !sd.IsGlobalDb(dbName) {
+	if sd.PrepareResult().Global() || !sd.IsGlobalDb(dbName) {
 		return
 	}
 
@@ -468,7 +468,7 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 	}
 
 	var condition ast.ExprNode
-	rt := sd.PrapareResult()
+	rt := sd.PrepareResult()
 	if rt.Global() {
 		if len(v.excludes) > 0 {
 			condition = &ast.PatternInExpr{
