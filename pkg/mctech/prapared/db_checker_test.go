@@ -55,7 +55,7 @@ func (c *testDatabaseCheckerCase) Source() any {
 }
 
 func newTestMCTechContext(tenant string) (mctech.Context, error) {
-	result, err := mctech.NewPrapareResult(tenant, map[string]any{
+	result, err := mctech.NewPrepareResult(tenant, map[string]any{
 		"global": &mctech.GlobalValueInfo{},
 	})
 	context := mctech.NewBaseContext(result, nil)

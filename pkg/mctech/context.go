@@ -16,8 +16,8 @@ type Context interface {
 	GetDbIndex() (DbIndex, error)
 	ToPhysicalDbName(db string) (string, error) // 转换为物理库名称
 	ToLogicDbName(db string) string             // 转换为数据库的逻辑名称
-	PrapareResult() *PrapareResult
-	SetResolveResult(result *PrapareResult)
+	PrepareResult() *PrepareResult
+	SetResolveResult(result *PrepareResult)
 	IsGlobalDb(dbName string) bool
 	SQLRewrited() bool
 	SetSQLRewrited(rewrited bool)
@@ -55,8 +55,8 @@ func (g *GlobalValueInfo) GetInfoForTest() map[string]any {
 	return info
 }
 
-// PrapareResult sql resolve result
-type PrapareResult struct {
+// PrepareResult sql resolve result
+type PrepareResult struct {
 	params         map[string]any
 	dbPrefix       string
 	tenant         string
@@ -64,8 +64,8 @@ type PrapareResult struct {
 	tenantFromRole bool
 }
 
-// NewPrapareResult create PrapareResult
-func NewPrapareResult(tenant string, params map[string]any) (*PrapareResult, error) {
+// NewPrepareResult create PrepareResult
+func NewPrepareResult(tenant string, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenant != ""
 	if !fromRole {
 		// 如果从角色中无法找到租户信息，并且查询的是global库，必须有hint，如果没有报错，如果hint写了租户，自动按写的租户补条件
@@ -99,7 +99,7 @@ func NewPrapareResult(tenant string, params map[string]any) (*PrapareResult, err
 		newParams[k] = v
 	}
 
-	r := &PrapareResult{
+	r := &PrepareResult{
 		tenantFromRole: fromRole,
 		tenant:         tenant,
 		dbPrefix:       dbPrefix,
@@ -110,7 +110,7 @@ func NewPrapareResult(tenant string, params map[string]any) (*PrapareResult, err
 }
 
 // GetInfoForTest get info for test
-func (r *PrapareResult) GetInfoForTest() map[string]any {
+func (r *PrepareResult) GetInfoForTest() map[string]any {
 	info := map[string]any{}
 	if len(r.params) > 0 {
 		info["params"] = maps.Clone(r.params)
@@ -131,38 +131,38 @@ func (r *PrapareResult) GetInfoForTest() map[string]any {
 }
 
 // Tenant current tenant
-func (r *PrapareResult) Tenant() string {
+func (r *PrepareResult) Tenant() string {
 	return r.tenant
 }
 
 // TenantFromRole tenant is from role
-func (r *PrapareResult) TenantFromRole() bool {
+func (r *PrepareResult) TenantFromRole() bool {
 	return r.tenantFromRole
 }
 
 // Global global
-func (r *PrapareResult) Global() bool {
+func (r *PrepareResult) Global() bool {
 	return r.globalInfo.Global
 }
 
 // Excludes excludes
-func (r *PrapareResult) Excludes() []string {
+func (r *PrepareResult) Excludes() []string {
 	return r.globalInfo.Excludes
 }
 
 // Params params
-func (r *PrapareResult) Params() map[string]any {
+func (r *PrepareResult) Params() map[string]any {
 	return r.params
 }
 
 // DbPrefix db prefix
-func (r *PrapareResult) DbPrefix() string {
+func (r *PrepareResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
 type mctechContext struct {
 	selector              DBSelector
-	prapareResult         *PrapareResult
+	prepareResult         *PrepareResult
 	sqlRewrited           bool
 	sqlWithGlobalPrefixDB bool
 }
@@ -172,15 +172,15 @@ const DbAssetPrefix = "asset_"
 const DbGlobalPrefix = "global_"
 
 // NewBaseContext create mctechContext (Context)
-func NewBaseContext(prapareResult *PrapareResult, dbSelector DBSelector) Context {
+func NewBaseContext(prepareResult *PrepareResult, dbSelector DBSelector) Context {
 	return &mctechContext{
-		prapareResult: prapareResult,
+		prepareResult: prepareResult,
 		selector:      dbSelector,
 	}
 }
 
 func (d *mctechContext) GetInfoForTest() map[string]any {
-	return d.prapareResult.GetInfoForTest()
+	return d.prepareResult.GetInfoForTest()
 }
 
 func (d *mctechContext) CurrentDB() string {
@@ -208,12 +208,12 @@ func (d *mctechContext) SetSQLWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool) {
 	d.sqlWithGlobalPrefixDB = sqlWithGlobalPrefixDB
 }
 
-func (d *mctechContext) PrapareResult() *PrapareResult {
-	return d.prapareResult
+func (d *mctechContext) PrepareResult() *PrepareResult {
+	return d.prepareResult
 }
 
-func (d *mctechContext) SetResolveResult(result *PrapareResult) {
-	d.prapareResult = result
+func (d *mctechContext) SetResolveResult(result *PrepareResult) {
+	d.prepareResult = result
 }
 
 func (d *mctechContext) ToPhysicalDbName(db string) (string, error) {
@@ -236,7 +236,7 @@ func (d *mctechContext) ToPhysicalDbName(db string) (string, error) {
 	}
 
 	// 到此database支持添加数据库前缀
-	result := d.prapareResult
+	result := d.prepareResult
 	if result == nil {
 		return db, nil
 	}
@@ -254,7 +254,7 @@ func (d *mctechContext) ToLogicDbName(db string) string {
 		return db
 	}
 
-	result := d.prapareResult
+	result := d.prepareResult
 	if result == nil {
 		return db
 	}
@@ -272,7 +272,7 @@ func (d *mctechContext) ToLogicDbName(db string) string {
 }
 
 func (d *mctechContext) IsGlobalDb(db string) bool {
-	result := d.PrapareResult()
+	result := d.PrepareResult()
 	if strings.HasPrefix(db, DbGlobalPrefix) {
 		return true
 	}
