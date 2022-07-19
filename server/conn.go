@@ -1826,8 +1826,8 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	session := cc.ctx.Session
-	handler := prapared.GetHandlerFactory().CreateHandler(session, sql)
-	if sql, err = handler.PrapareSQL(); err != nil {
+	handler := prapared.GetHandlerFactory().CreateHandler()
+	if sql, err = handler.PrapareSQL(session, sql); err != nil {
 		return err
 	}
 	// add end
@@ -1842,7 +1842,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
-	if _, err = handler.ApplyAndCheck(stmts); err != nil {
+	if _, err = handler.ApplyAndCheck(session, stmts); err != nil {
 		return err
 	}
 	// add end
