@@ -41,14 +41,15 @@ func (h *mctechHandler) PrapareSQL(session sessionctx.Context, rawSql string) (s
 // ApplyAndCheck apply tenant isolation and check db policies
 func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.StmtNode) (changed bool, err error) {
 	option := mctech.GetOption()
-	charset, collation := session.GetSessionVars().GetCharsetInfo()
+	vars := session.GetSessionVars()
+	charset, collation := vars.GetCharsetInfo()
 	for _, stmt := range stmts {
 		var (
 			dbs     []string
 			skipped = true
 		)
 
-		if err = ddl.ApplyExtension(h.resolver.context, stmt); err != nil {
+		if err = ddl.ApplyExtension(vars.CurrentDB, stmt); err != nil {
 			return false, err
 		}
 
