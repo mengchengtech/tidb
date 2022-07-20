@@ -170,6 +170,7 @@ type mctechContext struct {
 const DbPublicPrefix = "public_"
 const DbAssetPrefix = "asset_"
 const DbGlobalPrefix = "global_"
+const DbCustomSuffix = "_custom"
 
 // NewBaseContext create mctechContext (Context)
 func NewBaseContext(prepareResult *PrepareResult, dbSelector DBSelector) Context {
