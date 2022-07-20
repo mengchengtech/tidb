@@ -10,21 +10,27 @@ func ApplyExtension(context mctech.Context, node ast.Node,
 	charset, collation string) (dbs []string, skipped bool, err error) {
 	skipped = false
 	switch stmtNode := node.(type) {
-	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt, *ast.InsertStmt,
+	case *ast.SelectStmt:
+		dbs, err = doApplyExtension(context, stmtNode, charset, collation)
+		if stmtNode.Kind == ast.SelectStmtKindTable {
+			// "desc global_xxx.table" 语句解析后生成的SelectStmt
+			skipped = true
+		}
+	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.InsertStmt,
 		*ast.SetOprSelectList, *ast.SetOprStmt,
 		*ast.TruncateTableStmt:
 		dbs, err = doApplyExtension(context, stmtNode, charset, collation)
 	case *ast.MCTechStmt:
 		// MCTechStmt只需要处理对应的子句就可以
-		dbs, err = doApplyExtension(context, stmtNode.Stmt, charset, collation)
+		dbs, skipped, err = ApplyExtension(context, stmtNode.Stmt, charset, collation)
 	case *ast.ExplainStmt:
 		// ExplainStmt只需要处理对应的子句就可以
-		dbs, err = doApplyExtension(context, stmtNode.Stmt, charset, collation)
+		dbs, skipped, err = ApplyExtension(context, stmtNode.Stmt, charset, collation)
 	default:
 		skipped = true
 	}
 
-	return dbs, false, err
+	return dbs, skipped, err
 }
 
 func doApplyExtension(
