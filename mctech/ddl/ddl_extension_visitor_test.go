@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser"
 	. "github.com/pingcap/tidb/parser/format"
 	"github.com/stretchr/testify/require"
@@ -101,15 +100,6 @@ func TestDDLExtensionVisitor(t *testing.T) {
 	}
 }
 
-type testMCTechContext struct {
-	mctech.Context
-	currentDb string
-}
-
-func (d *testMCTechContext) CurrentDB() string {
-	return d.currentDb
-}
-
 func doRunDDLMCTechTestCase(t *testing.T, c *ddlMCTechTestCase) error {
 	p := parser.New()
 	stmts, _, err := p.Parse(c.sql, "", "")
@@ -120,10 +110,9 @@ func doRunDDLMCTechTestCase(t *testing.T, c *ddlMCTechTestCase) error {
 	if !ok {
 		db = c.shortDb
 	}
-	context := &testMCTechContext{currentDb: db}
 	for _, stmt := range stmts {
 		sb.Reset()
-		if err := ApplyExtension(context, stmt); err != nil {
+		if err := ApplyExtension(db, stmt); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
