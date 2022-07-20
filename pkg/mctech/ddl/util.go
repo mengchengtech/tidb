@@ -14,26 +14,26 @@ type _ddlExtension struct {
 	visitor        ast.Visitor
 }
 
-func (r *_ddlExtension) Apply(ctx mctech.Context, node ast.Node) (err error) {
+func (r *_ddlExtension) Apply(currentDb string, node ast.Node) (err error) {
 	if !r.versionEnabled {
 		return nil
 	}
 
 	switch stmtNode := node.(type) {
 	case *ast.CreateTableStmt:
-		err = r.doApply(ctx, stmtNode.Table, stmtNode)
+		err = r.doApply(currentDb, stmtNode.Table, stmtNode)
 	case *ast.AlterTableStmt:
-		err = r.doApply(ctx, stmtNode.Table, stmtNode)
+		err = r.doApply(currentDb, stmtNode.Table, stmtNode)
 	default:
 		err = nil
 	}
 	return err
 }
 
-func (r *_ddlExtension) doApply(ctx mctech.Context, table *ast.TableName, node ast.Node) (err error) {
+func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast.Node) (err error) {
 	db := table.Schema.L
 	if db == "" {
-		db = ctx.CurrentDB()
+		db = currentDb
 		if db == "" {
 			db = "test"
 		}
@@ -100,7 +100,7 @@ func getDDLExtension() *_ddlExtension {
 }
 
 // ApplyExtension apply ddl modify
-func ApplyExtension(ctx mctech.Context, node ast.Node) (err error) {
+func ApplyExtension(currentDb string, node ast.Node) (err error) {
 	ext := getDDLExtension()
-	return ext.Apply(ctx, node)
+	return ext.Apply(currentDb, node)
 }
