@@ -86,6 +86,7 @@ func getDDLExtension() *_ddlExtension {
 				mctech.PrefixFilterPattern(mctech.DbGlobalPrefix),
 				mctech.PrefixFilterPattern(mctech.DbAssetPrefix),
 				mctech.PrefixFilterPattern(mctech.DbPublicPrefix),
+				mctech.SuffixFilterPattern(mctech.DbCustomSuffix),
 			)
 
 			e.filters = make([]mctech.Filter, len(matchTexts))

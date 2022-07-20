@@ -30,12 +30,9 @@ func (t *ddlMCTechTestCase) Failure() string {
 
 var ErrColumnDef = "'__version' 字段定义不正确，允许的定义为 -> __version BIGINT NOT NULL DEFAULT MCTECH_SEQUENCE() ON UPDATE MCTECH_SEQUENCE()"
 var (
-	nopCases = []*ddlMCTechTestCase{
-		{"test", "create table t0 (id bigint,name varchar(100),primary key (id))", "CREATE TABLE `t0` (`id` BIGINT,`name` VARCHAR(100),PRIMARY KEY(`id`))", ""},
-		{"test", "alter table t1 add column (__version bigint)", "ALTER TABLE `t1` ADD COLUMN (`__version` BIGINT)", ""},
-	}
 	createCases = []*ddlMCTechTestCase{
 		{"pf", "create table t0 (id bigint,name varchar(100),primary key (id))", "CREATE TABLE `t0` (`id` BIGINT,`name` VARCHAR(100),`__version` BIGINT NOT NULL DEFAULT `MCTECH_SEQUENCE`() ON UPDATE `MCTECH_SEQUENCE`(),PRIMARY KEY(`id`))", ""},
+		{"gslq_custom", "create table t0 (id bigint,name varchar(100),primary key (id))", "CREATE TABLE `t0` (`id` BIGINT,`name` VARCHAR(100),`__version` BIGINT NOT NULL DEFAULT `MCTECH_SEQUENCE`() ON UPDATE `MCTECH_SEQUENCE`(),PRIMARY KEY(`id`))", ""},
 	}
 	alterAddMultiColumnsCases = []*ddlMCTechTestCase{
 		// add multiple
@@ -45,6 +42,7 @@ var (
 		{"pf", "alter table t1 add column (__version bigint not null default mctech_sequence())", "", ErrColumnDef},
 		{"pf", "alter table t1 add column (__version bigint not null default mctech_sequence() on update mctech_sequence())", "ALTER TABLE `t1` ADD COLUMN (`__version` BIGINT NOT NULL DEFAULT MCTECH_SEQUENCE() ON UPDATE MCTECH_SEQUENCE())", ""},
 		{"pf", "alter table t1 add column (__version bigint not null default mctech_sequence() on update mctech_sequence() comment 'abc')", "ALTER TABLE `t1` ADD COLUMN (`__version` BIGINT NOT NULL DEFAULT MCTECH_SEQUENCE() ON UPDATE MCTECH_SEQUENCE() COMMENT 'abc')", ""},
+		{"ys2_custom", "alter table t1 add column (__version bigint)", "", ErrColumnDef},
 	}
 	alterAddSingleColumnCases = []*ddlMCTechTestCase{
 		// add single
@@ -52,6 +50,7 @@ var (
 		{"pf", "alter table t2 add column __version bigint not null default mctech_sequence()", "", ErrColumnDef},
 		{"pf", "alter table t2 add column __version bigint not null on update mctech_sequence() default mctech_sequence()", "ALTER TABLE `t2` ADD COLUMN `__version` BIGINT NOT NULL ON UPDATE MCTECH_SEQUENCE() DEFAULT MCTECH_SEQUENCE()", ""},
 		{"pf", "alter table t2 add column __version bigint not null on update mctech_sequence() default mctech_sequence() comment 'abc'", "ALTER TABLE `t2` ADD COLUMN `__version` BIGINT NOT NULL ON UPDATE MCTECH_SEQUENCE() DEFAULT MCTECH_SEQUENCE() COMMENT 'abc'", ""},
+		{"mctech_custom", "alter table t2 add column __version bigint", "", ErrColumnDef},
 	}
 
 	alterRenameCases = []*ddlMCTechTestCase{
@@ -59,11 +58,12 @@ var (
 		{"pf", "alter table t3 rename column __version to xxxx_field", "", "'__version' 字段不支持修改名称"},
 		{"pf", "alter table t3 rename column xxxx_field to __version", "", "不支持把其它字段名称修改为'__version'"},
 		{"pf", "alter table t3 rename column field1 to field2", "ALTER TABLE `t3` RENAME COLUMN `field1` TO `field2`", ""},
+		{"mc_custom", "alter table t3 rename column __version to xxxx_field", "", "'__version' 字段不支持修改名称"},
 	}
 	alterDropCases = []*ddlMCTechTestCase{
 		// drop
 		{"pf", "alter table t4 drop column __version", "", "'__version' 字段不允许删除"},
-		{"pf", "alter table t4 drop column field1", "ALTER TABLE `t4` DROP COLUMN `field1`", ""},
+		{"public_data", "alter table t4 drop column field1", "ALTER TABLE `t4` DROP COLUMN `field1`", ""},
 	}
 
 	alterChangeCases = []*ddlMCTechTestCase{
@@ -73,18 +73,25 @@ var (
 		{"pf", "alter table t5 change column field1 __version bigint not null default mctech_sequence()", "", "不支持把其它字段名称修改为'__version'"},
 		{"pf", "alter table t5 change column __version __version bigint not null default mctech_sequence on update mctech_sequence", "ALTER TABLE `t5` CHANGE COLUMN `__version` `__version` BIGINT NOT NULL DEFAULT MCTECH_SEQUENCE() ON UPDATE MCTECH_SEQUENCE()", ""},
 		{"pf", "alter table t5 change column __version __version bigint not null default mctech_sequence", "", ErrColumnDef},
-		{"pf", "alter table t5 change column __version __version bigint not null on update mctech_sequence() default mctech_sequence()", "ALTER TABLE `t5` CHANGE COLUMN `__version` `__version` BIGINT NOT NULL ON UPDATE MCTECH_SEQUENCE() DEFAULT MCTECH_SEQUENCE()", ""},
-		{"pf", "alter table t5 change column field1 field1 bigint", "ALTER TABLE `t5` CHANGE COLUMN `field1` `field1` BIGINT", ""},
+		{"asset_component", "alter table t5 change column __version __version bigint not null on update mctech_sequence() default mctech_sequence()", "ALTER TABLE `t5` CHANGE COLUMN `__version` `__version` BIGINT NOT NULL ON UPDATE MCTECH_SEQUENCE() DEFAULT MCTECH_SEQUENCE()", ""},
+		{"ztsj_custom", "alter table t5 change column field1 field1 bigint", "ALTER TABLE `t5` CHANGE COLUMN `field1` `field1` BIGINT", ""},
 	}
 
 	alterAlterCases = []*ddlMCTechTestCase{
 		// alter default
+		{"gslq_custom", "alter table t6 alter column __version drop default", "", "'__version' 字段不允删除默认值"},
 		{"pf", "alter table t6 alter column __version drop default", "", "'__version' 字段不允删除默认值"},
 		{"pf", "alter table t6 alter column __version set default (now())", "", "'__version' 字段不允修改默认值"},
 		{"pf", "alter table t6 alter column field set default (current_timestamp)", "ALTER TABLE `t6` ALTER COLUMN `field` SET DEFAULT (CURRENT_TIMESTAMP())", ""},
 		{"pf", "alter table t6 alter column field set default (current_timestamp())", "ALTER TABLE `t6` ALTER COLUMN `field` SET DEFAULT (CURRENT_TIMESTAMP())", ""},
 		{"pf", "alter table t6 alter column __version set default (mctech_sequence())", "ALTER TABLE `t6` ALTER COLUMN `__version` SET DEFAULT (MCTECH_SEQUENCE())", ""},
 		{"pf", "alter table t6 alter column __version set default (mctech_sequence)", "ALTER TABLE `t6` ALTER COLUMN `__version` SET DEFAULT (MCTECH_SEQUENCE())", ""},
+	}
+
+	nopCases = []*ddlMCTechTestCase{
+		{"test", "create table t7 (id bigint,name varchar(100),primary key (id))", "CREATE TABLE `t7` (`id` BIGINT,`name` VARCHAR(100),PRIMARY KEY(`id`))", ""},
+		{"test", "alter table t7 add column (__version bigint)", "ALTER TABLE `t7` ADD COLUMN (`__version` BIGINT)", ""},
+		{"gslq_custom1", "alter table t7 add column (__version bigint)", "ALTER TABLE `t7` ADD COLUMN (`__version` BIGINT)", ""},
 	}
 )
 
