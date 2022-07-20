@@ -2,6 +2,7 @@ package prapared
 
 import (
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/ddl"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 )
@@ -46,6 +47,10 @@ func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.St
 			dbs     []string
 			skipped = true
 		)
+
+		if err = ddl.ApplyExtension(h.resolver.context, stmt); err != nil {
+			return false, err
+		}
 
 		if option.TenantEnabled {
 			h.resolver.Context().Reset()
