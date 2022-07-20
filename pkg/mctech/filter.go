@@ -35,6 +35,10 @@ func PrefixFilterPattern(text string) string {
 	return FilterStartsWith + ":" + text
 }
 
+func SuffixFilterPattern(text string) string {
+	return FilterEndsWith + ":" + text
+}
+
 const (
 	FilterStartsWith = "starts-with"
 	FilterEndsWith   = "ends-with"
