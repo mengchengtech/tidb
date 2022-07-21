@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/bits"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -1954,9 +1955,13 @@ func generateOriginDefaultValue(col *model.ColumnInfo, ctx sessionctx.Context) (
 	// add by zhangbing
 	if odValue == strings.ToUpper(ast.MCTechSequence) {
 		if ctx == nil {
-			odValue = 0
+			odValue = "0"
 		} else {
-			odValue, _ = expression.GetNextSequence()
+			seq, err := expression.GetNextSequence()
+			if err != nil {
+				return nil, err
+			}
+			odValue = strconv.FormatInt(seq, 10)
 		}
 	}
 	// add end
