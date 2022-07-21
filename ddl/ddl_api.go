@@ -1269,6 +1269,9 @@ func removeOnUpdateNowFlag(c *table.Column) {
 
 func processDefaultValue(c *table.Column, hasDefaultValue bool, setOnUpdateNow bool) {
 	setTimestampDefaultValue(c, hasDefaultValue, setOnUpdateNow)
+	// add by zhangbing
+	setMCTechSequenceDefaultValue(c, hasDefaultValue, setOnUpdateNow)
+  // add end
 
 	setYearDefaultValue(c, hasDefaultValue)
 
@@ -4334,6 +4337,12 @@ func processColumnOptions(ctx sessionctx.Context, col *table.Column, options []*
 				if !expression.IsValidCurrentTimestampExpr(opt.Expr, &col.FieldType) {
 					return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 				}
+				// add by zhangbing
+			} else if col.GetType() == mysql.TypeLonglong {
+				if !expression.IsValidMCTechSequenceExpr(opt.Expr, &col.FieldType) {
+					return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
+				}
+				// add end
 			} else {
 				return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 			}
