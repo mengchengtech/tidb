@@ -1636,6 +1636,9 @@ func removeOnUpdateNowFlag(c *table.Column) {
 
 func processDefaultValue(c *table.Column, hasDefaultValue bool, setOnUpdateNow bool) {
 	setTimestampDefaultValue(c, hasDefaultValue, setOnUpdateNow)
+	// add by zhangbing
+	setMCTechSequenceDefaultValue(c, hasDefaultValue, setOnUpdateNow)
+	// add end
 
 	setYearDefaultValue(c, hasDefaultValue)
 
@@ -5654,12 +5657,21 @@ func ProcessModifyColumnOptions(ctx sessionctx.Context, col *table.Column, optio
 			return errors.Trace(dbterror.ErrUnsupportedModifyColumn.GenWithStack("can't change column constraint (UNIQUE KEY)"))
 		case ast.ColumnOptionOnUpdate:
 			// TODO: Support other time functions.
+			// add by zhangbing
+			if col.GetType() == mysql.TypeLonglong {
+				if !expression.IsValidMCTechSequenceExpr(opt.Expr, &col.FieldType) {
+					return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
+				}
+				goto finish
+			}
+			// add end
 			if !(col.GetType() == mysql.TypeTimestamp || col.GetType() == mysql.TypeDatetime) {
 				return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 			}
 			if !expression.IsValidCurrentTimestampExpr(opt.Expr, &col.FieldType) {
 				return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 			}
+		finish:
 			col.AddFlag(mysql.OnUpdateNowFlag)
 			setOnUpdateNow = true
 		case ast.ColumnOptionGenerated:
