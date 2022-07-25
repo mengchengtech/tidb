@@ -173,3 +173,15 @@ func TestMCTechSequenceDefaultValueInitTest(t *testing.T) {
 	require.Len(t, rows, 4)
 	fmt.Printf("%v", rows)
 }
+
+func TestBigintDefaultValueOnInsertTest(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := initMock(t, store)
+
+	tk.MustExec("create table t1 (id int primary key, c1 bigint not null default 3)")
+	tk.MustExec(`insert into t1 (id) values (1)`)
+	res := tk.MustQuery("select * from t1")
+	rows := res.Rows()
+	require.Equal(t, "3", rows[0][1])
+}
