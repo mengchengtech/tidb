@@ -189,3 +189,21 @@ func TestBigintDefaultValueOnInsertTest(t *testing.T) {
 	rows := res.Rows()
 	require.Equal(t, "3", rows[0][1])
 }
+
+func TestInsertSelectUseSequenceTest(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := initMock(t, store)
+
+	tk.MustExec("create table t1 (id int primary key, c1 bigint not null)")
+	tk.MustExec("create table t2 (id int)")
+	tk.MustExec(`insert into t2 (id) values (1),(2)`)
+	tk.MustExec(`insert into t1 (id, c1) select id, mc_seq() from t2`)
+	res := tk.MustQuery("select id, c1 from t1")
+	rows := res.Rows()
+	seqs := map[string]any{}
+	for _, row := range rows {
+		seqs[row[1].(string)] = true
+	}
+	require.Len(t, seqs, len(rows))
+}
