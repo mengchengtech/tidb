@@ -72,15 +72,15 @@ func TestPreprocessorMultiRoleFailure(t *testing.T) {
 		cases, "mock_write", "gslq_tenant_only_write", "gdcd_tenant_only_write")
 }
 
-func TestPreprocessorMultiRoleFailure2(t *testing.T) {
-	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
-	cases := []*preprocessorTestCase{
-		{"select * from company", nil, nil, "", "", "当前用户mock_write同时属于多种类型的角色"},
-	}
+// func TestPreprocessorMultiRoleFailure2(t *testing.T) {
+// 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+// 	cases := []*preprocessorTestCase{
+// 		{"select * from company", nil, nil, "", "", "当前用户mock_write同时属于多种类型的角色"},
+// 	}
 
-	doRunWithSessionTest(t, preprocessorRunTestCase,
-		cases, "mock_write", "gslq_tenant_only_write", "mc_dev_write")
-}
+// 	doRunWithSessionTest(t, preprocessorRunTestCase,
+// 		cases, "mock_write", "gslq_tenant_only_write", "mc_dev_write")
+// }
 
 func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
