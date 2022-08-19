@@ -9,7 +9,9 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 )
 
-var tenantPattern = regexp.MustCompile(`(?i)^code_(.+)?$`)
+const tenantOnlyRole = "tenant_only"
+
+var tenantCodePattern = regexp.MustCompile(`(?i)^code_(.+)?$`)
 
 func currentUser(ctx sessionctx.Context) string {
 	vars := ctx.GetSessionVars()
@@ -20,10 +22,10 @@ func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCod
 	vars := ctx.GetSessionVars()
 	tenantFromRoles := make([]string, len(vars.ActiveRoles))
 	for i, r := range vars.ActiveRoles {
-		if r.Username == "tenant_only" {
+		if r.Username == tenantOnlyRole {
 			tenantOnly = true
 		}
-		subs := tenantPattern.FindStringSubmatch(r.Username)
+		subs := tenantCodePattern.FindStringSubmatch(r.Username)
 		if subs != nil {
 			tenantFromRoles[i] = subs[1]
 		}
