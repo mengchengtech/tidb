@@ -32,9 +32,9 @@ func TestStringFilter(t *testing.T) {
 		{"ends-with:_dw_1", "global_dw", false},
 		{"ends-with:_dw_1", "global_dw_1", true},
 		{"ends-with:_dw_1", "global_dw_2", false},
-		{"regex:.*_internal_.*", "gslq_internal_read", true},
-		{"regex:.*_internal_.+", "gslq_internal_", false},
-		{"contains:_internal_", "gslq_internal_write", true},
+		{"regex:.*_tenant_.*", "gslq_tenant_read", true},
+		{"regex:.*_tenant_.+", "gslq_tenant_", false},
+		{"contains:_tenant_", "gslq_tenant_write", true},
 	}
 
 	doRunTest(t, filterRunTestCase, cases)
