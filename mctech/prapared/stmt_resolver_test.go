@@ -35,7 +35,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& global:!ys2 */ select * from company", "{{{,,false,[],{true,[ys2]}}},global_platform}", ""},
 		{"pf", "select * from company /*& global:!ys2,!ys3 */", "{{{,,false,[],{true,[ys2 ys3]}}},global_platform}", ""},
 		// hint 格式不匹配
-		{"pf", "/* global:true */ select * from company", "", "用户root所属的角色无法确定租户信息"},
+		{"pf", "/* global:true */ select * from company", "", "当前用户root无法确定所属租户信息"},
 		{"test", "/* global:true */ select * from company", "{{{,,false,[],{false,[]}}},test}", ""},
 		// tenant hint
 		{"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{tenant,gdcd}],{false,[]}}},global_platform}", ""},

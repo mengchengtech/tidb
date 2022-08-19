@@ -60,14 +60,20 @@ type PrepareResult struct {
 }
 
 // NewPrepareResult create PrepareResult
-func NewPrepareResult(tenant string, params map[string]any) (*PrepareResult, error) {
-	fromRole := tenant != ""
-	if !fromRole {
-		// 如果从角色中无法找到租户信息，并且查询的是global库，必须有hint，如果没有报错，如果hint写了租户，自动按写的租户补条件
-		// 使用hint中提取的租户信息
-		// 角色里没有找到租户信息，需要等到数据库检查时才能确定当前是否需要租户code信息
-		if v, ok := params[ParamTenant]; ok {
-			tenant = strings.TrimSpace(v.(string))
+func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult, error) {
+	fromRole := tenantCode != ""
+
+	if v, ok := params[ParamTenant]; ok {
+		codeFromParam := strings.TrimSpace(v.(string))
+		if tenantCode == "" {
+			// 如果从角色中无法找到租户信息，并且查询的是global_*库，必须有hint
+			// 如果hint写了租户，自动按写的租户补条件
+			// 如果sql里也没有找到租户信息，需要等到数据库检查时才能确定当前是否需要租户code信息
+			tenantCode = codeFromParam
+		} else if codeFromParam != tenantCode {
+			// 角色里存在租户信息，sql里也存在租户信息
+			// 两个信息不一致时，抛出异常
+			return nil, fmt.Errorf("当前用户所属角色对应的租户信息与sql里传入的租户信息不一致. %s (role) <=> %s (sql)", tenantCode, codeFromParam)
 		}
 	}
 
@@ -80,7 +86,7 @@ func NewPrepareResult(tenant string, params map[string]any) (*PrepareResult, err
 		globalInfo = v.(*GlobalValueInfo)
 	}
 
-	if tenant != "" && globalInfo.Global {
+	if tenantCode != "" && globalInfo.Global {
 		return nil, errors.New("存在tenant信息时，global不允许设置为true")
 	}
 
@@ -96,7 +102,7 @@ func NewPrepareResult(tenant string, params map[string]any) (*PrepareResult, err
 
 	r := &PrepareResult{
 		tenantFromRole: fromRole,
-		tenant:         tenant,
+		tenant:         tenantCode,
 		dbPrefix:       dbPrefix,
 		globalInfo:     globalInfo,
 		params:         newParams,
