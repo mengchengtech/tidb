@@ -38,8 +38,7 @@ func TestHandler(t *testing.T) {
 		{"select * from global_cq3.company a join global_sq.table2 b on a.id = b.id", true, true, true, "dbs not allow in the same statement"},
 	}
 
-	doRunWithSessionTest(t, handlerRunTestCase, cases,
-		"mock_write", "gslq_tenant_only_write", "gslq_tenant_only_write")
+	doRunWithSessionTest(t, handlerRunTestCase, cases, "mock_write", "code_gslq", "code_gslq")
 }
 
 func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Session) (err error) {
