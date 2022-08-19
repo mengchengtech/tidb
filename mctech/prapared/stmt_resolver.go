@@ -93,7 +93,7 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 		!prepareResult.Global() {
 		// 检查DML语句和QUERY语句改写状态
 		user := currentUser(ctx)
-		return fmt.Errorf("用户%s所属的角色无法确定租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
+		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
 	}
 	return nil
 }
