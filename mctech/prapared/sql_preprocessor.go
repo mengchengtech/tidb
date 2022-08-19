@@ -1,6 +1,7 @@
 package prapared
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -8,29 +9,23 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 )
 
-var rolePattern = regexp.MustCompile(`(?i)^([^_]+)_tenant_only(_.*)?$`)
-
-func currentRoles(ctx sessionctx.Context) []string {
-	vars := ctx.GetSessionVars()
-	roles := make([]string, len(vars.ActiveRoles))
-	for i, r := range vars.ActiveRoles {
-		roles[i] = r.Username
-	}
-	return roles
-}
+var tenantPattern = regexp.MustCompile(`(?i)^code_(.+)?$`)
 
 func currentUser(ctx sessionctx.Context) string {
 	vars := ctx.GetSessionVars()
 	return vars.User.Username
 }
 
-func findTenantCodeFromRole(ctx sessionctx.Context) (string, error) {
-	roleNames := currentRoles(ctx)
-	tenantFromRoles := []string{}
-	for _, role := range roleNames {
-		subs := rolePattern.FindStringSubmatch(role)
+func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCode string, err error) {
+	vars := ctx.GetSessionVars()
+	tenantFromRoles := make([]string, len(vars.ActiveRoles))
+	for i, r := range vars.ActiveRoles {
+		if r.Username == "tenant_only" {
+			tenantOnly = true
+		}
+		subs := tenantPattern.FindStringSubmatch(r.Username)
 		if subs != nil {
-			tenantFromRoles = append(tenantFromRoles, subs[1])
+			tenantFromRoles[i] = subs[1]
 		}
 	}
 
@@ -39,30 +34,25 @@ func findTenantCodeFromRole(ctx sessionctx.Context) (string, error) {
 
 	tenantFromRolesLength := len(tenantFromRoles)
 	// if !isAdmin && tenantFromRolesLength > 0 && tenantFromRolesLength != len(roleNames) {
-	// 	// 1. 如果发现有一个{tenant}_tenant_only_r/w角色，不能再有其他任何角色，否则报错
-	// 	return "", fmt.Errorf("当前用户%s同时属于多种类型的角色。", user)
+	// 	// 1. 如果发现有一个code_{tenant} 角色，不能再有其他任何角色，否则报错
+	// 	return tenantOnly, tenantCode, fmt.Errorf("当前用户%s同时属于多种类型的角色。", user)
 	// }
 
 	if tenantFromRolesLength > 0 {
-		// 存在{tenant}_tenant_only_r/w角色，忽略global参数
-		// 2. 如果是单一{tenant}_tenant_only_r/w角色，按自动补条件处理，tenant来自角色名
-		tenant := tenantFromRoles[0]
-		if tenantFromRolesLength == 1 {
+		// 存在code_{tenant}角色，忽略global参数
+		// 2. 如果是单一code_{tenant}角色，按自动补条件处理，tenant来自角色名
+		tenantCode = tenantFromRoles[0]
+		if tenantFromRolesLength > 1 {
 			// 只有一个角色能提供租户信息
-			return tenant, nil
-		}
-
-		for index := 1; index < tenantFromRolesLength; index++ {
-			if tenant != tenantFromRoles[index] {
-				return "", fmt.Errorf("用户%s所属的角色存在多个租户的信息", user)
+			for index := 1; index < tenantFromRolesLength; index++ {
+				if tenantCode != tenantFromRoles[index] {
+					return tenantOnly, tenantCode, fmt.Errorf("用户%s所属的角色存在多个租户的信息", user)
+				}
 			}
 		}
-
-		// 所有角色提取的租户信息都相同
-		return tenant, nil
 	}
 
-	return "", nil
+	return tenantOnly, tenantCode, nil
 }
 
 var valueFormatters = map[string]valueFormatter{
@@ -117,9 +107,19 @@ func (p *sqlPreprocessor) Prepare(ctx sessionctx.Context,
 		}
 	}
 
-	tenant, err := findTenantCodeFromRole(ctx)
+	tenantOnly, tenantCode, err := findTenantInfoFromRoles(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return mctech.NewPrepareResult(tenant, params)
+
+	result, err := mctech.NewPrepareResult(tenantCode, params)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Global() && tenantOnly {
+		return nil, errors.New("当前数据库用户不允许启用 global hint")
+	}
+
+	return result, nil
 }

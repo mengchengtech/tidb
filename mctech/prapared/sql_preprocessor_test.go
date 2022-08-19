@@ -53,13 +53,56 @@ func TestProcessorWithRoot(t *testing.T) {
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "root")
 }
 
+func TestPreprocessorWithGlobalAndTenentOnlyUser(t *testing.T) {
+	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	cases := []*preprocessorTestCase{
+		{"select * from company", nil, map[string]any{"global": "true"}, "{,,false,[],{true,[]}}", "", "当前数据库用户不允许启用 global hint"},
+	}
+
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "tenant_only")
+}
+
+func TestPreprocessorWithoutGlobalAndTenentOnlyUser(t *testing.T) {
+	cases := []*preprocessorTestCase{
+		{"select * from company", nil, map[string]any{"global": "false"}, "{,,false,[],{false,[]}}", "", ""},
+	}
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "tenant_only")
+}
+
+func TestPreprocessorWithGlobalAndNotTenentOnlyUser(t *testing.T) {
+	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	cases := []*preprocessorTestCase{
+		{"select * from company", nil, map[string]any{"global": "true"}, "{,,false,[],{true,[]}}", "", ""},
+	}
+
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "tenant_only1")
+}
+
+func TestPreprocessorTenentCodeConflict(t *testing.T) {
+	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	cases := []*preprocessorTestCase{
+		{"select * from company", nil, map[string]any{"tenant": "cr19g"}, "{,,false,[],{false,[]}}", "", "当前用户所属角色对应的租户信息与sql里传入的租户信息不一致. gslq (role) <=> cr19g (sql)"},
+	}
+
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "code_gslq")
+}
+
+func TestPreprocessorTenentCodeFromRole(t *testing.T) {
+	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	cases := []*preprocessorTestCase{
+		{"select * from company", nil, map[string]any{}, "{,gslq,true,[],{false,[]}}", "", ""},
+	}
+
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "code_gslq")
+}
+
 func TestPreprocessorWithTenentUser(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
 		{"select * from company", nil, nil, "{,gslq,true,[],{false,[]}}", "", ""},
 	}
 
-	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "gslq_tenant_only_write")
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "code_gslq")
 }
 
 func TestPreprocessorMultiRoleFailure(t *testing.T) {
@@ -69,18 +112,8 @@ func TestPreprocessorMultiRoleFailure(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase,
-		cases, "mock_write", "gslq_tenant_only_write", "gdcd_tenant_only_write")
+		cases, "mock_write", "code_gslq", "code_gdcd")
 }
-
-// func TestPreprocessorMultiRoleFailure2(t *testing.T) {
-// 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
-// 	cases := []*preprocessorTestCase{
-// 		{"select * from company", nil, nil, "", "", "当前用户mock_write同时属于多种类型的角色"},
-// 	}
-
-// 	doRunWithSessionTest(t, preprocessorRunTestCase,
-// 		cases, "mock_write", "gslq_tenant_only_write", "mc_dev_write")
-// }
 
 func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
@@ -89,7 +122,7 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases,
-		"mock_write", "gslq_tenant_only_write", "gslq_tenant_only_write")
+		"mock_write", "code_gslq", "code_gslq")
 }
 
 func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session session.Session) error {
