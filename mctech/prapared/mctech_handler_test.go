@@ -39,7 +39,7 @@ func TestHandler(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, handlerRunTestCase, cases,
-		"mock_write", "gslq_internal_write", "gslq_internal_write")
+		"mock_write", "gslq_tenant_only_write", "gslq_tenant_only_write")
 }
 
 func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Session) (err error) {

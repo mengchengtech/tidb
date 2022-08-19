@@ -103,7 +103,7 @@ var deleteWithCTECases = []*tenantMCTechTestCase{
 }
 
 // ----------- grant --------------------
-// {false, false,"grant all on database public_data to role gslq4dev_internal_read", "GRANT ALL ON DATABASE public_data TO ROLE gslq4dev_internal_read"},
+// {false, false,"grant all on database public_data to role gslq4dev_tenant_only_read", "GRANT ALL ON DATABASE public_data TO ROLE gslq4dev_tenant_only_read"},
 
 var insertIntoSelectCases = []*tenantMCTechTestCase{
 	{false, false, nil, "pf", "insert into component (id, name) select id, name from global_ipm.component", "INSERT INTO `component` (`id`,`name`,`tenant`) SELECT `id`,`name`,'gslq4dev' AS `tenant` FROM `mock_global_ipm`.`component` WHERE (`mock_global_ipm`.`component`.`tenant`='gslq4dev')"},
