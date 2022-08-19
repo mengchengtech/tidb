@@ -53,13 +53,13 @@ func TestProcessorWithRoot(t *testing.T) {
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "root")
 }
 
-func TestPreprocessorWithInternalUser(t *testing.T) {
+func TestPreprocessorWithTenentUser(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
 		{"select * from company", nil, nil, "{,gslq,true,[],{false,[]}}", "", ""},
 	}
 
-	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "gslq_internal_write")
+	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "gslq_tenant_only_write")
 }
 
 func TestPreprocessorMultiRoleFailure(t *testing.T) {
@@ -69,7 +69,7 @@ func TestPreprocessorMultiRoleFailure(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase,
-		cases, "mock_write", "gslq_internal_write", "gdcd_internal_write")
+		cases, "mock_write", "gslq_tenant_only_write", "gdcd_tenant_only_write")
 }
 
 func TestPreprocessorMultiRoleFailure2(t *testing.T) {
@@ -79,7 +79,7 @@ func TestPreprocessorMultiRoleFailure2(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase,
-		cases, "mock_write", "gslq_internal_write", "mc_dev_write")
+		cases, "mock_write", "gslq_tenant_only_write", "mc_dev_write")
 }
 
 func TestPreprocessorMultiRoleSuccess(t *testing.T) {
@@ -89,7 +89,7 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases,
-		"mock_write", "gslq_internal_write", "gslq_internal_write")
+		"mock_write", "gslq_tenant_only_write", "gslq_tenant_only_write")
 }
 
 func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session session.Session) error {
