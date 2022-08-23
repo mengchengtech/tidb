@@ -43,8 +43,10 @@ func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string)
 		if strings.HasPrefix(name, "$") {
 			// action 去掉'$'前缀
 			actionName := name[1:]
-			if _, ok := actions[actionName]; ok {
-				return "", fmt.Errorf("发现多个%s hint信息", actionName)
+			if val, ok := actions[actionName]; ok {
+				if val != value {
+					return "", fmt.Errorf("多个 %s hint包含不同的值", actionName)
+				}
 			}
 			actions[actionName] = value
 		} else {
@@ -52,8 +54,10 @@ func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string)
 			if value[0] == '\'' && value[len(value)-1] == '\'' {
 				value = value[1 : len(value)-1]
 			}
-			if _, ok := params[name]; ok {
-				return "", fmt.Errorf("发现多个%s hint信息", name)
+			if val, ok := params[name]; ok {
+				if val != value {
+					return "", fmt.Errorf("多个 %s hint包含不同的值", name)
+				}
 			}
 			params[name] = value
 		}
