@@ -26,7 +26,9 @@ func (m *mctechStmtResolverTestCase) Source() any {
 func TestStmtResolverWithRoot(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*mctechStmtResolverTestCase{
-		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", nil, "发现多个tenant hint信息"},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:'gdcd' */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", nil, "多个 tenant hint包含不同的值"},
 		{"test", "describe company", map[string]any{"db": "test"}, ""},
 		{"test", "select * from company /*& global:true */", map[string]any{"global": map[string]any{"set": true}, "db": "test"}, ""},
 		//
