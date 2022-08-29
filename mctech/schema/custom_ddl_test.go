@@ -175,8 +175,7 @@ func TestMCTechSequenceDefaultValueInitTest(t *testing.T) {
 }
 
 func TestBigintDefaultValueOnInsertTest(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
 	tk.MustExec("create table t1 (id int primary key, c1 bigint not null default 3)")
@@ -187,8 +186,7 @@ func TestBigintDefaultValueOnInsertTest(t *testing.T) {
 }
 
 func TestInsertSelectUseSequenceTest(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
 	tk.MustExec("create table t1 (id int primary key, c1 bigint not null)")
