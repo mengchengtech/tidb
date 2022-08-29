@@ -119,7 +119,7 @@ func doRunDDLMCTechTestCase(t *testing.T, c *ddlMCTechTestCase) error {
 	}
 	for _, stmt := range stmts {
 		sb.Reset()
-		if err := ApplyExtension(db, stmt); err != nil {
+		if _, err := ApplyExtension(db, stmt); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
