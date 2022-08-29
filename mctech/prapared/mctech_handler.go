@@ -3,6 +3,7 @@ package prapared
 import (
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/ddl"
+	"github.com/pingcap/tidb/mctech/msic"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
 )
@@ -49,11 +50,19 @@ func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.St
 			skipped = true
 		)
 
-		if err = ddl.ApplyExtension(vars.CurrentDB, stmt); err != nil {
+		var matched bool
+		if matched, err = ddl.ApplyExtension(vars.CurrentDB, stmt); err != nil {
 			return false, err
 		}
 
-		if option.TenantEnabled {
+		if !matched {
+			if matched, err = msic.ApplyExtension(h.resolver.context, stmt); err != nil {
+				return false, err
+			}
+		}
+
+		// ddl 与dml语句不必重复判断
+		if !matched && option.TenantEnabled {
 			h.resolver.Context().Reset()
 			// 启用租户隔离，改写SQL，添加租户隔离信息
 			if dbs, skipped, err = h.resolver.ResolveStmt(stmt, charset, collation); err != nil {
