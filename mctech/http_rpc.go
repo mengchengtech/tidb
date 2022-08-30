@@ -36,11 +36,10 @@ func GetRPCClient() RPCClient {
 }
 
 // DoRequest invoke rpc api
-func DoRequest(request *http.Request) ([]byte, error) {
-	var err error
+func DoRequest(request *http.Request) (body []byte, err error) {
 	retryCount := 3
 	for retryCount > 0 {
-		body, err := do(request)
+		body, err = do(request)
 		if err == nil {
 			return body, nil
 		}
