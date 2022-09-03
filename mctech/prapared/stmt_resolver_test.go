@@ -28,7 +28,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 	cases := []*mctechStmtResolverTestCase{
 		{"pf", "/*& tenant:gdcd */ /*& tenant:'gdcd' */ select * from company", "{{{,gdcd,false,[{tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{tenant,gdcd}],{false,[]}}},global_platform}", ""},
-		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", "", "多个 tenant hint包含不同的值"},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", "", "多个 tenant hint包含不同的值: gdcd <=> gdcd1"},
 		{"test", "describe company", "{{{,,false,[],{false,[]}}},test}", ""},
 		{"test", "select * from company /*& global:true */", "{{{,,false,[],{true,[]}}},test}", ""},
 		//
