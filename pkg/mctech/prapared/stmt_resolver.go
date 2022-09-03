@@ -45,7 +45,8 @@ func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string)
 			actionName := name[1:]
 			if val, ok := actions[actionName]; ok {
 				if val != value {
-					return "", fmt.Errorf("多个 %s hint包含不同的值", actionName)
+					return "", fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
+						actionName, val, value)
 				}
 			}
 			actions[actionName] = value
@@ -56,7 +57,8 @@ func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string)
 			}
 			if val, ok := params[name]; ok {
 				if val != value {
-					return "", fmt.Errorf("多个 %s hint包含不同的值", name)
+					return "", fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
+						name, val, value)
 				}
 			}
 			params[name] = value
