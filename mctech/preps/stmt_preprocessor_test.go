@@ -1,4 +1,4 @@
-package prapared
+package preps
 
 import (
 	"context"
@@ -60,7 +60,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 }
 
 func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
-	resolver := &mctechStatementResolver{
+	preprocessor := &mctechStatementPreprocessor{
 		checker: getMutexDatabaseChecker(),
 	}
 	db, ok := dbMap[c.shortDb]
@@ -70,7 +70,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 
 	sql := c.sql
 	session.GetSessionVars().CurrentDB = db
-	sql, err := resolver.PrepareSQL(session, sql)
+	sql, err := preprocessor.PrepareSQL(session, sql)
 	if err != nil {
 		return err
 	}
@@ -81,25 +81,25 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 	}
 	stmt := stmts[0]
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
-	resolver.Context().Reset()
+	preprocessor.Context().Reset()
 	if err != nil {
 		return err
 	}
-	dbs, skipped, err := resolver.ResolveStmt(stmt, charset, collation)
+	dbs, skipped, err := preprocessor.ResolveStmt(stmt, charset, collation)
 	if err != nil {
 		return err
 	}
 
-	if err = resolver.CheckDB(dbs); err != nil {
+	if err = preprocessor.CheckDB(dbs); err != nil {
 		return err
 	}
 	if !skipped {
-		err = resolver.Validate(session)
+		err = preprocessor.Validate(session)
 		if err != nil {
 			return err
 		}
 	}
-	info := resolver.Context().GetInfo()
+	info := preprocessor.Context().GetInfo()
 	require.Equal(t, c.expect, info, c.Source())
 	return nil
 }
