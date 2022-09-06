@@ -359,7 +359,7 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 
 		// add by zhangbing
 		var handler mctech.Handler
-		factory := mctech.GetHandlerFactory(tk.session)
+		factory := mctech.GetHandlerFactoryForTest(tk.session)
 		if factory != nil {
 			var err error
 			handler = factory.CreateHandler()
