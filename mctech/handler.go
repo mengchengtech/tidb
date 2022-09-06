@@ -7,8 +7,8 @@ import (
 
 // Handler mctech enhance interface
 type Handler interface {
-	// PrapareSQL prapare sql
-	PrapareSQL(session sessionctx.Context, rawSql string) (sql string, err error)
+	// PrepareSQL prapare sql
+	PrepareSQL(session sessionctx.Context, rawSql string) (sql string, err error)
 	// ApplyAndCheck apply tenant isolation and check db policies
 	ApplyAndCheck(session sessionctx.Context, stmts []ast.StmtNode) (changed bool, err error)
 }

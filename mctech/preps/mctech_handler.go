@@ -1,4 +1,4 @@
-package prapared
+package preps
 
 import (
 	"github.com/pingcap/tidb/mctech"
@@ -10,28 +10,28 @@ import (
 
 // Handler enhance tidb features
 type mctechHandler struct {
-	resolver *mctechStatementResolver
+	preprocessor *mctechStatementPreprocessor
 }
 
-// PrapareSQL prapare sql
-func (h *mctechHandler) PrapareSQL(session sessionctx.Context, rawSql string) (sql string, err error) {
+// PrepareSQL prepare sql
+func (h *mctechHandler) PrepareSQL(session sessionctx.Context, rawSql string) (sql string, err error) {
 	option := mctech.GetOption()
 	if !option.TenantEnabled {
 		// 禁用租户隔离
 		return rawSql, nil
 	}
 
-	sql, err = h.resolver.PrepareSQL(session, rawSql)
+	sql, err = h.preprocessor.PrepareSQL(session, rawSql)
 	if err != nil {
 		return "", err
 	}
 
-	mctech.SetContext(session, h.resolver.context)
+	mctech.SetContext(session, h.preprocessor.context)
 
 	// 改写session上的数据库
 	vars := session.GetSessionVars()
 	currDb := vars.CurrentDB
-	currDb, err = h.resolver.Context().ToPhysicalDbName(currDb)
+	currDb, err = h.preprocessor.Context().ToPhysicalDbName(currDb)
 	if err != nil {
 		return "", err
 	}
@@ -44,6 +44,7 @@ func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.St
 	option := mctech.GetOption()
 	vars := session.GetSessionVars()
 	charset, collation := vars.GetCharsetInfo()
+	preprocessor := h.preprocessor
 	for _, stmt := range stmts {
 		var (
 			dbs     []string
@@ -56,16 +57,16 @@ func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.St
 		}
 
 		if !matched {
-			if matched, err = msic.ApplyExtension(h.resolver.context, stmt); err != nil {
+			if matched, err = msic.ApplyExtension(preprocessor.context, stmt); err != nil {
 				return false, err
 			}
 		}
 
 		// ddl 与dml语句不必重复判断
 		if !matched && option.TenantEnabled {
-			h.resolver.Context().Reset()
+			preprocessor.context.Reset()
 			// 启用租户隔离，改写SQL，添加租户隔离信息
-			if dbs, skipped, err = h.resolver.ResolveStmt(stmt, charset, collation); err != nil {
+			if dbs, skipped, err = h.preprocessor.ResolveStmt(stmt, charset, collation); err != nil {
 				return false, err
 			}
 		}
@@ -76,7 +77,7 @@ func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.St
 
 		if option.DbCheckerEnabled && len(dbs) > 0 {
 			// 启用数据库联合查询规则检查
-			if err = h.resolver.CheckDB(dbs); err != nil {
+			if err = preprocessor.CheckDB(dbs); err != nil {
 				return changed, err
 			}
 		}
@@ -87,7 +88,7 @@ func (h *mctechHandler) ApplyAndCheck(session sessionctx.Context, stmts []ast.St
 
 		if option.TenantEnabled {
 			// 启用租户隔离，改写SQL，检查租户隔离信息
-			err = h.resolver.Validate(session)
+			err = preprocessor.Validate(session)
 			if err != nil {
 				return changed, err
 			}
@@ -102,7 +103,7 @@ type handlerFactory struct {
 // CreateHandler create Handler
 func (factory *handlerFactory) CreateHandler() mctech.Handler {
 	return &mctechHandler{
-		resolver: &mctechStatementResolver{
+		preprocessor: &mctechStatementPreprocessor{
 			checker: getMutexDatabaseChecker(),
 		},
 	}
@@ -111,7 +112,7 @@ func (factory *handlerFactory) CreateHandler() mctech.Handler {
 // CreateHandlerWithContext create Handler
 func (factory *handlerFactory) CreateHandlerWithContext(ctx mctech.Context) mctech.Handler {
 	return &mctechHandler{
-		resolver: &mctechStatementResolver{
+		preprocessor: &mctechStatementPreprocessor{
 			context: ctx,
 			checker: getMutexDatabaseChecker(),
 		},

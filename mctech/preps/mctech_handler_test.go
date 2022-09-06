@@ -1,4 +1,4 @@
-package prapared
+package preps
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Sessio
 	defer mctech.SetOptionForTest(option)
 	handler := GetHandlerFactory().CreateHandler()
 	var sql string
-	if sql, err = handler.PrapareSQL(session, c.sql); err != nil {
+	if sql, err = handler.PrepareSQL(session, c.sql); err != nil {
 		return err
 	}
 
