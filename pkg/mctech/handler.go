@@ -21,15 +21,15 @@ type HandlerFactory interface {
 
 const handlerFactoryKey sessionValueKey = "$$MCTechContext"
 
-// GetHandlerFactory get HandlerFactory from session
-func GetHandlerFactory(s sessionctx.Context) HandlerFactory {
+// GetHandlerFactoryForTest get HandlerFactory from session
+func GetHandlerFactoryForTest(s sessionctx.Context) HandlerFactory {
 	if factory, ok := s.Value(handlerFactoryKey).(HandlerFactory); ok {
 		return factory
 	}
 	return nil
 }
 
-// SetHandlerFactory set HandlerFactory to session
-func SetHandlerFactory(s sessionctx.Context, factory HandlerFactory) {
+// SetHandlerFactoryForTest set HandlerFactory to session
+func SetHandlerFactoryForTest(s sessionctx.Context, factory HandlerFactory) {
 	s.SetValue(handlerFactoryKey, factory)
 }
