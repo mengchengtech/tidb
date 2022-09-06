@@ -8,7 +8,7 @@ import (
 
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pingcap/tidb/mctech/prapared"
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/parser/auth"
 	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/pingcap/tidb/testkit"
@@ -40,7 +40,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctech.SetHandlerFactory(session, prapared.GetHandlerFactory())
+	mctech.SetHandlerFactory(session, preps.GetHandlerFactory())
 	tk.MustExec(createTableSQL)
 	res := tk.MustQuery("show create table version_table")
 	createSQL := res.Rows()[0][1].(string)
@@ -120,7 +120,7 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctech.SetHandlerFactory(session, prapared.GetHandlerFactory())
+	mctech.SetHandlerFactory(session, preps.GetHandlerFactory())
 	tk.MustExec(createTableSQL)
 	tk.MustExec(
 		`insert into version_table

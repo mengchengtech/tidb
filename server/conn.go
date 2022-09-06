@@ -63,7 +63,7 @@ import (
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/mctech/prapared"
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
@@ -1826,8 +1826,8 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	session := cc.ctx.Session
-	handler := prapared.GetHandlerFactory().CreateHandler()
-	if sql, err = handler.PrapareSQL(session, sql); err != nil {
+	handler := preps.GetHandlerFactory().CreateHandler()
+	if sql, err = handler.PrepareSQL(session, sql); err != nil {
 		return err
 	}
 	// add end

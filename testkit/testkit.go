@@ -206,7 +206,7 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 		if factory != nil {
 			var err error
 			handler = factory.CreateHandler()
-			if sql, err = handler.PrapareSQL(tk.session, sql); err != nil {
+			if sql, err = handler.PrepareSQL(tk.session, sql); err != nil {
 				return nil, err
 			}
 		}
