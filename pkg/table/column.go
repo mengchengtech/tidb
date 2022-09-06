@@ -628,7 +628,7 @@ func getColDefaultValue(ctx expression.BuildContext, col *model.ColumnInfo, defa
 
 	// add by zhangbing
 	if col.GetType() == mysql.TypeLonglong {
-		if value, err := CastValue(ctx, types.NewDatum(defaultVal), col, false, false); err == nil {
+		if value, err := CastColumnValue(ctx.GetSessionVars(), types.NewDatum(defaultVal), col, false, false); err == nil {
 			return value, nil
 		}
 
