@@ -40,7 +40,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctech.SetHandlerFactory(session, preps.GetHandlerFactory())
+	mctech.SetHandlerFactoryForTest(session, preps.GetHandlerFactory())
 	tk.MustExec(createTableSQL)
 	res := tk.MustQuery("show create table version_table")
 	createSQL := res.Rows()[0][1].(string)
@@ -120,7 +120,7 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctech.SetHandlerFactory(session, preps.GetHandlerFactory())
+	mctech.SetHandlerFactoryForTest(session, preps.GetHandlerFactory())
 	tk.MustExec(createTableSQL)
 	tk.MustExec(
 		`insert into version_table

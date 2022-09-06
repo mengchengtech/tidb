@@ -202,7 +202,7 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 
 		// add by zhangbing
 		var handler mctech.Handler
-		factory := mctech.GetHandlerFactory(tk.session)
+		factory := mctech.GetHandlerFactoryForTest(tk.session)
 		if factory != nil {
 			var err error
 			handler = factory.CreateHandler()
