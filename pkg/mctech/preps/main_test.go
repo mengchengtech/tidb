@@ -44,7 +44,7 @@ func createSession(t *testing.T, tk *testkit.TestKit, user string, roles ...stri
 	}
 
 	factory := GetHandlerFactory()
-	mctech.SetHandlerFactory(session, factory)
+	mctech.SetHandlerFactoryForTest(session, factory)
 	return session
 }
 
