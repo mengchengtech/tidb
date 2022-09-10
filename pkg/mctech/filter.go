@@ -10,10 +10,12 @@ type stringFilter struct {
 	action  string
 }
 
+// Filter interface
 type Filter interface {
 	Match(text string) (bool, error)
 }
 
+// NewStringFilter function
 func NewStringFilter(pattern string) Filter {
 	index := strings.Index(pattern, ":")
 	filter := &stringFilter{}
@@ -31,19 +33,21 @@ func NewStringFilter(pattern string) Filter {
 	return filter
 }
 
+// PrefixFilterPattern function
 func PrefixFilterPattern(text string) string {
-	return FilterStartsWith + ":" + text
+	return filterStartsWith + ":" + text
 }
 
+// SuffixFilterPattern function
 func SuffixFilterPattern(text string) string {
-	return FilterEndsWith + ":" + text
+	return filterEndsWith + ":" + text
 }
 
 const (
-	FilterStartsWith = "starts-with"
-	FilterEndsWith   = "ends-with"
-	FilterContains   = "contains"
-	FilterRegex      = "regex"
+	filterStartsWith = "starts-with"
+	filterEndsWith   = "ends-with"
+	filterContains   = "contains"
+	filterRegex      = "regex"
 )
 
 func (f *stringFilter) Match(text string) (bool, error) {
@@ -52,13 +56,13 @@ func (f *stringFilter) Match(text string) (bool, error) {
 		err     error
 	)
 	switch f.action {
-	case FilterStartsWith:
+	case filterStartsWith:
 		matched = strings.HasPrefix(text, f.pattern)
-	case FilterEndsWith:
+	case filterEndsWith:
 		matched = strings.HasSuffix(text, f.pattern)
-	case FilterContains:
+	case filterContains:
 		matched = strings.Contains(text, f.pattern)
-	case FilterRegex:
+	case filterRegex:
 		matched, err = regexp.MatchString(f.pattern, text)
 	default:
 		matched = f.pattern == text
