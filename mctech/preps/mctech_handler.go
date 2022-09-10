@@ -14,14 +14,14 @@ type mctechHandler struct {
 }
 
 // PrepareSQL prepare sql
-func (h *mctechHandler) PrepareSQL(session sessionctx.Context, rawSql string) (sql string, err error) {
+func (h *mctechHandler) PrepareSQL(session sessionctx.Context, rawSQL string) (sql string, err error) {
 	option := mctech.GetOption()
 	if !option.TenantEnabled {
 		// 禁用租户隔离
-		return rawSql, nil
+		return rawSQL, nil
 	}
 
-	sql, err = h.preprocessor.PrepareSQL(session, rawSql)
+	sql, err = h.preprocessor.PrepareSQL(session, rawSQL)
 	if err != nil {
 		return "", err
 	}
