@@ -285,6 +285,7 @@ func IsValidMCTechSequenceExpr(exprNode ast.ExprNode, _ *types.FieldType) bool {
 	return true
 }
 
+// GetNextSequence function
 func GetNextSequence() (int64, error) {
 	return udf.GetCache().Next()
 }
