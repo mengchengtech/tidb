@@ -421,6 +421,7 @@ func GetCache() *SequenceCache {
 	return cache
 }
 
+// SequenceDecode function
 func SequenceDecode(id int64) (int64, error) {
 	var ep int64 = 1497220815106
 	var timeSegmentShift = 13
