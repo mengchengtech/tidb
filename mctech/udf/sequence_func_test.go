@@ -23,16 +23,16 @@ func TestSequence(t *testing.T) {
 }
 
 func TestSequenceDecodeSuccess(t *testing.T) {
-	var seqId int64 = 1318030351881216
-	unixTime, err := SequenceDecode(seqId)
+	var seqID int64 = 1318030351881216
+	unixTime, err := SequenceDecode(seqID)
 	require.NoError(t, err)
 	dt := time.UnixMilli(unixTime)
 	require.Equal(t, dt.String(), "2022-07-18 10:59:52.044 +0800 CST")
 }
 
 func TestSequenceDecodeFailure(t *testing.T) {
-	var seqId int64 = -30351881216
-	_, err := SequenceDecode(seqId)
+	var seqID int64 = -30351881216
+	_, err := SequenceDecode(seqID)
 	require.Errorf(t, err, "Invalid negative %s specified", -30351881216)
 }
 

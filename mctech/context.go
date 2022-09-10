@@ -158,9 +158,18 @@ type mctechContext struct {
 	sqlWithGlobalPrefixDB bool
 }
 
+
+
+// DbPublicPrefix public类数据库前缀
 const DbPublicPrefix = "public_"
+
+// DbAssetPrefix asset类数据库前缀
 const DbAssetPrefix = "asset_"
+
+// DbGlobalPrefix global类数据库前缀
 const DbGlobalPrefix = "global_"
+
+// DbCustomSuffix 租户自定义数据库后缀
 const DbCustomSuffix = "_custom"
 
 // NewBaseContext create mctechContext (Context)
