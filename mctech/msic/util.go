@@ -10,11 +10,11 @@ import (
 type _msicExtension struct {
 }
 
-func (r *_msicExtension) Apply(context mctech.Context, node ast.Node) (matched bool, err error) {
+func (r *_msicExtension) Apply(mctechCtx mctech.Context, node ast.Node) (matched bool, err error) {
 	matched = true
 	switch stmtNode := node.(type) {
 	case *ast.UseStmt:
-		err = r.changeToPhysicalDb(context, stmtNode)
+		err = r.changeToPhysicalDb(mctechCtx, stmtNode)
 	default:
 		matched = false
 	}
@@ -46,7 +46,7 @@ func getMsicExtension() *_msicExtension {
 }
 
 // ApplyExtension apply msic
-func ApplyExtension(context mctech.Context, node ast.Node) (matched bool, err error) {
+func ApplyExtension(mctechCtx mctech.Context, node ast.Node) (matched bool, err error) {
 	ext := getMsicExtension()
-	return ext.Apply(context, node)
+	return ext.Apply(mctechCtx, node)
 }
