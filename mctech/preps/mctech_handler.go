@@ -56,9 +56,8 @@ func (h *mctechHandler) ApplyAndCheck(mctechCtx mctech.Context, stmts []ast.Stmt
 		var (
 			dbs     []string
 			skipped = true
+			matched bool
 		)
-
-		var matched bool
 		if matched, err = ddl.ApplyExtension(vars.CurrentDB, stmt); err != nil {
 			return false, err
 		}

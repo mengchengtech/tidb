@@ -43,11 +43,15 @@ func TestHandler(t *testing.T) {
 
 func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Context) (err error) {
 	option := mctech.GetOption()
-	mctech.SetOptionForTest(&mctech.Option{
-		TenantEnabled:    c.tenantEnabled,
-		DbCheckerEnabled: c.dbCheckerEnabled,
-	})
-	defer mctech.SetOptionForTest(option)
+	tenantEnabled := option.TenantEnabled
+	dbCheckerEnabled := option.DbCheckerEnabled
+	option.TenantEnabled = c.tenantEnabled
+	option.DbCheckerEnabled = c.dbCheckerEnabled
+
+	defer func() {
+		option.TenantEnabled = tenantEnabled
+		option.DbCheckerEnabled = dbCheckerEnabled
+	}()
 	var sql string
 	if sql, err = handler.PrepareSQL(mctechCtx, c.sql); err != nil {
 		return err
