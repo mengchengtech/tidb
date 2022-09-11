@@ -37,13 +37,17 @@ type testMCTechContext struct {
 	currentDb string
 }
 
-func (d *testMCTechContext) GetInfo() string {
-	info := d.Context.GetInfo()
+func (d *testMCTechContext) GetInfoForTest() string {
+	info := d.Context.(mctech.ContextForTest).GetInfoForTest()
 	return fmt.Sprintf("{%s,%s}", info, d.CurrentDB())
 }
 
 func (d *testMCTechContext) CurrentDB() string {
 	return d.currentDb
+}
+
+func (d *testMCTechContext) BaseContext() mctech.Context {
+	return d.Context
 }
 
 type testDBSelector struct {
@@ -69,9 +73,11 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	}
 
 	context := &testMCTechContext{
-		Context: mctech.NewBaseContext(
-			result, &testDBSelector{dbIndex: 1}),
+		Context: mctech.NewBaseContext(),
 	}
+	modifyCtx := context.Context.(mctech.ModifyContext)
+	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetDBSelector(&testDBSelector{dbIndex: 1})
 
 	context.currentDb, err = context.ToPhysicalDbName(currentDb)
 	return context, err
