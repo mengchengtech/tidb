@@ -73,7 +73,7 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	}
 
 	context := &testMCTechContext{
-		Context: mctech.NewBaseContext(),
+		Context: mctech.NewBaseContext(false),
 	}
 	modifyCtx := context.Context.(mctech.ModifyContext)
 	modifyCtx.SetPrepareResult(result)

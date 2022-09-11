@@ -13,9 +13,10 @@ type tidbSessionMCTechContext struct {
 }
 
 // NewContext function
-func NewContext(session sessionctx.Context) mctech.Context {
+func NewContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
+	baseCtx := mctech.NewBaseContext(usingTenantParam)
 	return &tidbSessionMCTechContext{
-		Context: mctech.NewBaseContext(),
+		Context: baseCtx,
 		session: session,
 	}
 }

@@ -1827,7 +1827,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	mctechCtx := preps.NewContext(cc.ctx.Session)
+	mctechCtx := preps.NewContext(cc.ctx.Session, false)
 	ctx = mctech.WithContext(ctx, mctechCtx)
 	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 		return err
