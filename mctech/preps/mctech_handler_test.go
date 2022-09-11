@@ -41,26 +41,25 @@ func TestHandler(t *testing.T) {
 	doRunWithSessionTest(t, handlerRunTestCase, cases, "mock_write", "code_gslq", "code_gslq")
 }
 
-func handlerRunTestCase(t *testing.T, c *handlerTestCase, session session.Session) (err error) {
+func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Context) (err error) {
 	option := mctech.GetOption()
 	mctech.SetOptionForTest(&mctech.Option{
 		TenantEnabled:    c.tenantEnabled,
 		DbCheckerEnabled: c.dbCheckerEnabled,
 	})
 	defer mctech.SetOptionForTest(option)
-	handler := GetHandlerFactory().CreateHandler()
 	var sql string
-	if sql, err = handler.PrepareSQL(session, c.sql); err != nil {
+	if sql, err = handler.PrepareSQL(mctechCtx, c.sql); err != nil {
 		return err
 	}
-
+	session := mctechCtx.Session().(session.Session)
 	stmts, err := session.Parse(context.Background(), sql)
 	if err != nil {
 		return err
 	}
 
 	require.Equal(t, 1, len(stmts), c.Source())
-	changed, err := handler.ApplyAndCheck(session, stmts)
+	changed, err := handler.ApplyAndCheck(mctechCtx, stmts)
 	if err != nil {
 		return err
 	}

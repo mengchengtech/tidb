@@ -1,29 +1,87 @@
 package mctech
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 
+	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
 	"golang.org/x/exp/slices"
 )
 
 // Context mctech context interface
 type Context interface {
-	CurrentDB() string // 当前数据库
-	Reset()
+	// 获取tidb session
+	Session() sessionctx.Context
+
+	// @title InPrepareStmt
+	// @description 当前请求是否是prepare语句中
+	// @return bool
+	InPrepareStmt() bool
+	// @title CurrentDB
+	// @description 当前数据库
+	CurrentDB() string
+	// @title GetDbIndex
+	// @description 获取当前使用的global_dw库的索引号
 	GetDbIndex() (DbIndex, error)
-	ToPhysicalDbName(db string) (string, error) // 转换为物理库名称
-	ToLogicDbName(db string) string             // 转换为数据库的逻辑名称
+	// @title ToPhysicalDbName
+	// @description 把给定的库名转换为真实的物理库名。根据传入sql中的dbPrefix添加前缀，如果前缀已存在则什么也不做
+	ToPhysicalDbName(db string) (string, error)
+	// @title ToLogicDbName
+	// @description 把给定的数据库名转换为数据库的逻辑名称。根据传入sql中的dbPrefix，移除前缀，如果前缀不存在则什么也不做
+	ToLogicDbName(db string) string
+	// @title PrepareResult
+	// @description 对sql预处理的结果
 	PrepareResult() *PrepareResult
-	SetResolveResult(result *PrepareResult)
+	// @title IsGlobalDb
+	// @description 判断给定的库名是否属于global一类的库。（需要考虑是否含有dbPrefix）
+	// @param dbName string
 	IsGlobalDb(dbName string) bool
+	// @title SQLRewrited
+	// @description 当前请求中的sql是否已被改动
 	SQLRewrited() bool
+	// @title SQLHasGlobalDB
+	// @description sql中是否包含global类的库
+	SQLHasGlobalDB() bool
+}
+
+// ContextForTest interface
+type ContextForTest interface {
+	// @title GetInfoForTest
+	// @description 获取用于单元测试的描述信息
+	GetInfoForTest() string
+}
+
+// ModifyContext interface
+type ModifyContext interface {
+	// @title Reset
+	// @description 重置是否改写状态，用于支持一次执行多条sql语句时
+	Reset()
+	// @title SetPrepareResult
+	// @description 设置sql预处理的结果
+	// @param result *PrepareResult
+	SetPrepareResult(result *PrepareResult)
+	// @title SetDBSelector
+	// @description 设置DbSelector
+	// @param selector DBSelector
+	SetDBSelector(selector DBSelector)
+	// @title SetSQLRewrited
+	// @description 设置sql是否已被改动的标记
+	// @param rewrited bool
 	SetSQLRewrited(rewrited bool)
-	SQLWithGlobalPrefixDB() bool
-	SetSQLWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool)
-	GetInfo() string
+	// @title SetSQLHasGlobalDB
+	// @description 设置sql中是否包含global类的库
+	// @param hasGlobalDB bool
+	SetSQLHasGlobalDB(hasGlobalDB bool)
+}
+
+// BaseContextAware interface
+type BaseContextAware interface {
+	BaseContext() Context
 }
 
 // DBSelector global_dw_* db index selector
@@ -151,14 +209,13 @@ func (r *PrepareResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
-type mctechContext struct {
-	selector              DBSelector
-	prepareResult         *PrepareResult
-	sqlRewrited           bool
-	sqlWithGlobalPrefixDB bool
+type baseContext struct {
+	inPrepareStmt  bool
+	selector       DBSelector
+	prepareResult  *PrepareResult
+	sqlRewrited    bool
+	sqlHasGlobalDB bool
 }
-
-
 
 // DbPublicPrefix public类数据库前缀
 const DbPublicPrefix = "public_"
@@ -173,51 +230,78 @@ const DbGlobalPrefix = "global_"
 const DbCustomSuffix = "_custom"
 
 // NewBaseContext create mctechContext (Context)
-func NewBaseContext(prepareResult *PrepareResult, dbSelector DBSelector) Context {
-	return &mctechContext{
-		prepareResult: prepareResult,
-		selector:      dbSelector,
-	}
+func NewBaseContext() Context {
+	return &baseContext{}
 }
 
-func (d *mctechContext) GetInfo() string {
+func (d *baseContext) CurrentDB() string {
+	log.Error("CurrentDB: " + string(debug.Stack()))
+	panic(errors.New("CurrentDB not implemented"))
+}
+
+func (d *baseContext) PrepareSQL(rawSQL string) (sql string, err error) {
+	log.Error("PrepareSQL: " + string(debug.Stack()))
+	panic(errors.New("PrepareSQL not implemented"))
+}
+
+func (d *baseContext) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err error) {
+	log.Error("ApplyAndCheck: " + string(debug.Stack()))
+	panic(errors.New("ApplyAndCheck not implemented"))
+}
+
+func (d *baseContext) Session() sessionctx.Context {
+	log.Error("Session: " + string(debug.Stack()))
+	panic(errors.New("Session not implemented"))
+}
+
+// ------------------------------------------------
+
+func (d *baseContext) GetInfoForTest() string {
 	return fmt.Sprintf("{%s}", d.prepareResult)
 }
 
-func (d *mctechContext) CurrentDB() string {
-	panic(errors.New("not implemented"))
-}
-
-func (d *mctechContext) Reset() {
+func (d *baseContext) Reset() {
 	d.sqlRewrited = false
-	d.sqlWithGlobalPrefixDB = false
+	d.sqlHasGlobalDB = false
 }
 
-func (d *mctechContext) SQLRewrited() bool {
-	return d.sqlRewrited
+// ------------------------------------------------
+
+func (d *baseContext) SetDBSelector(selector DBSelector) {
+	d.selector = selector
 }
 
-func (d *mctechContext) SetSQLRewrited(sqlRewrited bool) {
-	d.sqlRewrited = sqlRewrited
+func (d *baseContext) SetSQLHasGlobalDB(hasGlobalDB bool) {
+	d.sqlHasGlobalDB = hasGlobalDB
 }
 
-func (d *mctechContext) SQLWithGlobalPrefixDB() bool {
-	return d.sqlWithGlobalPrefixDB
-}
-
-func (d *mctechContext) SetSQLWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool) {
-	d.sqlWithGlobalPrefixDB = sqlWithGlobalPrefixDB
-}
-
-func (d *mctechContext) PrepareResult() *PrepareResult {
-	return d.prepareResult
-}
-
-func (d *mctechContext) SetResolveResult(result *PrepareResult) {
+func (d *baseContext) SetPrepareResult(result *PrepareResult) {
 	d.prepareResult = result
 }
 
-func (d *mctechContext) ToPhysicalDbName(db string) (string, error) {
+func (d *baseContext) SetSQLRewrited(sqlRewrited bool) {
+	d.sqlRewrited = sqlRewrited
+}
+
+// ------------------------------------------------
+
+func (d *baseContext) InPrepareStmt() bool {
+	return d.inPrepareStmt
+}
+
+func (d *baseContext) SQLRewrited() bool {
+	return d.sqlRewrited
+}
+
+func (d *baseContext) SQLHasGlobalDB() bool {
+	return d.sqlHasGlobalDB
+}
+
+func (d *baseContext) PrepareResult() *PrepareResult {
+	return d.prepareResult
+}
+
+func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	if db == "" {
 		return db, nil
 	}
@@ -250,7 +334,7 @@ func (d *mctechContext) ToPhysicalDbName(db string) (string, error) {
 	return dbPrefix + "_" + db, nil
 }
 
-func (d *mctechContext) ToLogicDbName(db string) string {
+func (d *baseContext) ToLogicDbName(db string) string {
 	if db == "" {
 		return db
 	}
@@ -272,7 +356,7 @@ func (d *mctechContext) ToLogicDbName(db string) string {
 	return db
 }
 
-func (d *mctechContext) IsGlobalDb(db string) bool {
+func (d *baseContext) IsGlobalDb(db string) bool {
 	result := d.PrepareResult()
 	if strings.HasPrefix(db, DbGlobalPrefix) {
 		return true
@@ -285,7 +369,7 @@ func (d *mctechContext) IsGlobalDb(db string) bool {
 	return false
 }
 
-func (d *mctechContext) GetDbIndex() (DbIndex, error) {
+func (d *baseContext) GetDbIndex() (DbIndex, error) {
 	return d.selector.GetDbIndex()
 }
 
@@ -311,23 +395,44 @@ const (
 	SECOND // 0x02
 )
 
+type contextKey struct{}
+
+var customContextKey = contextKey{}
+
+// NewContext function callback
+var NewContext func(session sessionctx.Context) Context
+
+// WithContext set mctech context to session
+func WithContext(parent context.Context, cc Context) context.Context {
+	return context.WithValue(parent, customContextKey, cc)
+}
+
+// GetContext get mctech context from session
+func GetContext(ctx context.Context) Context {
+	val := ctx.Value(customContextKey)
+	if sp, ok := val.(Context); ok {
+		return sp
+	}
+	return nil
+}
+
 type sessionValueKey string
 
 func (s sessionValueKey) String() string {
 	return string(s)
 }
 
-const contextKey sessionValueKey = "$$MCTechContext"
+const contextForTestKey sessionValueKey = "$$MCTechContext"
 
-// GetContext get mctech context from session
-func GetContext(s sessionctx.Context) Context {
-	if ctx, ok := s.Value(contextKey).(Context); ok {
-		return ctx
+// GetContextForTest get HandlerFactory from session
+func GetContextForTest(s sessionctx.Context) Context {
+	if factory, ok := s.Value(contextForTestKey).(Context); ok {
+		return factory
 	}
 	return nil
 }
 
-// SetContext set mctech context to session
-func SetContext(s sessionctx.Context, ctx Context) {
-	s.SetValue(contextKey, ctx)
+// SetContextForTest set HandlerFactory to session
+func SetContextForTest(s sessionctx.Context, mctechCtx Context) {
+	s.SetValue(contextForTestKey, mctechCtx)
 }

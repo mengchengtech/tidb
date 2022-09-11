@@ -306,12 +306,13 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 		prevWarns := sc.GetWarnings()
 
 		// add by zhangbing
-		var handler mctech.Handler
-		factory := mctech.GetHandlerFactoryForTest(tk.session)
-		if factory != nil {
+		handler := mctech.GetHandler()
+		mctechCtx := mctech.GetContextForTest(tk.session)
+
+		if mctechCtx != nil {
 			var err error
-			handler = factory.CreateHandler()
-			if sql, err = handler.PrepareSQL(tk.session, sql); err != nil {
+			ctx = mctech.WithContext(ctx, mctechCtx)
+			if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 				return nil, err
 			}
 		}
@@ -327,8 +328,8 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 		}
 
 		// add by zhangbing
-		if handler != nil {
-			if _, err = handler.ApplyAndCheck(tk.session, stmts); err != nil {
+		if mctechCtx != nil {
+			if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
 				return nil, err
 			}
 		}

@@ -14,6 +14,10 @@ type testMCTechContext struct {
 	mctech.Context
 }
 
+func (d *testMCTechContext) BaseContext() mctech.Context {
+	return d.Context
+}
+
 type testDBSelector struct {
 	dbIndex mctech.DbIndex
 }
@@ -98,9 +102,10 @@ func newTestMCTechContext() (mctech.Context, error) {
 	}
 
 	context := &testMCTechContext{
-		Context: mctech.NewBaseContext(
-			result, &testDBSelector{dbIndex: 1}),
+		Context: mctech.NewBaseContext(),
 	}
-
+	modifyCtx := context.Context.(mctech.ModifyContext)
+	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetDBSelector(&testDBSelector{dbIndex: 1})
 	return context, err
 }

@@ -88,6 +88,11 @@ func (g *databaseGrouper) GroupBy(dbNames []string) []dbGroup {
 	return results
 }
 
+// DatabaseChecker interface
+type DatabaseChecker interface {
+	Check(context mctech.Context, dbs []string) error
+}
+
 // mutexDatabaseChecker 检查sql中用到的数据库是否存在互斥的库名
 /**
  *
@@ -104,7 +109,7 @@ type mutexDatabaseChecker struct {
 var dbChecker *mutexDatabaseChecker
 var dbCheckerInitOne sync.Once
 
-func getMutexDatabaseChecker() *mutexDatabaseChecker {
+func getDatabaseChecker() DatabaseChecker {
 	if dbChecker != nil {
 		return dbChecker
 	}

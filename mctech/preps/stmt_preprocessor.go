@@ -9,27 +9,29 @@ import (
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/isolation"
 	"github.com/pingcap/tidb/parser/ast"
-	"github.com/pingcap/tidb/sessionctx"
 	"golang.org/x/exp/slices"
 )
 
 var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*/`)
 
-type mctechStatementPreprocessor struct {
-	context mctech.Context
-	checker *mutexDatabaseChecker
+// StatementPreprocessor interface
+type StatementPreprocessor interface {
+	PrepareSQL(mctechCtx mctech.Context, sql string) (string, *mctech.PrepareResult, error)
+	ResolveStmt(mctechCtx mctech.Context,
+		stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error)
+	Validate(mctechCtx mctech.Context) error
 }
 
-func (r *mctechStatementPreprocessor) Context() mctech.Context {
-	return r.context
+type mctechStatementPreprocessor struct {
 }
 
 /**
  * 预解析sql，解析的结果存到MCTechContext中
  */
-func (r *mctechStatementPreprocessor) PrepareSQL(ctx sessionctx.Context, sql string) (string, error) {
-	if r.context != nil {
-		return "", errors.New("[mctech] PrepareSQL failure, Context exists")
+func (r *mctechStatementPreprocessor) PrepareSQL(
+	mctechCtx mctech.Context, sql string) (string, *mctech.PrepareResult, error) {
+	if mctechCtx.PrepareResult() != nil {
+		return "", nil, errors.New("[mctech] PrepareSQL failure, Context exists")
 	}
 
 	params := map[string]any{}
@@ -45,7 +47,7 @@ func (r *mctechStatementPreprocessor) PrepareSQL(ctx sessionctx.Context, sql str
 			actionName := name[1:]
 			if val, ok := actions[actionName]; ok {
 				if val != value {
-					return "", fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
+					return "", nil, fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
 						actionName, val, value)
 				}
 			}
@@ -57,7 +59,7 @@ func (r *mctechStatementPreprocessor) PrepareSQL(ctx sessionctx.Context, sql str
 			}
 			if val, ok := params[name]; ok {
 				if val != value {
-					return "", fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
+					return "", nil, fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
 						name, val, value)
 				}
 			}
@@ -67,19 +69,18 @@ func (r *mctechStatementPreprocessor) PrepareSQL(ctx sessionctx.Context, sql str
 
 	preprocessor := newSQLPreprocessor(sql)
 	var preparedSQL string
-	result, err := preprocessor.Prepare(ctx, actions, params)
+	result, err := preprocessor.Prepare(mctechCtx, actions, params)
 	if err != nil {
-		return preparedSQL, err
+		return preparedSQL, nil, err
 	}
 
 	preparedSQL = preprocessor.preparedSQL
-	r.context = newContext(ctx, result, newDBSelector(result))
-	return preparedSQL, nil
+	return preparedSQL, result, nil
 }
 
-func (r *mctechStatementPreprocessor) ResolveStmt(
+func (r *mctechStatementPreprocessor) ResolveStmt(mctechCtx mctech.Context,
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = r.rewriteStmt(stmt, charset, collation)
+	dbs, skipped, err = r.rewriteStmt(mctechCtx, stmt, charset, collation)
 	if err != nil {
 		return nil, false, err
 	}
@@ -87,41 +88,38 @@ func (r *mctechStatementPreprocessor) ResolveStmt(
 	return dbs, skipped, nil
 }
 
-func (r *mctechStatementPreprocessor) CheckDB(dbs []string) error {
-	return r.checker.Check(r.context, dbs)
-}
-
-func (r *mctechStatementPreprocessor) Validate(ctx sessionctx.Context) error {
-	prepareResult := r.context.PrepareResult()
+func (r *mctechStatementPreprocessor) Validate(mctechCtx mctech.Context) error {
+	prepareResult := mctechCtx.PrepareResult()
 	// 执行到此处说明当前语句一定是DML或QUERY
 	// sql没有被改写，但是用到了global_xxx数据库，并且没有设置global为true
-	if !r.context.SQLRewrited() && r.context.SQLWithGlobalPrefixDB() &&
+	if !mctechCtx.SQLRewrited() && mctechCtx.SQLHasGlobalDB() &&
 		!prepareResult.Global() {
 		// 检查DML语句和QUERY语句改写状态
-		user := currentUser(ctx)
+		user := currentUser(mctechCtx.Session())
 		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
 	}
 	return nil
 }
 
-func (r *mctechStatementPreprocessor) rewriteStmt(
+func (r *mctechStatementPreprocessor) rewriteStmt(mctechCtx mctech.Context,
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = isolation.ApplyExtension(r.context, stmt, charset, collation)
+	dbs, skipped, err = isolation.ApplyExtension(mctechCtx, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, skipped, err
 	}
 
 	// 判断sql中是否使用了是否包含'global_xxx'这样的数据库
 	hasGlobalDb := slices.IndexFunc(dbs, func(db string) bool {
-		return r.context.IsGlobalDb(db)
+		return mctechCtx.IsGlobalDb(db)
 	}) >= 0
 
 	if !hasGlobalDb {
 		return nil, false, nil
 	}
 
-	r.context.SetSQLWithGlobalPrefixDB(true)
-	result := r.context.PrepareResult()
+	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx.SetSQLHasGlobalDB(true)
+	result := mctechCtx.PrepareResult()
 	if result.Global() {
 		// 启用global时，允许跨任意数据库查询
 		return nil, false, nil
@@ -132,6 +130,8 @@ func (r *mctechStatementPreprocessor) rewriteStmt(
 		return nil, false, nil
 	}
 
-	r.context.SetSQLRewrited(!skipped)
+	modifyCtx.SetSQLRewrited(!skipped)
 	return dbs, false, nil
 }
+
+var preprocessor StatementPreprocessor = &mctechStatementPreprocessor{}

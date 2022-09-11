@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,47 +59,52 @@ func TestStmtResolverWithRoot(t *testing.T) {
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
 }
 
-func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
-	preprocessor := &mctechStatementPreprocessor{
-		checker: getMutexDatabaseChecker(),
-	}
+func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechCtx mctech.Context) error {
 	db, ok := dbMap[c.shortDb]
 	if !ok {
 		db = "test"
 	}
 
-	sql := c.sql
+	var (
+		sql     = c.sql
+		session = mctechCtx.Session()
+		result  *mctech.PrepareResult
+		err     error
+	)
+
 	session.GetSessionVars().CurrentDB = db
-	sql, err := preprocessor.PrepareSQL(session, sql)
+	sql, result, err = preprocessor.PrepareSQL(mctechCtx, sql)
 	if err != nil {
 		return err
 	}
+	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx.SetPrepareResult(result)
 	ctx := context.Background()
-	stmts, err := session.Parse(ctx, sql)
+	stmts, err := session.(parser).Parse(ctx, sql)
 	if err != nil {
 		return err
 	}
 	stmt := stmts[0]
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
-	preprocessor.Context().Reset()
+	modifyCtx.Reset()
 	if err != nil {
 		return err
 	}
-	dbs, skipped, err := preprocessor.ResolveStmt(stmt, charset, collation)
+	dbs, skipped, err := preprocessor.ResolveStmt(mctechCtx, stmt, charset, collation)
 	if err != nil {
 		return err
 	}
 
-	if err = preprocessor.CheckDB(dbs); err != nil {
+	if err = getDatabaseChecker().Check(mctechCtx, dbs); err != nil {
 		return err
 	}
 	if !skipped {
-		err = preprocessor.Validate(session)
+		err = preprocessor.Validate(mctechCtx)
 		if err != nil {
 			return err
 		}
 	}
-	info := preprocessor.Context().GetInfo()
+	info := mctechCtx.(mctech.ContextForTest).GetInfoForTest()
 	require.Equal(t, c.expect, info, c.Source())
 	return nil
 }
