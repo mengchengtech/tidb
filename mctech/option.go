@@ -59,12 +59,13 @@ var mctechOpts *Option
 
 // GetOption get mctech option
 func GetOption() *Option {
+	if mctechOpts != nil {
+		return mctechOpts
+	}
 	// 只能懒加载，需要在启动时先加载 config模块
 	once := &sync.Once{}
 	once.Do(func() {
-		if mctechOpts == nil {
-			mctechOpts = initMCTechOption()
-		}
+		mctechOpts = initMCTechOption()
 	})
 	return mctechOpts
 }

@@ -55,7 +55,7 @@ func (e *MCTechExec) Close() error {
 // Next implements the Executor Next interface.
 func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	if e.rows == nil {
-		if err := e.mctech.RenderResult(); err != nil {
+		if err := e.mctech.RenderResult(ctx); err != nil {
 			return err
 		}
 		e.rows = e.mctech.Rows

@@ -82,10 +82,10 @@ func (e *MCTech) prepareSchema() error {
 }
 
 // RenderResult renders the mctech result as specified format.
-func (e *MCTech) RenderResult() error {
+func (e *MCTech) RenderResult(ctx context.Context) error {
 	switch strings.ToLower(e.Format) {
 	case types.ExplainFormatROW:
-		if err := e.mctechPlanInRowFormat(); err != nil {
+		if err := e.mctechPlanInRowFormat(ctx); err != nil {
 			return err
 		}
 	default:
@@ -95,8 +95,8 @@ func (e *MCTech) RenderResult() error {
 }
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
-func (e *MCTech) mctechPlanInRowFormat() (err error) {
-	mctechctx := mctech.GetContext(e.ctx)
+func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (err error) {
+	mctechCtx := mctech.GetContext(ctx)
 	// "global", "excludes", "tenant", "tenant_from_role", "dw_index", "params", "prepared_sql"
 	var sb strings.Builder
 	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags|format.RestoreBracketAroundBinaryOperation, &sb)
@@ -116,8 +116,8 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		restoreSQL = sb.String()
 	)
 
-	if mctechctx != nil {
-		pr := mctechctx.PrepareResult()
+	if mctechCtx != nil {
+		pr := mctechCtx.PrepareResult()
 		global = pr.Global()
 		params = pr.Params()
 		excludes = pr.Excludes()
@@ -129,7 +129,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 				tenantFrom = "hint"
 			}
 		}
-		index, err = mctechctx.GetDbIndex()
+		index, err = mctechCtx.GetDbIndex()
 		if err != nil {
 			return err
 		}

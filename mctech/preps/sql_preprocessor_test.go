@@ -3,7 +3,7 @@ package preps
 import (
 	"testing"
 
-	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
 
@@ -125,9 +125,9 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 		"mock_write", "code_gslq", "code_gslq")
 }
 
-func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session session.Session) error {
+func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, mctechCtx mctech.Context) error {
 	processor := newSQLPreprocessor(c.sql)
-	result, err := processor.Prepare(session, c.actions, c.params)
+	result, err := processor.Prepare(mctechCtx, c.actions, c.params)
 	if err != nil {
 		return err
 	}
