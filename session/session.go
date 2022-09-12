@@ -52,6 +52,7 @@ import (
 	"github.com/pingcap/tidb/extension/extensionimpl"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/owner"
@@ -2499,6 +2500,16 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 	if err = sessiontxn.GetTxnManager(s).AdviseWarmup(); err != nil {
 		return
 	}
+
+	// add by zhangbing
+	handler := mctech.GetHandler()
+	mctechCtx := mctech.NewContext(s, true)
+	ctx = mctech.WithContext(ctx, mctechCtx)
+	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+		return
+	}
+	// add end
+
 	prepareExec := executor.NewPrepareExec(s, sql)
 	err = prepareExec.Next(ctx, nil)
 	// Rollback even if err is nil.

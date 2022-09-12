@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -11,7 +12,9 @@ import (
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/mysql"
+	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
+	"golang.org/x/exp/slices"
 )
 
 func (b *PlanBuilder) buildMCTech(ctx context.Context, stmt *ast.MCTechStmt) (Plan, error) {
@@ -168,4 +171,84 @@ func isDefaultValMCSymFunc(expr ast.ExprNode) bool {
 		}
 	}
 	return false
+}
+
+// ----------------------------------------------------------------
+
+const tenantParamName = "__mc_tenant_code"
+
+var tenantParamTp *types.FieldType
+
+func init() {
+	tenantParamTp = &types.FieldType{}
+	tenantParamTp.SetType(mysql.TypeVarString)
+	tenantParamTp.SetFlen(types.UnspecifiedLength)
+	tenantParamTp.SetDecimal(types.UnspecifiedLength)
+}
+
+func (e *Execute) GetExtensionParams(ctx context.Context,
+	prepared *ast.Prepared) ([]ast.ParamMarkerExpr, string, error) {
+	var (
+		extParams  []ast.ParamMarkerExpr
+		tenantCode string
+		err        error
+	)
+	mctechCtx := mctech.GetContext(ctx)
+	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
+		return p.GetOffset() == mctech.ExtensionParamMarkerOffset
+	})
+	sessionVars := mctechCtx.Session().GetSessionVars()
+	if index >= 0 {
+		// 含有扩展参数
+		tenantCode = mctechCtx.PrepareResult().Tenant()
+		if tenantCode != "" {
+			extParams = prepared.Params[index:]
+		} else {
+			user := sessionVars.User.Username
+			err = fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
+		}
+	}
+	return extParams, tenantCode, err
+}
+
+func (e *Execute) InitSessionVars(ctx sessionctx.Context, execCom bool, tenantCode string) {
+	sessionVars := ctx.GetSessionVars()
+	if execCom {
+		// execute command
+		sessionVars.UnsetUserVar(tenantParamName)
+	} else {
+		// execute sql
+		sessionVars.SetStringUserVar(tenantParamName, tenantCode, "")
+	}
+}
+
+type extensionArgCreator[T any] func() (T, error)
+
+func appendExtensionArgs[T any](
+	params []ast.ParamMarkerExpr, callback extensionArgCreator[T]) ([]T, error) {
+	extensions := []T{}
+	for _, p := range params {
+		if p.GetOffset() == mctech.ExtensionParamMarkerOffset {
+			// 扩展自定义参数
+			if item, err := callback(); err != nil {
+				return nil, err
+			} else {
+				extensions = append(extensions, item)
+			}
+		}
+	}
+
+	return extensions, nil
+}
+
+func (e *Execute) AppendVarExprs(sctx sessionctx.Context, extParams []ast.ParamMarkerExpr, tenantCode string) error {
+	extArgs, err := appendExtensionArgs(extParams, func() (expression.Expression, error) {
+		return expression.BuildGetVarFunction(sctx,
+			expression.DatumToConstant(types.NewDatum(tenantParamName), mysql.TypeString, 0),
+			tenantParamTp)
+	})
+	if err == nil {
+		e.Params = append(e.Params, extArgs...)
+	}
+	return err
 }

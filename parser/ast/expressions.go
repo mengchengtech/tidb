@@ -976,6 +976,10 @@ func (n *PatternLikeOrIlikeExpr) Accept(v Visitor) (Node, bool) {
 type ParamMarkerExpr interface {
 	ValueExpr
 	SetOrder(int)
+	// add by zhangbing
+	// 获取参数的顺序索引值
+	GetOffset() int
+	// add end
 }
 
 // ParenthesesExpr is the parentheses expression.
