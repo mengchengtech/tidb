@@ -309,8 +309,10 @@ type Config struct {
 	// TiDBEnableExitCheck indicates whether exit-checking in domain for background process
 	TiDBEnableExitCheck bool `toml:"tidb-enable-exit-check" json:"tidb-enable-exit-check"`
 
+	// add by zhangbing
 	// MCTech
 	MCTech MCTech `toml:"mctech" json:"mctech"`
+	// add end
 
 	// InMemSlowQueryTopNNum indicates the number of TopN slow queries stored in memory.
 	InMemSlowQueryTopNNum int `toml:"in-mem-slow-query-topn-num" json:"in-mem-slow-query-topn-num"`
@@ -1077,37 +1079,9 @@ var defaultConf = Config{
 	InMemSlowQueryTopNNum:                30,
 	InMemSlowQueryRecentNum:              500,
 
-	MCTech: MCTech{
-		Sequence: Sequence{
-			Mock:          false,
-			Debug:         false,
-			MaxFetchCount: 1000,
-			Backend:       3,
-			APIPrefix:     "http://node-infra-sequence-service.mc/",
-		},
-		Encryption: Encryption{
-			Mock:      false,
-			AccessID:  "oJEKJh1wvqncJYASxp1Iiw",
-			APIPrefix: "http://node-infra-encryption-service.mc/",
-		},
-		DbChecker: DbChecker{
-			Enabled:          true,
-			APIPrefix:        "http://node-infra-dim-service.mc/",
-			MutexAcrossDbs:   []string{},
-			ExcludeAcrossDbs: []string{},
-			AcrossDbGroups:   []string{},
-		},
-		Tenant: Tenant{
-			Enabled:          true,
-			ForbiddenPrepare: true,
-		},
-		DDL: DDL{
-			Version: VersionColumn{
-				Enabled: true,
-				Name:    "__version",
-			},
-		},
-	},
+	// add by zhangbing
+	MCTech: initMCTechConfig(),
+	// add end
 }
 
 var (
