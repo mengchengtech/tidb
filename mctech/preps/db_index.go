@@ -14,16 +14,16 @@ import (
 const paramBackgroundKey = "background"
 const paramRequestIDKey = "requestId"
 
-// TODO: 暂时留下的占位参数值
-const localCacheKey = "global"
+// 整体切换前后台库的参数值KEY
+const localCacheKey = "$$global"
 
 var ticketMap = goCache.New(60*time.Second, 20*time.Second)
 var currentMap = goCache.New(15*time.Second, 10*time.Second)
 
 type dbSelector struct {
 	// private final static URI BASE_URI;
-	result *mctech.PrepareResult
-	dbIndex       *mctech.DbIndex
+	result  *mctech.PrepareResult
+	dbIndex *mctech.DbIndex
 }
 
 func newDBSelector(result *mctech.PrepareResult) mctech.DBSelector {

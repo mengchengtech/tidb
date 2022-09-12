@@ -266,7 +266,10 @@ type Config struct {
 	EnableBatchDML bool   `toml:"enable-batch-dml" json:"enable-batch-dml"`
 	MemQuotaQuery  int64  `toml:"mem-quota-query" json:"mem-quota-query"`
 	OOMAction      string `toml:"oom-action" json:"oom-action"`
-	MCTech         MCTech `toml:"mctech" json:"mctech"`
+
+	// add by zhangbing
+	MCTech MCTech `toml:"mctech" json:"mctech"`
+	// add end
 }
 
 // UpdateTempStoragePath is to update the `TempStoragePath` if port/statusPort was changed
@@ -909,37 +912,9 @@ var defaultConf = Config{
 	NewCollationsEnabledOnFirstBootstrap: true,
 	EnableGlobalKill:                     true,
 
-	MCTech: MCTech{
-		Sequence: Sequence{
-			Mock:          false,
-			Debug:         false,
-			MaxFetchCount: 1000,
-			Backend:       3,
-			APIPrefix:     "http://node-infra-sequence-service.mc/",
-		},
-		Encryption: Encryption{
-			Mock:      false,
-			AccessID:  "oJEKJh1wvqncJYASxp1Iiw",
-			APIPrefix: "http://node-infra-encryption-service.mc/",
-		},
-		DbChecker: DbChecker{
-			Enabled:          true,
-			APIPrefix:        "http://node-infra-dim-service.mc/",
-			MutexAcrossDbs:   []string{},
-			ExcludeAcrossDbs: []string{},
-			AcrossDbGroups:   []string{},
-		},
-		Tenant: Tenant{
-			Enabled:          true,
-			ForbiddenPrepare: true,
-		},
-		DDL: DDL{
-			Version: VersionColumn{
-				Enabled: true,
-				Name:    "__version",
-			},
-		},
-	},
+	// add by zhangbing
+	MCTech: initMCTechConfig(),
+	// add end
 }
 
 var (

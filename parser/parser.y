@@ -101,7 +101,9 @@ import (
 	currentDate       "CURRENT_DATE"
 	currentTime       "CURRENT_TIME"
 	currentTs         "CURRENT_TIMESTAMP"
-	mcSequence        "MCTECH_SEQUENCE"
+	/* add by zhangbing */
+  mcSequence        "MCTECH_SEQUENCE"
+  /* add end */
 	currentUser       "CURRENT_USER"
 	currentRole       "CURRENT_ROLE"
 	database          "DATABASE"
@@ -128,7 +130,9 @@ import (
 	escaped           "ESCAPED"
 	exists            "EXISTS"
 	explain           "EXPLAIN"
-	mctech            "MCTECH"
+	/* add by zhangbing */
+  mctech            "MCTECH"
+  /* add end */
 	except            "EXCEPT"
 	falseKwd          "FALSE"
 	fetch             "FETCH"
@@ -841,8 +845,10 @@ import (
 	DefaultValueExpr                "DefaultValueExpr(Now or Signed Literal)"
 	NowSymOptionFraction            "NowSym with optional fraction part"
 	NowSymOptionFractionParentheses "NowSym with optional fraction part within potential parentheses"
-	MCSymOptionFraction             "MCSym with optional fraction part"
+	/* add by zhangbing */
+  MCSymOptionFraction             "MCSym with optional fraction part"
 	MCSymOptionFractionParentheses  "MCSym with optional fraction part within potential parentheses"
+  /* add end */
 	CharsetNameOrDefault            "Character set name or default"
 	NextValueForSequence            "Default nextval expression"
 	BuiltinFunction                 "Default builtin functions for columns"
@@ -896,8 +902,10 @@ import (
 	EmptyStmt                  "empty statement"
 	ExecuteStmt                "Execute statement"
 	ExplainStmt                "EXPLAIN statement"
-	MCTechStmt                 "MCTECH statement"
-	ExplainableStmt            "explainable statement"
+	/* add by zhangbing */
+  MCTechStmt                 "MCTECH statement"
+	/* add end */
+  ExplainableStmt            "explainable statement"
 	FlushStmt                  "Flush statement"
 	FlashbackTableStmt         "Flashback table statement"
 	GrantStmt                  "Grant statement"
@@ -1033,7 +1041,9 @@ import (
 	FieldItem                              "Field item for load data clause"
 	FieldItemList                          "Field items for load data clause"
 	FuncDatetimePrec                       "Function datetime precision"
-	FuncMCPrec                             "Function mctech_sequence precision"
+  /* add by zhangbing */
+  FuncMCPrec                             "Function mctech_sequence precision"
+  /* add end */
 	GetFormatSelector                      "{DATE|DATETIME|TIME|TIMESTAMP}"
 	GlobalScope                            "The scope of variable"
 	StatementScope                         "The scope of statement"
@@ -1342,8 +1352,10 @@ import (
 	PrimaryOpt        "Optional primary keyword"
 	NowSym            "CURRENT_TIMESTAMP/LOCALTIME/LOCALTIMESTAMP"
 	NowSymFunc        "CURRENT_TIMESTAMP/LOCALTIME/LOCALTIMESTAMP/NOW"
+  /* add by zhangbing */
 	MCSym             "MCTECH_SEQUENCE keyword"
-	MCSymFunc         "MCTECH_SEQUENCE function"
+  MCSymFunc         "MCTECH_SEQUENCE function"
+  /* add end */
 	DefaultKwdOpt     "optional DEFAULT keyword"
 	DatabaseSym       "DATABASE or SCHEMA"
 	ExplainSym        "EXPLAIN or DESCRIBE or DESC"
@@ -3025,10 +3037,12 @@ ColumnOption:
 	{
 		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionOnUpdate, Expr: $3}
 	}
+/* add by zhangbing */
 |	"ON" "UPDATE" MCSymOptionFraction
 	{
 		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionOnUpdate, Expr: $3}
 	}
+/* add end */
 |	"COMMENT" stringLit
 	{
 		$$ = &ast.ColumnOption{Tp: ast.ColumnOptionComment, Expr: ast.NewValueExpr($2, "", "")}
@@ -3361,7 +3375,9 @@ ReferOpt:
  */
 DefaultValueExpr:
 	NowSymOptionFractionParentheses
+/* add by zhangbing */
 |	MCSymOptionFractionParentheses
+/* add end */
 |	SignedLiteral
 |	NextValueForSequence
 |	BuiltinFunction
@@ -3406,6 +3422,7 @@ NowSymOptionFraction:
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr("CURRENT_TIMESTAMP"), Args: []ast.ExprNode{ast.NewValueExpr($3, parser.charset, parser.collation)}}
 	}
 
+/* add by zhangbing */
 MCSymOptionFractionParentheses:
 	'(' MCSymOptionFractionParentheses ')'
 	{
@@ -3422,6 +3439,7 @@ MCSymOptionFraction:
 	{
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr("MCTECH_SEQUENCE")}
 	}
+/* add end */
 
 NextValueForSequence:
 	"NEXT" "VALUE" forKwd TableName
@@ -3460,11 +3478,13 @@ NowSym:
 |	"LOCALTIME"
 |	"LOCALTIMESTAMP"
 
+/* add by zhangbing */
 MCSym:
 	"MCTECH_SEQUENCE"
 
 MCSymFunc:
 	"MCTECH_SEQUENCE"
+/* add end */
 
 SignedLiteral:
 	Literal
@@ -4765,6 +4785,7 @@ ExplainFormatType:
 |	"VERBOSE"
 |	"TRUE_CARD_COST"
 
+/* add by zhangbing */
 MCTechStmt:
 	"MCTECH" ExplainableStmt
 	{
@@ -4787,6 +4808,7 @@ MCTechStmt:
 			Format: $4,
 		}
 	}
+/* add end */
 
 /*******************************************************************
  * Backup / restore / import statements
@@ -7149,10 +7171,12 @@ FunctionCallKeyword:
 		}
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr($1), Args: args}
 	}
+/* add by zhangbing */
 |	"MCTECH_SEQUENCE" FuncMCPrec
 	{
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr(ast.MCTechSequence)}
 	}
+/* add end */
 |	"CHAR" '(' ExpressionList ')'
 	{
 		nilVal := ast.NewValueExpr(nil, parser.charset, parser.collation)
@@ -7686,6 +7710,7 @@ FuncDatetimePrec:
 		$$ = expr
 	}
 
+/* add by zhangbing */
 FuncMCPrec:
 	{
 		$$ = nil
@@ -7694,6 +7719,7 @@ FuncMCPrec:
 	{
 		$$ = nil
 	}
+/* add end */
 
 TimeUnit:
 	TimestampUnit
@@ -11109,7 +11135,9 @@ Statement:
 |	DeleteFromStmt
 |	ExecuteStmt
 |	ExplainStmt
+/* add by zhangbing */
 |	MCTechStmt
+/* add end */
 |	ChangeStmt
 |	CreateDatabaseStmt
 |	CreateImportStmt

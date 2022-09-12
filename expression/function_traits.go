@@ -50,9 +50,6 @@ var unFoldableFunctions = map[string]struct{}{
 	ast.LastVal:   {},
 	ast.SetVal:    {},
 	ast.AnyValue:  {},
-
-	ast.MCTechSequence: {},
-	ast.MCSeq: {},
 }
 
 // DisableFoldFunctions stores functions which prevent child scope functions from being constant folded.

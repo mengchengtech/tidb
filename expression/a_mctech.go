@@ -49,6 +49,7 @@ func init() {
 
 	// mctech function.
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
+	unFoldableFunctions[ast.MCSeq] = struct{}{}
 }
 
 type mctechSequenceDecodeFunctionClass struct {
