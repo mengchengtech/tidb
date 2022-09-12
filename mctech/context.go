@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"runtime/debug"
 	"strings"
 
@@ -47,10 +48,6 @@ type Context interface {
 	// @title SQLHasGlobalDB
 	// @description sql中是否包含global类的库
 	SQLHasGlobalDB() bool
-
-	// @title NewApplyExpr
-	// @description 创建租户条件用到的表达式
-	CreateTenantExpr(value string, charset string, collate string) ast.ValueExpr
 
 	// @title UsingTenantParam
 	// @description 租户过滤条件是否使用参数
@@ -267,19 +264,11 @@ func (d *baseContext) Session() sessionctx.Context {
 
 // ------------------------------------------------
 
-func (d *baseContext) CreateTenantExpr(value string, charset string, collate string) ast.ValueExpr {
-	if d.usingTenantParam {
-		// TODO: 参数化租户条件未完成
-		return ast.NewParamMarkerExpr(-1)
-	}
-	return ast.NewValueExpr(value, charset, collate)
-}
-
 func (d *baseContext) UsingTenantParam() bool {
 	return d.usingTenantParam
 }
 
-func (d *baseContext) SetNewTenantExprFunc(val bool) {
+func (d *baseContext) SetUsingTenantParam(val bool) {
 	d.usingTenantParam = val
 }
 
@@ -463,3 +452,6 @@ func GetContextForTest(s sessionctx.Context) Context {
 func SetContextForTest(s sessionctx.Context, mctechCtx Context) {
 	s.SetValue(contextForTestKey, mctechCtx)
 }
+
+// 添加的租户条件假的文本位置偏移量
+const ExtensionParamMarkerOffset = math.MaxInt - 1
