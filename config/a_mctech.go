@@ -51,3 +51,37 @@ type VersionColumn struct {
 	Name      string   `toml:"name" json:"name"`
 	DbMatches []string `toml:"db-matches" json:"db-matches"`
 }
+
+func initMCTechConfig() MCTech {
+	return MCTech{
+		Sequence: Sequence{
+			Mock:          false,
+			Debug:         false,
+			MaxFetchCount: 1000,
+			Backend:       3,
+			APIPrefix:     "http://node-infra-sequence-service.mc/",
+		},
+		Encryption: Encryption{
+			Mock:      false,
+			AccessID:  "oJEKJh1wvqncJYASxp1Iiw",
+			APIPrefix: "http://node-infra-encryption-service.mc/",
+		},
+		DbChecker: DbChecker{
+			Enabled:          true,
+			APIPrefix:        "http://node-infra-dim-service.mc/",
+			MutexAcrossDbs:   []string{},
+			ExcludeAcrossDbs: []string{},
+			AcrossDbGroups:   []string{},
+		},
+		Tenant: Tenant{
+			Enabled:          true,
+			ForbiddenPrepare: true,
+		},
+		DDL: DDL{
+			Version: VersionColumn{
+				Enabled: true,
+				Name:    "__version",
+			},
+		},
+	}
+}

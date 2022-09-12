@@ -303,7 +303,10 @@ type Config struct {
 	TiDBMaxReuseColumn uint32 `toml:"tidb-max-reuse-column" json:"tidb-max-reuse-column"`
 	// TiDBEnableExitCheck indicates whether exit-checking in domain for background process
 	TiDBEnableExitCheck bool `toml:"tidb-enable-exit-check" json:"tidb-enable-exit-check"`
-	MCTech				 MCTech `toml:"mctech" json:"mctech"`
+
+	// add by zhangbing
+	MCTech MCTech `toml:"mctech" json:"mctech"`
+	// add end
 }
 
 // UpdateTempStoragePath is to update the `TempStoragePath` if port/statusPort was changed
@@ -1056,37 +1059,9 @@ var defaultConf = Config{
 	TiDBMaxReuseColumn:                   256,
 	TiDBEnableExitCheck:                  false,
 
-	MCTech: MCTech{
-		Sequence: Sequence{
-			Mock:          false,
-			Debug:         false,
-			MaxFetchCount: 1000,
-			Backend:       3,
-			APIPrefix:     "http://node-infra-sequence-service.mc/",
-		},
-		Encryption: Encryption{
-			Mock:      false,
-			AccessID:  "oJEKJh1wvqncJYASxp1Iiw",
-			APIPrefix: "http://node-infra-encryption-service.mc/",
-		},
-		DbChecker: DbChecker{
-			Enabled:          true,
-			APIPrefix:        "http://node-infra-dim-service.mc/",
-			MutexAcrossDbs:   []string{},
-			ExcludeAcrossDbs: []string{},
-			AcrossDbGroups:   []string{},
-		},
-		Tenant: Tenant{
-			Enabled:          true,
-			ForbiddenPrepare: true,
-		},
-		DDL: DDL{
-			Version: VersionColumn{
-				Enabled: true,
-				Name:    "__version",
-			},
-		},
-	},
+	// add by zhangbing
+	MCTech: initMCTechConfig(),
+	// add end
 }
 
 var (
