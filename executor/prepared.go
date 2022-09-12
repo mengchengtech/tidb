@@ -154,6 +154,17 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	if len(stmts) != 1 {
 		return ErrPrepareMulti
 	}
+
+	// add by zhangbing
+	handler := mctech.GetHandler()
+	mctechCtx := mctech.GetContext(ctx)
+	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx.SetUsingTenantParam(true)
+	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+		return err
+	}
+	// add end
+
 	stmt := stmts[0]
 
 	if e.needReset {

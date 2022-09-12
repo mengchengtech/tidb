@@ -39,6 +39,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/auth"
@@ -2181,6 +2182,16 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 	}
 
 	s.PrepareTSFuture(ctx)
+
+	// add by zhangbing
+	handler := mctech.GetHandler()
+	mctechCtx := mctech.NewContext(s, true)
+	ctx = mctech.WithContext(ctx, mctechCtx)
+	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+		return
+	}
+	// add end
+
 	prepareExec := executor.NewPrepareExec(s, sql)
 	err = prepareExec.Next(ctx, nil)
 	if err != nil {

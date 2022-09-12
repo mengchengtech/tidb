@@ -126,7 +126,7 @@ func (r *mctechStatementPreprocessor) rewriteStmt(mctechCtx mctech.Context,
 	}
 
 	// 未启用global,租户code为空，留到后续Validate步骤统一校验
-	if result.Tenant() == "" {
+	if result.Tenant() == "" && !mctechCtx.UsingTenantParam() {
 		return nil, false, nil
 	}
 

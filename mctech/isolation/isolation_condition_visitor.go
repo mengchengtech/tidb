@@ -116,9 +116,10 @@ func (v *databaseNameVisitor) leaveTableName(node *ast.TableName) error {
 
 type isolationConditionVisitor struct {
 	*databaseNameVisitor
-	tenant   ast.ValueExpr
-	enabled  bool // 是否启用追加租户条件
-	excludes []ast.ExprNode
+	// 租户条件是否使用参数化方式
+	usingParam bool
+	tenant     ast.ValueExpr
+	excludes   []ast.ExprNode
 
 	withClauseScope     *nodeScope[*cteScopeItem]
 	columnModifiedScope *nodeScope[bool]
@@ -130,6 +131,7 @@ func newIsolationConditionVisitor(
 	mctechCtx mctech.Context,
 	charset string, collation string) *isolationConditionVisitor {
 	visitor := &isolationConditionVisitor{
+		usingParam: mctechCtx.UsingTenantParam(),
 		databaseNameVisitor: &databaseNameVisitor{
 			context: mctechCtx,
 			dbNames: map[string]bool{},
@@ -138,29 +140,36 @@ func newIsolationConditionVisitor(
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
 	result := mctechCtx.PrepareResult()
-	if result.Tenant() != "" {
-		visitor.enabled = true
-		visitor.tenant = mctechCtx.CreateTenantExpr(result.Tenant(), charset, collation)
-	} else {
+	if result.Global() {
 		length := len(result.Excludes())
 		if length > 0 {
-			visitor.enabled = true
 			exprList := make([]ast.ExprNode, length)
 			for i, str := range result.Excludes() {
-				exprList[i] = mctechCtx.CreateTenantExpr(str, charset, collation)
+				// global相关的，只能生成常量
+				exprList[i] = ast.NewValueExpr(str, charset, collation)
 			}
 			visitor.excludes = exprList
+		}
+	} else if !visitor.usingParam {
+		// 非参数化租户过滤条件，且tenant不为空时
+		tenant := result.Tenant()
+		if tenant != "" {
+			visitor.tenant = ast.NewValueExpr(tenant, charset, collation)
 		}
 	}
 
 	return visitor
 }
 
+func (v *isolationConditionVisitor) enabled() bool {
+	return v.usingParam || v.tenant != nil || len(v.excludes) > 0
+}
+
 // Enter implements interface Visitor
 func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	v.databaseNameVisitor.Enter(n)
 
-	if v.enabled {
+	if v.enabled() {
 		switch node := n.(type) {
 		case
 			*ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt,
@@ -183,7 +192,7 @@ func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildr
 // Leave implements interface Visitor
 func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	v.databaseNameVisitor.Leave(n)
-	if v.enabled {
+	if v.enabled() {
 		switch node := n.(type) {
 		case
 			*ast.SetOprSelectList, *ast.SetOprStmt:
@@ -251,25 +260,23 @@ func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	}
 
 	var modified bool
-	if v.tenant != nil {
-		if len(node.Setlist) == 0 {
-			// insert .... values/select ....
-			modified = v.processInsertColumns(node)
-		} else {
-			for _, set := range node.Setlist {
-				if set.Column.Name.L == tenantFieldName {
-					// 存在tenant字段，不处理
-					return
-				}
+	if len(node.Setlist) == 0 {
+		// insert .... values/select ....
+		modified = v.processInsertColumns(node)
+	} else {
+		for _, set := range node.Setlist {
+			if set.Column.Name.L == tenantFieldName {
+				// 存在tenant字段，不处理
+				return
 			}
-
-			node.Setlist = append(node.Setlist, &ast.Assignment{
-				Column: &ast.ColumnName{
-					Name: model.NewCIStr(tenantFieldName),
-				},
-				Expr: v.tenant,
-			})
 		}
+
+		node.Setlist = append(node.Setlist, &ast.Assignment{
+			Column: &ast.ColumnName{
+				Name: model.NewCIStr(tenantFieldName),
+			},
+			Expr: v.createTenantExpr(),
+		})
 	}
 	v.columnModifiedScope.Push(modified)
 }
@@ -378,7 +385,7 @@ func (v *isolationConditionVisitor) processSelectItems(node *ast.SelectStmt) {
 
 		if !hasTenant {
 			node.Fields.Fields = append(items, &ast.SelectField{
-				Expr:   v.tenant,
+				Expr:   v.createTenantExpr(),
 				AsName: model.NewCIStr(tenantFieldName),
 			})
 		}
@@ -481,7 +488,7 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 		condition = &ast.BinaryOperationExpr{
 			L:  tenantField,
 			Op: opcode.EQ,
-			R:  v.tenant,
+			R:  v.createTenantExpr(),
 		}
 	}
 	return condition
@@ -512,8 +519,17 @@ func (v *isolationConditionVisitor) processInsertColumns(node *ast.InsertStmt) b
 		operands := node.Lists
 		length := len(operands)
 		for i := 0; i < length; i++ {
-			operands[i] = append(operands[i], v.tenant)
+			operands[i] = append(operands[i], v.createTenantExpr())
 		}
 	}
 	return modified
+}
+
+func (v *isolationConditionVisitor) createTenantExpr() (expr ast.ValueExpr) {
+	if v.usingParam {
+		expr = ast.NewParamMarkerExpr(mctech.ExtensionParamMarkerOffset)
+	} else {
+		expr = v.tenant
+	}
+	return expr
 }
