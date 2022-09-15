@@ -8,7 +8,6 @@ import (
 
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/parser/auth"
 	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/pingcap/tidb/testkit"
@@ -40,10 +39,8 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctechCtx := preps.NewContext(session, false)
-	mctech.SetContextForTest(session, mctechCtx)
-	tk.MustExec(createTableSQL)
-	mctech.SetContextForTest(session, nil)
+	ctx, _ := mctech.WithNewContext(session)
+	tk.MustExecWithContext(ctx, createTableSQL)
 	res := tk.MustQuery("show create table version_table")
 	createSQL := res.Rows()[0][1].(string)
 	expected := strings.Join([]string{
@@ -122,16 +119,14 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctechCtx := preps.NewContext(session, false)
-	mctech.SetContextForTest(session, mctechCtx)
-	tk.MustExec(createTableSQL)
-	mctech.SetContextForTest(session, nil)
+	ctx, _ := mctech.WithNewContext(session)
+	tk.MustExecWithContext(ctx, createTableSQL)
 	tk.MustExec(
 		`insert into version_table
 		(a, b)
 		values ('a', ifnull(sleep(0.01), 1)), ('b', ifnull(sleep(0.01),2)), ('c', ifnull(sleep(0.01),3)), ('d', ifnull(sleep(0.01),4))
 		`)
-	res := tk.MustQuery("select * from version_table")
+	res := tk.MustQuery("select a, b, c, __version from version_table")
 	seqs := map[string]any{}
 	stamps := map[string]any{}
 	rows := res.Rows()
