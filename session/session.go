@@ -2189,8 +2189,7 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	mctechCtx := mctech.NewContext(s, true)
-	ctx = mctech.WithContext(ctx, mctechCtx)
+	ctx, mctechCtx := mctech.WithNewContext3(ctx, s, true)
 	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 		return
 	}

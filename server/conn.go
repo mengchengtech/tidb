@@ -64,7 +64,6 @@ import (
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
@@ -1827,8 +1826,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	mctechCtx := preps.NewContext(cc.ctx.Session, false)
-	ctx = mctech.WithContext(ctx, mctechCtx)
+	ctx, mctechCtx := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
 	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 		return err
 	}

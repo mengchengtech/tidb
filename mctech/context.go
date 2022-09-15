@@ -418,9 +418,21 @@ var customContextKey = contextKey{}
 // NewContext function callback
 var NewContext func(session sessionctx.Context, usingTenantParam bool) Context
 
-// WithContext set mctech context to session
-func WithContext(parent context.Context, cc Context) context.Context {
-	return context.WithValue(parent, customContextKey, cc)
+// WithContext
+// @Param session sessionctx.Context -
+func WithNewContext(session sessionctx.Context) (context.Context, Context) {
+	return WithNewContext3(context.Background(), session, false)
+}
+
+// WithContext3
+// @Param parent context.Context -
+// @Param session sessionctx.Context -
+// @Param usingTenantParam bool 添加租户条件时，是否使用参数占位符方式
+func WithNewContext3(parent context.Context,
+	session sessionctx.Context, usingTenantParam bool) (context.Context, Context) {
+	mctechCtx := NewContext(session, usingTenantParam)
+	ctx := context.WithValue(parent, customContextKey, mctechCtx)
+	return ctx, mctechCtx
 }
 
 // GetContext get mctech context from session
@@ -430,27 +442,6 @@ func GetContext(ctx context.Context) Context {
 		return sp
 	}
 	return nil
-}
-
-type sessionValueKey string
-
-func (s sessionValueKey) String() string {
-	return string(s)
-}
-
-const contextForTestKey sessionValueKey = "$$MCTechContext"
-
-// GetContextForTest get HandlerFactory from session
-func GetContextForTest(s sessionctx.Context) Context {
-	if factory, ok := s.Value(contextForTestKey).(Context); ok {
-		return factory
-	}
-	return nil
-}
-
-// SetContextForTest set HandlerFactory to session
-func SetContextForTest(s sessionctx.Context, mctechCtx Context) {
-	s.SetValue(contextForTestKey, mctechCtx)
 }
 
 // 添加的租户条件假的文本位置偏移量
