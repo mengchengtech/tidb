@@ -12,7 +12,6 @@ import (
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/mysql"
-	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/types"
 	"golang.org/x/exp/slices"
 )
@@ -186,44 +185,15 @@ func init() {
 	tenantParamTp.SetDecimal(types.UnspecifiedLength)
 }
 
-func (e *Execute) getExtensionParams(ctx context.Context,
-	prepared *ast.Prepared) ([]ast.ParamMarkerExpr, string, error) {
-	var (
-		extParams  []ast.ParamMarkerExpr
-		tenantCode string
-		err        error
-	)
-	mctechCtx := mctech.GetContext(ctx)
+func (e *Execute) getExtensionParams(ctx context.Context, prepared *ast.Prepared) []ast.ParamMarkerExpr {
 	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
 		return p.GetOffset() == mctech.ExtensionParamMarkerOffset
 	})
-	sessionVars := mctechCtx.Session().GetSessionVars()
-	if index >= 0 {
-		// 含有扩展参数
-		tenantCode = mctechCtx.PrepareResult().Tenant()
-		if tenantCode != "" {
-			extParams = prepared.Params[index:]
-		} else {
-			user := sessionVars.User.Username
-			err = fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
-		}
-	}
-	return extParams, tenantCode, err
-}
 
-func (e *Execute) initSessionVars(ctx sessionctx.Context, execCom bool, tenantCode string) {
-	sessionVars := ctx.GetSessionVars()
-	sessionVars.UsersLock.Lock()
-	if execCom {
-		// execute command
-		delete(sessionVars.Users, tenantParamName)
-		delete(sessionVars.UserVarTypes, tenantParamName)
-	} else {
-		// execute sql
-		sessionVars.Users[tenantParamName] = types.NewStringDatum(tenantCode)
-		sessionVars.UserVarTypes[tenantParamName] = tenantParamTp
+	if index < 0 {
+		return nil
 	}
-	sessionVars.UsersLock.Unlock()
+	return prepared.Params[index:]
 }
 
 type extensionArgCreator[T any] func() (T, error)
@@ -245,24 +215,76 @@ func appendExtensionArgs[T any](ctx context.Context,
 	return extensions, nil
 }
 
-func (e *Execute) appendBinProtoVars(ctx context.Context,
-	extParams []ast.ParamMarkerExpr, tenantCode string) error {
+func (e *Execute) appendBinProtoVars(ctx context.Context, prepared *ast.Prepared) error {
+	// 获取扩展参数列表
+	extParams := e.getExtensionParams(ctx, prepared)
+	lenExtParams := len(extParams)
+	if lenExtParams == 0 {
+		return nil
+	}
+
+	lenInputArgs := len(e.BinProtoVars)
+	lenParams := len(prepared.Params)
+	if lenInputArgs+lenExtParams != lenParams+1 {
+		// 传入参数最后一个是多传入的tenantCode，因此传入参数个数加上声明的扩展的参数个数会比实际的参数个数多1
+		return errors.Trace(ErrWrongParamCount)
+	}
+
+	// 获取表示租户code的传入参数
+	tenantCodeDatum := e.BinProtoVars[lenInputArgs-1]
 	extArgs, err := appendExtensionArgs(ctx, extParams, func() (types.Datum, error) {
-		return types.NewStringDatum(tenantCode), nil
+		return tenantCodeDatum, nil
 	})
+
+	// 补全扩展参数
 	if err == nil {
-		e.BinProtoVars = append(e.BinProtoVars, extArgs...)
+		// 舍去最后一个租户参数
+		index := lenInputArgs - 1
+		vars := make([]types.Datum, 0, lenParams)
+		vars = append(vars, e.BinProtoVars[:index]...)
+		vars = append(vars, extArgs...)
+		e.BinProtoVars = vars
 	}
 	return err
 }
 
-func (e *Execute) appendTxtProtoVars(ctx context.Context, sctx sessionctx.Context,
-	extParams []ast.ParamMarkerExpr, tenantCode string) error {
+func (e *Execute) appendTxtProtoVars(ctx context.Context, prepared *ast.Prepared) error {
+	// 获取扩展参数列表
+	extParams := e.getExtensionParams(ctx, prepared)
+	if len(extParams) == 0 {
+		return nil
+	}
+
+	mctechCtx := mctech.GetContext(ctx)
+	var tenantCode string
+	if mctechCtx != nil {
+		tenantCode = mctechCtx.PrepareResult().Tenant()
+	}
+
+	sctx := mctechCtx.Session()
+	sessionVars := sctx.GetSessionVars()
+	if tenantCode == "" {
+		user := sessionVars.User.Username
+		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
+	}
+
+	// 初始化租户条件参数
+	sessionVars.UsersLock.Lock()
+	if tenantCode == "" {
+		delete(sessionVars.Users, tenantParamName)
+		delete(sessionVars.UserVarTypes, tenantParamName)
+	} else {
+		sessionVars.Users[tenantParamName] = types.NewStringDatum(tenantCode)
+		sessionVars.UserVarTypes[tenantParamName] = tenantParamTp
+	}
+	sessionVars.UsersLock.Unlock()
+
 	extArgs, err := appendExtensionArgs(ctx, extParams, func() (expression.Expression, error) {
 		return expression.BuildGetVarFunction(sctx,
 			expression.DatumToConstant(types.NewDatum(tenantParamName), mysql.TypeString, 0),
 			tenantParamTp)
 	})
+
 	if err == nil {
 		e.TxtProtoVars = append(e.TxtProtoVars, extArgs...)
 	}

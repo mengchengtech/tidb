@@ -237,22 +237,17 @@ func (e *Execute) OptimizePreparedPlan(ctx context.Context, sctx sessionctx.Cont
 	prepared := preparedObj.PreparedAst
 	vars.StmtCtx.StmtType = prepared.StmtType
 
-	// add by zhangbing
-	extParams, tenantCode, err := e.getExtensionParams(ctx, prepared)
-	if err != nil {
-		return err
-	}
-	// add end
 	paramLen := len(e.BinProtoVars)
-	// add by zhangbing
-	e.initSessionVars(sctx, paramLen > 0, tenantCode)
-	// add end
 	if paramLen > 0 {
 		// add by zhangbing
-		e.appendBinProtoVars(ctx, extParams, tenantCode)
+		if err := e.appendBinProtoVars(ctx, prepared); err != nil {
+			return err
+		}
 		// add end
 		// for binary protocol execute, argument is placed in vars.BinProtoVars
-		if len(prepared.Params) != paramLen {
+		// modify by zhangbing
+		if len(prepared.Params) != len(e.BinProtoVars) {
+			// modify end
 			return errors.Trace(ErrWrongParamCount)
 		}
 		vars.PreparedParams = e.BinProtoVars
@@ -263,7 +258,9 @@ func (e *Execute) OptimizePreparedPlan(ctx context.Context, sctx sessionctx.Cont
 		}
 	} else {
 		// add by zhangbing
-		e.appendTxtProtoVars(ctx, sctx, extParams, tenantCode)
+		if err := e.appendTxtProtoVars(ctx, prepared); err != nil {
+			return err
+		}
 		// add end
 		// for `execute stmt using @a, @b, @c`, using value in e.TxtProtoVars
 		if len(prepared.Params) != len(e.TxtProtoVars) {

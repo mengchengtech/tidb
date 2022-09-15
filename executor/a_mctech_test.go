@@ -117,7 +117,7 @@ func TestPrepareByCmd(t *testing.T) {
 	session := tk.Session()
 	var ctx context.Context
 	ctx, _ = mctech.WithNewContext3(context.Background(), session, true)
-	result1 := tk.MustQueryWithContext(ctx, sql, "termination", "finished", "none", "project", "mctest")
+	result1 := tk.MustQueryWithContext(ctx, sql, "termination", "finished", "none", "project", "project", "mctest")
 
 	rows1 := result1.Rows()
 	seqs1 := map[string]any{}
@@ -125,6 +125,20 @@ func TestPrepareByCmd(t *testing.T) {
 	for _, row := range rows1 {
 		seqs1[row[0].(string)] = true
 	}
+}
+
+func TestPrepareByCmdNoTenant(t *testing.T) {
+	option := mctech.GetOption()
+	forbidden := option.ForbiddenPrepare
+	option.ForbiddenPrepare = false
+	defer func() {
+		option.ForbiddenPrepare = forbidden
+	}()
+
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("select * from information_schema.statements_summary limit ?", 5,)
 }
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
