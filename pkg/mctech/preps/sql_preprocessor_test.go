@@ -9,7 +9,7 @@ import (
 
 type preprocessorTestCase struct {
 	sql          string
-	actions      map[string]string
+	actions      []*actionInfo
 	params       map[string]any
 	resultExpect map[string]any
 	sqlExpect    string
@@ -44,10 +44,10 @@ func TestProcessorWithRoot(t *testing.T) {
 		{"select * from company", nil, map[string]any{"dbPrefix": "mock"}, map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock"}}, "", ""},
 		// action
 		// $replace
-		{"select * from custom.company", map[string]string{"nop": ""}, nil, nil, "", "不支持的action操作"},
-		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant=gslq"}, nil, map[string]any{}, "select * from gslq_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant"}, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}}, "select * from gdcd_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", map[string]string{"replace": "tenant"}, nil, nil, "", "执行[replace]时未找到名称为'tenant'的参数的值"},
+		{"select * from custom.company", []*actionInfo{{"nop", ""}}, nil, nil, "", "不支持的action操作"},
+		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant=gslq"}}, nil, map[string]any{}, "select * from gslq_custom.company", ""},
+		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}}, "select * from gdcd_custom.company", ""},
+		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, nil, nil, "", "执行[replace]时未找到名称为'tenant'的参数的值"},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "root")
