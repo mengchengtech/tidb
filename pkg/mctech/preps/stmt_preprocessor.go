@@ -25,6 +25,11 @@ type StatementPreprocessor interface {
 type mctechStatementPreprocessor struct {
 }
 
+type actionInfo struct {
+	name string
+	args string
+}
+
 /**
  * 预解析sql，解析的结果存到MCTechContext中
  */
@@ -35,7 +40,7 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 	}
 
 	params := map[string]any{}
-	actions := map[string]string{}
+	actions := []*actionInfo{}
 
 	matches := mctechHintPattern.FindAllStringSubmatch(sql, -1)
 	for _, match := range matches {
@@ -45,13 +50,7 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 		if strings.HasPrefix(name, "$") {
 			// action 去掉'$'前缀
 			actionName := name[1:]
-			if val, ok := actions[actionName]; ok {
-				if val != value {
-					return "", nil, fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",
-						actionName, val, value)
-				}
-			}
-			actions[actionName] = value
+			actions = append(actions, &actionInfo{actionName, value})
 		} else {
 			// param 去掉两端的单引号
 			if value[0] == '\'' && value[len(value)-1] == '\'' {
