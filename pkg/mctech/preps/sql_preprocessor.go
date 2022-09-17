@@ -75,7 +75,7 @@ func newSQLPreprocessor(stmt string) *sqlPreprocessor {
 }
 
 func (p *sqlPreprocessor) Prepare(mctechCtx mctech.Context,
-	actions map[string]string, params map[string]any) (*mctech.PrepareResult, error) {
+	actions []*actionInfo, params map[string]any) (*mctech.PrepareResult, error) {
 	if len(params) > 0 {
 		for name, formatter := range valueFormatters {
 			value := params[name]
@@ -94,13 +94,13 @@ func (p *sqlPreprocessor) Prepare(mctechCtx mctech.Context,
 	}
 
 	if len(actions) > 0 {
-		for actionName, args := range actions {
-			action, ok := resolveActions[actionName]
+		for _, act := range actions {
+			action, ok := resolveActions[act.name]
 			if !ok {
-				return nil, fmt.Errorf("不支持的action操作: %s", actionName)
+				return nil, fmt.Errorf("不支持的action操作: %s", act.name)
 			}
 
-			sql, err := action.Resolve(p.preparedSQL, args, params)
+			sql, err := action.Resolve(p.preparedSQL, act.args, params)
 			if err != nil {
 				return nil, err
 			}
