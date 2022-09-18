@@ -33,7 +33,7 @@ func TestHandler(t *testing.T) {
 		{"/*& global:true */ select * from company", false, false, true, ""},
 		{"select * from company", false, false, false, ""},
 		{"/*& tenant:gslq */ select * from company", true, true, false, ""},
-		{"/*& $replace:tenant */ /*& tenant:gslq */ SELECT * FROM {{tenant}}_custom.{{tenant}}g6_progress_month_setting", true, true, false, ""},
+		{"/*& $replace:tenant */ /*& $replace:p1=zzz */  /*& tenant:gslq */ SELECT * FROM {{tenant}}_custom.{{tenant}}g6_progress_month_setting where name='{{p1}}'", true, true, false, ""},
 		{"/*& global:1 */ select * from company", false, true, false, "存在tenant信息时，global不允许设置为true"},
 		{"select * from global_cq3.company a join global_sq.table2 b on a.id = b.id", true, true, true, "dbs not allow in the same statement"},
 	}
