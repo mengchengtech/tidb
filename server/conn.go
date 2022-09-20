@@ -1830,6 +1830,19 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 		return err
 	}
+
+	params := mctechCtx.PrepareResult().Params()
+	if value, ok := params["mpp"]; ok {
+		mppValue := value.(string)
+		mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
+		if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
+			return err
+		}
+		defer mppVarCtx.ReloadSessionMPPVars()
+		if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
+			return err
+		}
+	}
 	// add end
 
 	stmts, err := cc.ctx.Parse(ctx, sql)
