@@ -86,6 +86,15 @@ type ModifyContext interface {
 	SetSQLHasGlobalDB(hasGlobalDB bool)
 }
 
+// SessionMPPVarsContext interface
+type SessionMPPVarsContext interface {
+	StoreSessionMPPVars(mpp string) (err error)
+
+	ReloadSessionMPPVars() (err error)
+
+	SetSessionMPPVars(mpp string) (err error)
+}
+
 // BaseContextAware interface
 type BaseContextAware interface {
 	BaseContext() Context
@@ -244,22 +253,39 @@ func NewBaseContext(usingTenantParam bool) Context {
 
 func (d *baseContext) CurrentDB() string {
 	log.Error("CurrentDB: " + string(debug.Stack()))
-	panic(errors.New("CurrentDB not implemented"))
+	panic(errors.New("[CurrentDB] not implemented"))
 }
 
 func (d *baseContext) PrepareSQL(rawSQL string) (sql string, err error) {
 	log.Error("PrepareSQL: " + string(debug.Stack()))
-	panic(errors.New("PrepareSQL not implemented"))
+	panic(errors.New("[PrepareSQL] not implemented"))
 }
 
 func (d *baseContext) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err error) {
 	log.Error("ApplyAndCheck: " + string(debug.Stack()))
-	panic(errors.New("ApplyAndCheck not implemented"))
+	panic(errors.New("[ApplyAndCheck] not implemented"))
 }
 
 func (d *baseContext) Session() sessionctx.Context {
 	log.Error("Session: " + string(debug.Stack()))
-	panic(errors.New("Session not implemented"))
+	panic(errors.New("[Session] not implemented"))
+}
+
+// ------------------------------------------------
+
+func (d *baseContext) StoreSessionMPPVars(mpp string) (err error) {
+	log.Error("Session: " + string(debug.Stack()))
+	panic(errors.New("[StoreSessionMPPVars] not implemented"))
+}
+
+func (d *baseContext) ReloadSessionMPPVars() (err error) {
+	log.Error("Session: " + string(debug.Stack()))
+	panic(errors.New("[ReloadSessionMPPVars] not implemented"))
+}
+
+func (d *baseContext) SetSessionMPPVars(mpp string) (err error) {
+	log.Error("Session: " + string(debug.Stack()))
+	panic(errors.New("[SetSessionMPPVars] not implemented"))
 }
 
 // ------------------------------------------------
