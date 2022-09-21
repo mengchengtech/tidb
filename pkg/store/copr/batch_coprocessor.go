@@ -958,6 +958,7 @@ func buildBatchCopTasksCore(bo *backoff.Backoffer, store *kvStore, rangesForEach
 		usedTiFlashStoresMap := make(map[uint64]struct{}, 0)
 		needRetry := false
 		for _, task := range tasks {
+			// comment by zhangbing. 当前分支已修改过此bug
 			rpcCtx, err := cache.GetTiFlashRPCContext(bo.TiKVBackoffer(), task.region, isMPP, tikv.LabelFilterNoTiFlashWriteNode)
 			if err != nil {
 				return nil, errors.Trace(err)
