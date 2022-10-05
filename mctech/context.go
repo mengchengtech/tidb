@@ -347,6 +347,10 @@ func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	if db == "" {
 		return db, nil
 	}
+	result := d.prepareResult
+	if result == nil {
+		return db, nil
+	}
 	// 处理dw库的索引
 	if d.IsGlobalDb(db) && strings.HasSuffix(db, "_dw") {
 		dbIndex, err := d.selector.GetDbIndex()
@@ -363,10 +367,6 @@ func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	}
 
 	// 到此database支持添加数据库前缀
-	result := d.prepareResult
-	if result == nil {
-		return db, nil
-	}
 	dbPrefix := result.DbPrefix()
 
 	if dbPrefix == "" {
@@ -399,12 +399,15 @@ func (d *baseContext) ToLogicDbName(db string) string {
 }
 
 func (d *baseContext) IsGlobalDb(db string) bool {
-	result := d.PrepareResult()
 	if strings.HasPrefix(db, DbGlobalPrefix) {
 		return true
 	}
 
-	dbPrefix := result.DbPrefix()
+	dbPrefix := ""
+	result := d.PrepareResult()
+	if result != nil {
+		dbPrefix = result.DbPrefix()
+	}
 	if dbPrefix != "" {
 		return strings.HasPrefix(db, dbPrefix+"_"+DbGlobalPrefix)
 	}

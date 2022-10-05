@@ -1831,16 +1831,19 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		return err
 	}
 
-	params := mctechCtx.PrepareResult().Params()
-	if value, ok := params["mpp"]; ok {
-		mppValue := value.(string)
-		mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
-		if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
-			return err
-		}
-		defer mppVarCtx.ReloadSessionMPPVars()
-		if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
-			return err
+	result := mctechCtx.PrepareResult()
+	if result != nil {
+		params := result.Params()
+		if value, ok := params["mpp"]; ok {
+			mppValue := value.(string)
+			mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
+			if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
+				return err
+			}
+			defer mppVarCtx.ReloadSessionMPPVars()
+			if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
+				return err
+			}
 		}
 	}
 	// add end
