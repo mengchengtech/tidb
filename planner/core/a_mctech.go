@@ -108,7 +108,7 @@ func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (err error) {
 	}
 
 	var (
-		global     bool
+		global     = true
 		excludes   = []string{}
 		tenant     string
 		tenantFrom = "none"
@@ -119,16 +119,18 @@ func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (err error) {
 	)
 
 	if mctechCtx != nil {
-		pr := mctechCtx.PrepareResult()
-		global = pr.Global()
-		params = pr.Params()
-		excludes = pr.Excludes()
-		tenant = pr.Tenant()
-		if tenant != "" {
-			if pr.TenantFromRole() {
-				tenantFrom = "role"
-			} else {
-				tenantFrom = "hint"
+		result := mctechCtx.PrepareResult()
+		if result != nil {
+			global = result.Global()
+			params = result.Params()
+			excludes = result.Excludes()
+			tenant = result.Tenant()
+			if tenant != "" {
+				if result.TenantFromRole() {
+					tenantFrom = "role"
+				} else {
+					tenantFrom = "hint"
+				}
 			}
 		}
 		index, err = mctechCtx.GetDbIndex()
@@ -225,7 +227,10 @@ func (e *Execute) AppendVarExprs(ctx context.Context, prepared *ast.Prepared) er
 	mctechCtx := mctech.GetContext(ctx)
 	var tenantCode string
 	if mctechCtx != nil {
-		tenantCode = mctechCtx.PrepareResult().Tenant()
+		result := mctechCtx.PrepareResult()
+		if result != nil {
+			tenantCode = result.Tenant()
+		}
 	}
 
 	sctx := mctechCtx.Session()

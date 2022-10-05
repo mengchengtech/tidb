@@ -82,7 +82,7 @@ func (h *mctechHandler) ApplyAndCheck(mctechCtx mctech.Context, stmts []ast.Stmt
 			changed = true
 		}
 
-		if option.DbCheckerEnabled && len(dbs) > 0 {
+		if option.TenantEnabled && option.DbCheckerEnabled && len(dbs) > 0 {
 			// 启用数据库联合查询规则检查
 			if err = getDatabaseChecker().Check(mctechCtx, dbs); err != nil {
 				return changed, err
