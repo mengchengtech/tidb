@@ -30,10 +30,12 @@ import (
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 var testKitIDGenerator atomic.Uint64
@@ -250,6 +252,10 @@ func (tk *TestKit) ExecWithContext(
 		// add by zhangbing
 		if mctechCtx != nil {
 			if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+				if strFmt, ok := tk.session.(mctech.StringFormat); ok {
+					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
+						zap.String("session", strFmt.String()), zap.String("SQL", sql))
+				}
 				return nil, err
 			}
 		}

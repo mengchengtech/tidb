@@ -1859,6 +1859,11 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+		if strFmt, ok := cc.getCtx().Session.(mctech.StringFormat); ok {
+			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
+				zap.String("session", strFmt.String()), zap.String("SQL", sql))
+		}
+
 		return err
 	}
 	// add end
