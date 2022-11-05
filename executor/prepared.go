@@ -31,6 +31,7 @@ import (
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/dbterror/exeerrors"
+	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/pingcap/tidb/util/topsql"
 	topsqlstate "github.com/pingcap/tidb/util/topsql/state"
@@ -123,6 +124,10 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 	modifyCtx.SetUsingTenantParam(true)
 	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+		if strFmt, ok := e.ctx.(mctech.StringFormat); ok {
+			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
+				zap.String("session", strFmt.String()), zap.String("SQL", e.sqlText))
+		}
 		return err
 	}
 	// add end
