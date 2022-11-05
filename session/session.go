@@ -1516,11 +1516,15 @@ func (s *session) Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
 		// Only print log message when this SQL is from the user.
 		// Mute the warning for internal SQLs.
 		if !s.sessionVars.InRestrictedSQL {
+			// modify by zhangbing
 			if s.sessionVars.EnableRedactLog {
-				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
+				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err),
+					zap.String("session", s.String()), zap.String("SQL", sql))
 			} else {
-				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
+				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err),
+					zap.String("session", s.String()), zap.String("SQL", sql))
 			}
+			// modify end
 			s.sessionVars.StmtCtx.AppendError(err)
 		}
 		return nil, err
@@ -1572,11 +1576,15 @@ func (s *session) ParseWithParams(ctx context.Context, sql string, args ...inter
 		// Only print log message when this SQL is from the user.
 		// Mute the warning for internal SQLs.
 		if !s.sessionVars.InRestrictedSQL {
+				// modify by zhangbing
 			if s.sessionVars.EnableRedactLog {
-				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
+				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err),
+					zap.String("session", s.String()), zap.String("SQL", sql))
 			} else {
-				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
+				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err),
+					zap.String("session", s.String()), zap.String("SQL", sql))
 			}
+			// modify end
 		}
 		return nil, util.SyntaxError(err)
 	}
@@ -1925,7 +1933,8 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 		// Only print log message when this SQL is from the user.
 		// Mute the warning for internal SQLs.
 		if !s.sessionVars.InRestrictedSQL {
-			logutil.Logger(ctx).Warn("compile SQL failed", zap.Error(err), zap.String("SQL", stmtNode.Text()))
+			logutil.Logger(ctx).Warn("compile SQL failed", zap.Error(err),
+				zap.String("session", s.String()), zap.String("SQL", stmtNode.Text()))
 		}
 		return nil, err
 	}
@@ -1943,10 +1952,13 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 	recordSet, err := runStmt(ctx, s, stmt)
 	if err != nil {
 		if !errIsNoisy(err) {
-			logutil.Logger(ctx).Warn("run statement failed",
+			// modify by zhangbing
+			// 统一输出日志格式
+			logutil.Logger(ctx).Warn("run SQL failed",
+				// modify end
 				zap.Int64("schemaVersion", s.GetInfoSchema().SchemaMetaVersion()),
 				zap.Error(err),
-				zap.String("session", s.String()))
+				zap.String("session", s.String()), zap.String("SQL", stmt.OriginText()))
 		}
 		return nil, err
 	}
