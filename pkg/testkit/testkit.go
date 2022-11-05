@@ -30,9 +30,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/kv"
-	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/terror"
 	"github.com/pingcap/tidb/pkg/session"
@@ -43,6 +43,7 @@ import (
 	"github.com/pingcap/tidb/pkg/util"
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/intest"
+	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/metricsutil"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/pingcap/tipb/go-binlog"
@@ -52,6 +53,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/tikvrpc"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -381,6 +383,10 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 		// add by zhangbing
 		if mctechCtx != nil {
 			if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+				if strFmt, ok := tk.session.(mctech.StringFormat); ok {
+					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
+						zap.String("session", strFmt.String()), zap.String("SQL", sql))
+				}
 				return nil, err
 			}
 		}

@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/parser/auth"
-	"github.com/pingcap/tidb/testkit"
+	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/parser/auth"
+	"github.com/pingcap/tidb/pkg/testkit"
 )
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
@@ -30,8 +30,7 @@ func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 }
 
 func TestJoinAndWhere(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 	tk.MustExec(strings.Join([]string{
 		"SELECT * FROM unit_test",

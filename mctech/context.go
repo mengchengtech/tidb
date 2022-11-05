@@ -14,6 +14,10 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+type StringFormat interface {
+ 	String() string
+}
+
 // Context mctech context interface
 type Context interface {
 	// 获取tidb session

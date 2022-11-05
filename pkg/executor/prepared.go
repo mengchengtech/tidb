@@ -19,11 +19,11 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/bindinfo"
 	"github.com/pingcap/tidb/pkg/executor/internal/exec"
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/infoschema"
-	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
@@ -35,6 +35,7 @@ import (
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/dbterror/exeerrors"
 	"github.com/pingcap/tidb/pkg/util/dbterror/plannererrors"
+	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/pingcap/tidb/pkg/util/topsql"
 	topsqlstate "github.com/pingcap/tidb/pkg/util/topsql/state"
@@ -127,6 +128,10 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 	modifyCtx.SetUsingTenantParam(true)
 	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+		if strFmt, ok := e.Ctx().(mctech.StringFormat); ok {
+			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
+				zap.String("session", strFmt.String()), zap.String("SQL", e.sqlText))
+		}
 		return err
 	}
 	// add end
