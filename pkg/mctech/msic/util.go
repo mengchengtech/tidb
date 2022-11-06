@@ -14,20 +14,22 @@ func (r *_msicExtension) Apply(mctechCtx mctech.Context, node ast.Node) (matched
 	matched = true
 	switch stmtNode := node.(type) {
 	case *ast.UseStmt:
-		err = r.changeToPhysicalDb(mctechCtx, stmtNode)
+		stmtNode.DBName, err = r.changeToPhysicalDb(mctechCtx, stmtNode.DBName)
+	case *ast.ShowStmt:
+		stmtNode.DBName, err = r.changeToPhysicalDb(mctechCtx, stmtNode.DBName)
 	default:
 		matched = false
 	}
 	return matched, err
 }
 
-func (r *_msicExtension) changeToPhysicalDb(mctechCtx mctech.Context, n *ast.UseStmt) (err error) {
-	var dbName string
-	if dbName, err = mctechCtx.ToPhysicalDbName(n.DBName); err == nil {
-		n.DBName = dbName
+func (r *_msicExtension) changeToPhysicalDb(
+	mctechCtx mctech.Context, oriName string) (dbName string, err error) {
+	if dbName, err = mctechCtx.ToPhysicalDbName(oriName); err == nil {
+		return dbName, err
 	}
 
-	return err
+	return oriName, err
 }
 
 var msicResolver *_msicExtension
