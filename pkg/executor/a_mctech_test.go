@@ -64,6 +64,27 @@ func TestForbiddenPrepare(t *testing.T) {
 	}
 }
 
+func TestIntegerAutoIncrement(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := initMock(t, store)
+	// Check for warning in case we can't set the auto_increment to the desired value
+	tk.MustExec("create table t(a bigint primary key auto_increment)")
+	res := tk.MustQuery("SHOW COLUMNS FROM t")
+
+	lst := []string{}
+	for _, row := range res.Rows() {
+		lst = append(lst, fmt.Sprintf("%v", row))
+	}
+
+	require.Equal(t,
+		strings.Join([]string{
+			"[a bigint(20) NO PRI <nil> auto_increment]",
+		}, "\n"),
+		strings.Join(lst, "\n"),
+		"TestIntegerAutoIncrement",
+	)
+}
+
 func TestPrepareByQuery(t *testing.T) {
 	option := mctech.GetOption()
 	forbidden := option.ForbiddenPrepare
