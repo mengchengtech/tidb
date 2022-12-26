@@ -20,14 +20,15 @@ func currentUser(ctx sessionctx.Context) string {
 
 func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCode string, err error) {
 	vars := ctx.GetSessionVars()
-	tenantFromRoles := make([]string, len(vars.ActiveRoles))
-	for i, r := range vars.ActiveRoles {
+	tenantFromRoles := make([]string, 0, len(vars.ActiveRoles))
+	for _, r := range vars.ActiveRoles {
 		if r.Username == tenantOnlyRole {
 			tenantOnly = true
+			continue
 		}
 		subs := tenantCodePattern.FindStringSubmatch(r.Username)
 		if subs != nil {
-			tenantFromRoles[i] = subs[1]
+			tenantFromRoles = append(tenantFromRoles, subs[1])
 		}
 	}
 	// var isAdmin = user == "root"
