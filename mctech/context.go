@@ -357,7 +357,7 @@ func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	}
 	// 处理dw库的索引
 	if d.IsGlobalDb(db) && strings.HasSuffix(db, "_dw") {
-		dbIndex, err := d.selector.GetDbIndex()
+		dbIndex, err := d.GetDbIndex()
 		if err != nil {
 			return "", err
 		}
@@ -419,7 +419,11 @@ func (d *baseContext) IsGlobalDb(db string) bool {
 }
 
 func (d *baseContext) GetDbIndex() (DbIndex, error) {
-	return d.selector.GetDbIndex()
+	sel := d.selector
+	if sel == nil {
+		return -1, errors.New("db selector is nil")
+	}
+	return sel.GetDbIndex()
 }
 
 /**
