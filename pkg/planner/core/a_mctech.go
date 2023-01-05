@@ -97,12 +97,12 @@ func (e *MCTech) RenderResult(ctx context.Context) error {
 }
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
-func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (err error) {
+func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (error) {
 	mctechCtx := mctech.GetContext(ctx)
 	// "global", "excludes", "tenant", "tenant_from_role", "dw_index", "params", "prepared_sql"
 	var sb strings.Builder
 	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags|format.RestoreBracketAroundBinaryOperation, &sb)
-	err = e.ExecStmt.Restore(restoreCtx)
+	err := e.ExecStmt.Restore(restoreCtx)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,8 @@ func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (err error) {
 		}
 		index, err = mctechCtx.GetDbIndex()
 		if err != nil {
-			return err
+			err = nil
+			index = -1
 		}
 	}
 
