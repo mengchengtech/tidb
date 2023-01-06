@@ -56,6 +56,7 @@ import (
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
+	// "github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/errno"
@@ -1820,22 +1821,6 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 		return err
 	}
-
-	result := mctechCtx.PrepareResult()
-	if result != nil {
-		params := result.Params()
-		if value, ok := params["mpp"]; ok {
-			mppValue := value.(string)
-			mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
-			if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
-				return err
-			}
-			defer mppVarCtx.ReloadSessionMPPVars()
-			if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
-				return err
-			}
-		}
-	}
 	// add end
 
 	var stmts []ast.StmtNode
@@ -1850,6 +1835,45 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
+	// 判断当前是否是查询语句
+	queryOnly := false
+	for _, stmt := range stmts {
+		switch stmtNode := stmt.(type) {
+		case *ast.SelectStmt, *ast.SetOprStmt:
+			queryOnly = true
+		case *ast.MCTechStmt:
+			_, queryOnly = stmtNode.Stmt.(*ast.SelectStmt)
+		case *ast.ExplainStmt:
+			_, queryOnly = stmtNode.Stmt.(*ast.SelectStmt)
+		}
+	}
+
+	// log.Warn(fmt.Sprintf("queryOnly: %t", queryOnly))
+	if queryOnly {
+		// 只对查询语句处理mpp
+		result := mctechCtx.PrepareResult()
+		// log.Warn(fmt.Sprintf("result is null: %t", result == nil))
+		if result != nil {
+			params := result.Params()
+			var mppValue string
+			if value, ok := params[mctech.ParamMPP]; ok {
+				mppValue = value.(string)
+			}
+
+			// log.Warn("mppValue: " + mppValue)
+			if mppValue != "allow" && mppValue != "" {
+				mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
+				if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
+					return err
+				}
+				defer mppVarCtx.ReloadSessionMPPVars()
+				if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
 		if strFmt, ok := cc.getCtx().Session.(mctech.StringFormat); ok {
 			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),

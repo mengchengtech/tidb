@@ -15,7 +15,7 @@ import (
 )
 
 type StringFormat interface {
- 	String() string
+	String() string
 }
 
 // Context mctech context interface
@@ -116,6 +116,8 @@ const (
 	ParamDbPrefix = "dbPrefix"
 	// ParamGlobal custom hint param "global"
 	ParamGlobal = "global"
+	// ParamGlobal custom hint param "mpp"
+	ParamMPP = "mpp"
 )
 
 // GlobalValueInfo from global params
@@ -140,6 +142,9 @@ type PrepareResult struct {
 // NewPrepareResult create PrepareResult
 func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenantCode != ""
+	if _, ok := params[ParamMPP]; !ok {
+		params[ParamMPP] = GetOption().DefaultMPPValue
+	}
 
 	if v, ok := params[ParamTenant]; ok {
 		codeFromParam := strings.TrimSpace(v.(string))
