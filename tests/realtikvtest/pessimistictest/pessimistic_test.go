@@ -58,6 +58,7 @@ func createAsyncCommitTestKit(t *testing.T, store kv.Storage) *testkit.TestKit {
 }
 
 // TODO: figure out a stable way to run Test1PCWithSchemaChange
+//
 //nolint:unused
 func create1PCTestKit(t *testing.T, store kv.Storage) *testkit.TestKit {
 	tk := testkit.NewTestKit(t, store)
@@ -3107,13 +3108,21 @@ func TestPessimisticAutoCommitTxn(t *testing.T) {
 
 	tk.MustExec("set tidb_txn_mode = 'pessimistic'")
 	tk.MustExec("drop table if exists t")
-	tk.MustExec("create table t (i int)")
+	tk.MustExec("create table t (i int primary key)")
 	tk.MustExec("insert into t values (1)")
 	tk.MustExec("set autocommit = on")
 
 	rows := tk.MustQuery("explain update t set i = -i").Rows()
 	explain := fmt.Sprintf("%v", rows[1])
 	require.NotRegexp(t, ".*SelectLock.*", explain)
+	rows = tk.MustQuery("explain update t set i = -i where i = -1").Rows()
+	explain = fmt.Sprintf("%v", rows[1])
+	require.Regexp(t, ".*handle:-1.*", explain)
+	require.NotRegexp(t, ".*handle:-1, lock.*", explain)
+	rows = tk.MustQuery("explain update t set i = -i where i in (-1, 1)").Rows()
+	explain = fmt.Sprintf("%v", rows[1])
+	require.Regexp(t, ".*handle:\\[-1 1\\].*", explain)
+	require.NotRegexp(t, ".*handle:\\[-1 1\\].*, lock.*", explain)
 
 	originCfg := config.GetGlobalConfig()
 	defer config.StoreGlobalConfig(originCfg)
@@ -3124,6 +3133,12 @@ func TestPessimisticAutoCommitTxn(t *testing.T) {
 	rows = tk.MustQuery("explain update t set i = -i").Rows()
 	explain = fmt.Sprintf("%v", rows[1])
 	require.Regexp(t, ".*SelectLock.*", explain)
+	rows = tk.MustQuery("explain update t set i = -i where i = -1").Rows()
+	explain = fmt.Sprintf("%v", rows[1])
+	require.Regexp(t, ".*handle:-1, lock.*", explain)
+	rows = tk.MustQuery("explain update t set i = -i where i in (-1, 1)").Rows()
+	explain = fmt.Sprintf("%v", rows[1])
+	require.Regexp(t, ".*handle:\\[-1 1\\].*, lock.*", explain)
 }
 
 func TestPessimisticLockOnPartition(t *testing.T) {
