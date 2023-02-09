@@ -76,8 +76,7 @@ func TestParseErrorWarn(t *testing.T) {
 
 func TestKeysNeedLock(t *testing.T) {
 	rowKey := tablecodec.EncodeRowKeyWithHandle(1, kv.IntHandle(1))
-	uniqueIndexKey := tablecodec.EncodeIndexSeekKey(1, 1, []byte{1})
-	nonUniqueIndexKey := tablecodec.EncodeIndexSeekKey(1, 2, []byte{1})
+	indexKey := tablecodec.EncodeIndexSeekKey(1, 1, []byte{1})
 	uniqueValue := make([]byte, 8)
 	uniqueUntouched := append(uniqueValue, '1')
 	nonUniqueVal := []byte{'0'}
@@ -91,20 +90,18 @@ func TestKeysNeedLock(t *testing.T) {
 	}{
 		{rowKey, rowVal, true},
 		{rowKey, deleteVal, true},
-		{nonUniqueIndexKey, nonUniqueVal, false},
-		{nonUniqueIndexKey, nonUniqueUntouched, false},
-		{uniqueIndexKey, uniqueValue, true},
-		{uniqueIndexKey, uniqueUntouched, false},
-		{uniqueIndexKey, deleteVal, false},
+		{indexKey, nonUniqueVal, false},
+		{indexKey, nonUniqueUntouched, false},
+		{indexKey, uniqueValue, true},
+		{indexKey, uniqueUntouched, false},
+		{indexKey, deleteVal, false},
 	}
 
 	for _, test := range tests {
-		need := keyNeedToLock(test.key, test.val, 0)
-		require.Equal(t, test.need, need)
-
-		flag := kv.KeyFlags(1)
-		need = keyNeedToLock(test.key, test.val, flag)
-		require.True(t, flag.HasPresumeKeyNotExists())
-		require.True(t, need)
+		require.Equal(t, test.need, keyNeedToLock(test.key, test.val, 0))
 	}
+
+	flag := kv.KeyFlags(1)
+	require.True(t, flag.HasPresumeKeyNotExists())
+	require.True(t, keyNeedToLock(indexKey, deleteVal, flag))
 }

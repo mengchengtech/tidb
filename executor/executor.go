@@ -889,7 +889,6 @@ func (e *CheckTableExec) checkTableRecord(ctx context.Context, idxOffset int) er
 
 // ShowSlowExec represents the executor of showing the slow queries.
 // It is build from the "admin show slow" statement:
-//
 //	admin show slow top [internal | all] N
 //	admin show slow recent N
 type ShowSlowExec struct {
@@ -1571,22 +1570,21 @@ func (e *MaxOneRowExec) Next(ctx context.Context, req *chunk.Chunk) error {
 // UnionExec pulls all it's children's result and returns to its parent directly.
 // A "resultPuller" is started for every child to pull result from that child and push it to the "resultPool", the used
 // "Chunk" is obtained from the corresponding "resourcePool". All resultPullers are running concurrently.
-//
-//	                          +----------------+
-//	+---> resourcePool 1 ---> | resultPuller 1 |-----+
-//	|                         +----------------+     |
-//	|                                                |
-//	|                         +----------------+     v
-//	+---> resourcePool 2 ---> | resultPuller 2 |-----> resultPool ---+
-//	|                         +----------------+     ^               |
-//	|                               ......           |               |
-//	|                         +----------------+     |               |
-//	+---> resourcePool n ---> | resultPuller n |-----+               |
-//	|                         +----------------+                     |
-//	|                                                                |
-//	|                          +-------------+                       |
-//	|--------------------------| main thread | <---------------------+
-//	                           +-------------+
+//                             +----------------+
+//   +---> resourcePool 1 ---> | resultPuller 1 |-----+
+//   |                         +----------------+     |
+//   |                                                |
+//   |                         +----------------+     v
+//   +---> resourcePool 2 ---> | resultPuller 2 |-----> resultPool ---+
+//   |                         +----------------+     ^               |
+//   |                               ......           |               |
+//   |                         +----------------+     |               |
+//   +---> resourcePool n ---> | resultPuller n |-----+               |
+//   |                         +----------------+                     |
+//   |                                                                |
+//   |                          +-------------+                       |
+//   |--------------------------| main thread | <---------------------+
+//                              +-------------+
 type UnionExec struct {
 	baseExecutor
 	concurrency int
@@ -1787,7 +1785,6 @@ func ResetContextOfStmt(ctx sessionctx.Context, s ast.StmtNode) (err error) {
 	sc.EnableOptimizeTrace = false
 	sc.OptimizeTracer = nil
 	sc.OptimizerCETrace = nil
-	sc.IsExplainAnalyzeDML = false
 
 	sc.SysdateIsNow = ctx.GetSessionVars().SysdateIsNow
 
@@ -1980,8 +1977,6 @@ func ResetContextOfStmt(ctx sessionctx.Context, s ast.StmtNode) (err error) {
 	vars.ClearStmtVars()
 	vars.PrevFoundInBinding = vars.FoundInBinding
 	vars.FoundInBinding = false
-	vars.CurrInsertBatchExtraCols = nil
-	vars.CurrInsertValues = chunk.Row{}
 	return
 }
 

@@ -471,8 +471,7 @@ func (mgr *Mgr) GetTS(ctx context.Context) (uint64, error) {
 }
 
 // GetMergeRegionSizeAndCount returns the tikv config `coprocessor.region-split-size` and `coprocessor.region-split-key`.
-// returns the default config when failed.
-func (mgr *Mgr) GetMergeRegionSizeAndCount(ctx context.Context, client *http.Client) (uint64, uint64) {
+func (mgr *Mgr) GetMergeRegionSizeAndCount(ctx context.Context, client *http.Client) (uint64, uint64, error) {
 	regionSplitSize := DefaultMergeRegionSizeBytes
 	regionSplitKeys := DefaultMergeRegionKeyCount
 	type coprocessor struct {
@@ -501,10 +500,9 @@ func (mgr *Mgr) GetMergeRegionSizeAndCount(ctx context.Context, client *http.Cli
 		return nil
 	})
 	if err != nil {
-		log.Warn("meet error when getting config from TiKV; using default", logutil.ShortError(err))
-		return DefaultMergeRegionSizeBytes, DefaultMergeRegionKeyCount
+		return 0, 0, errors.Trace(err)
 	}
-	return regionSplitSize, regionSplitKeys
+	return regionSplitSize, regionSplitKeys, nil
 }
 
 // GetConfigFromTiKV get configs from all alive tikv stores.

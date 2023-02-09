@@ -101,7 +101,7 @@ func (rc *Controller) clusterResource(ctx context.Context, localSource int64) er
 	passed := true
 	message := "Cluster resources are rich for this import task"
 	defer func() {
-		rc.checkTemplate.Collect(Warn, passed, message)
+		rc.checkTemplate.Collect(Critical, passed, message)
 	}()
 
 	var (
@@ -194,7 +194,7 @@ func (rc *Controller) checkEmptyRegion(ctx context.Context) error {
 	passed := true
 	message := "Cluster doesn't have too many empty regions"
 	defer func() {
-		rc.checkTemplate.Collect(Warn, passed, message)
+		rc.checkTemplate.Collect(Critical, passed, message)
 	}()
 	storeInfo := &pdtypes.StoresInfo{}
 	err := rc.tls.WithHost(rc.cfg.TiDB.PdAddr).GetJSON(ctx, pdStores, storeInfo)
@@ -754,10 +754,10 @@ func (rc *Controller) SchemaIsValid(ctx context.Context, tableInfo *mydump.MDTab
 }
 
 // checkCSVHeader try to check whether the csv header config is consistent with the source csv files by:
-//  1. pick one table with two CSV files and a unique/primary key
-//  2. read the first row of those two CSV files
-//  3. checks if the content of those first rows are compatible with the table schema, and whether the
-//     two rows are identical, to determine if the first rows are a header rows.
+// 1. pick one table with two CSV files and a unique/primary key
+// 2. read the first row of those two CSV files
+// 3. checks if the content of those first rows are compatible with the table schema, and whether the
+//    two rows are identical, to determine if the first rows are a header rows.
 func (rc *Controller) checkCSVHeader(ctx context.Context, dbMetas []*mydump.MDDatabaseMeta) error {
 	// if cfg set header = ture but source files actually contain not header, former SchemaCheck should
 	// return error in this situation, so we need do it again.
@@ -1156,12 +1156,7 @@ func tableContainsData(ctx context.Context, db utils.DBExecutor, tableName strin
 	failpoint.Inject("CheckTableEmptyFailed", func() {
 		failpoint.Return(false, errors.New("mock error"))
 	})
-	// Here we use the `USE INDEX()` hint to skip fetch the record from index.
-	// In Lightning, if previous importing is halted half-way, it is possible that
-	// the data is partially imported, but the index data has not been imported.
-	// In this situation, if no hint is added, the SQL executor might fetch the record from index,
-	// which is empty.  This will result in missing check.
-	query := "SELECT 1 FROM " + tableName + " USE INDEX() LIMIT 1"
+	query := "select 1 from " + tableName + " limit 1"
 	exec := common.SQLWithRetry{
 		DB:     db,
 		Logger: log.L(),

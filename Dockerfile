@@ -32,8 +32,6 @@ WORKDIR /go/src/github.com/pingcap/tidb
 # Cache dependencies
 COPY go.mod .
 COPY go.sum .
-COPY parser/go.mod parser/go.mod
-COPY parser/go.sum parser/go.sum
 
 RUN GO111MODULE=on go mod download
 

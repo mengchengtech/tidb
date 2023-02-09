@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -39,7 +38,7 @@ import (
 	"github.com/pingcap/tidb/util/codec"
 )
 
-var openDBFunc = openDB
+var openDBFunc = sql.Open
 
 var emptyHandleValsErr = errors.New("empty handleVals for TiDB table")
 
@@ -188,13 +187,14 @@ func (d *Dumper) Dump() (dumpErr error) {
 
 	atomic.StoreInt64(&d.totalTables, int64(calculateTableCount(conf.Tables)))
 
-	rebuildMetaConn := func(conn *sql.Conn, updateMeta bool) (*sql.Conn, error) {
-		_ = conn.Raw(func(dc interface{}) error {
-			// return an `ErrBadConn` to ensure close the connection, but do not put it back to the pool.
-			// if we choose to use `Close`, it will always put the connection back to the pool.
-			return driver.ErrBadConn
-		})
-
+	rebuildConn := func(conn *sql.Conn, updateMeta bool) (*sql.Conn, error) {
+		// make sure that the lock connection is still alive
+		err1 := conCtrl.PingContext(tctx)
+		if err1 != nil {
+			return conn, errors.Trace(err1)
+		}
+		// give up the last broken connection
+		conn.Close()
 		newConn, err1 := createConnWithConsistency(tctx, pool, repeatableRead)
 		if err1 != nil {
 			return conn, errors.Trace(err1)
@@ -210,20 +210,7 @@ func (d *Dumper) Dump() (dumpErr error) {
 		return conn, nil
 	}
 
-	rebuildConn := func(conn *sql.Conn, updateMeta bool) (*sql.Conn, error) {
-		// make sure that the lock connection is still alive
-		err1 := conCtrl.PingContext(tctx)
-		if err1 != nil {
-			return conn, errors.Trace(err1)
-		}
-		return rebuildMetaConn(conn, updateMeta)
-	}
-
-	chanSize := defaultDumpThreads
-	failpoint.Inject("SmallDumpChanSize", func() {
-		chanSize = 1
-	})
-	taskChan := make(chan Task, chanSize)
+	taskChan := make(chan Task, defaultDumpThreads)
 	AddGauge(taskChannelCapacity, conf.Labels, defaultDumpThreads)
 	wg, writingCtx := errgroup.WithContext(tctx)
 	writerCtx := tctx.WithContext(writingCtx)
@@ -272,7 +259,7 @@ func (d *Dumper) Dump() (dumpErr error) {
 			fmt.Printf("tidb_mem_quota_query == %s\n", s)
 		}
 	})
-	baseConn := newBaseConn(metaConn, true, rebuildMetaConn)
+	baseConn := newBaseConn(metaConn, canRebuildConn(conf.Consistency, conf.TransactionalConsistency), rebuildConn)
 
 	if conf.SQL == "" {
 		if err = d.dumpDatabases(writerCtx, baseConn, taskChan); err != nil && !errors.ErrorEqual(err, context.Canceled) {
@@ -512,6 +499,7 @@ func adjustTableCollation(tctx *tcontext.Context, collationCompatible string, pa
 	}
 
 	if collation == "" && charset != "" {
+		// get db collation
 		collation, ok := charsetAndDefaultCollationMap[strings.ToLower(charset)]
 		if !ok {
 			tctx.L().Warn("not found table charset default collation.", zap.String("originSQL", originSQL), zap.String("charset", strings.ToLower(charset)))
@@ -540,12 +528,11 @@ func adjustTableCollation(tctx *tcontext.Context, collationCompatible string, pa
 
 // adjustColumnsCollation adds column's collation.
 func adjustColumnsCollation(tctx *tcontext.Context, createStmt *ast.CreateTableStmt, charsetAndDefaultCollationMap map[string]string) {
-ColumnLoop:
 	for _, col := range createStmt.Cols {
 		for _, options := range col.Options {
 			// already have 'Collation'
 			if options.Tp == ast.ColumnOptionCollate {
-				continue ColumnLoop
+				continue
 			}
 		}
 		fieldType := col.Tp
@@ -1236,9 +1223,6 @@ func (d *Dumper) Close() error {
 	if d.dbHandle != nil {
 		return d.dbHandle.Close()
 	}
-	if d.conf.Security.DriveTLSName != "" {
-		mysql.DeregisterTLSConfig(d.conf.Security.DriveTLSName)
-	}
 	return nil
 }
 
@@ -1306,11 +1290,11 @@ func startHTTPService(d *Dumper) error {
 // openSQLDB is an initialization step of Dumper.
 func openSQLDB(d *Dumper) error {
 	conf := d.conf
-	c, err := mysql.NewConnector(conf.GetDriverConfig(""))
+	pool, err := sql.Open("mysql", conf.GetDSN(""))
 	if err != nil {
 		return errors.Trace(err)
 	}
-	d.dbHandle = sql.OpenDB(c)
+	d.dbHandle = pool
 	return nil
 }
 
@@ -1483,18 +1467,10 @@ func setSessionParam(d *Dumper) error {
 			}
 		}
 	}
-	if d.dbHandle, err = resetDBWithSessionParams(d.tctx, pool, conf.GetDriverConfig(""), conf.SessionParams); err != nil {
+	if d.dbHandle, err = resetDBWithSessionParams(d.tctx, pool, conf.GetDSN(""), conf.SessionParams); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
-}
-
-func openDB(cfg *mysql.Config) (*sql.DB, error) {
-	c, err := mysql.NewConnector(cfg)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return sql.OpenDB(c), nil
 }
 
 func (d *Dumper) renewSelectTableRegionFuncForLowerTiDB(tctx *tcontext.Context) error {
@@ -1513,7 +1489,7 @@ func (d *Dumper) renewSelectTableRegionFuncForLowerTiDB(tctx *tcontext.Context) 
 	d.selectTiDBTableRegionFunc = func(_ *tcontext.Context, _ *BaseConn, meta TableMeta) (pkFields []string, pkVals [][]string, err error) {
 		return nil, nil, errors.Annotatef(emptyHandleValsErr, "table: `%s`.`%s`", escapeString(meta.DatabaseName()), escapeString(meta.TableName()))
 	}
-	dbHandle, err := openDBFunc(conf.GetDriverConfig(""))
+	dbHandle, err := openDBFunc("mysql", conf.GetDSN(""))
 	if err != nil {
 		return errors.Trace(err)
 	}

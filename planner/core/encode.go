@@ -133,8 +133,6 @@ func (pn *planEncoder) encodePlan(p Plan, isRoot bool, store kv.StoreType, depth
 		if copPlan.tablePlan != nil {
 			pn.encodePlan(copPlan.tablePlan, false, store, depth)
 		}
-	case *PhysicalShuffleReceiverStub:
-		pn.encodePlan(copPlan.DataSource, isRoot, store, depth)
 	case *PhysicalCTE:
 		pn.ctes = append(pn.ctes, copPlan)
 	}

@@ -721,17 +721,6 @@ func killConn(conn *clientConn) {
 	}
 }
 
-// KillSysProcesses kill sys processes such as auto analyze.
-func (s *Server) KillSysProcesses() {
-	if s.dom == nil {
-		return
-	}
-	sysProcTracker := s.dom.SysProcTracker()
-	for connID := range sysProcTracker.GetSysProcessList() {
-		sysProcTracker.KillSysProcess(connID)
-	}
-}
-
 // KillAllConnections kills all connections when server is not gracefully shutdown.
 func (s *Server) KillAllConnections() {
 	logutil.BgLogger().Info("[server] kill all connections.")
@@ -746,7 +735,12 @@ func (s *Server) KillAllConnections() {
 		killConn(conn)
 	}
 
-	s.KillSysProcesses()
+	if s.dom != nil {
+		sysProcTracker := s.dom.SysProcTracker()
+		for connID := range sysProcTracker.GetSysProcessList() {
+			sysProcTracker.KillSysProcess(connID)
+		}
+	}
 }
 
 var gracefulCloseConnectionsTimeout = 15 * time.Second
@@ -875,38 +869,4 @@ func setSystemTimeZoneVariable() {
 		}
 		variable.SetSysVar("system_time_zone", tz)
 	})
-}
-
-// GetMinStartTS implements SessionManager interface.
-func (s *Server) GetMinStartTS(lowerBound uint64) (ts uint64) {
-	// sys processes
-	if s.dom != nil {
-		for _, pi := range s.dom.SysProcTracker().GetSysProcessList() {
-			if thisTS := pi.GetMinStartTS(lowerBound); thisTS > lowerBound && (thisTS < ts || ts == 0) {
-				ts = thisTS
-			}
-		}
-	}
-	// user sessions
-	func() {
-		s.rwlock.RLock()
-		defer s.rwlock.RUnlock()
-		for _, client := range s.clients {
-			if thisTS := client.ctx.ShowProcess().GetMinStartTS(lowerBound); thisTS > lowerBound && (thisTS < ts || ts == 0) {
-				ts = thisTS
-			}
-		}
-	}()
-	// internal sessions
-	func() {
-		s.sessionMapMutex.Lock()
-		defer s.sessionMapMutex.Unlock()
-		analyzeProcID := util.GetAutoAnalyzeProcID(s.ServerID)
-		for se := range s.internalSessions {
-			if thisTS, processInfoID := session.GetStartTSFromSession(se); processInfoID != analyzeProcID && thisTS > lowerBound && (thisTS < ts || ts == 0) {
-				ts = thisTS
-			}
-		}
-	}()
-	return
 }
