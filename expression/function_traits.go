@@ -19,14 +19,15 @@ import (
 	"github.com/pingcap/tidb/parser/opcode"
 )
 
-// GeneralPlanCacheableOp stores function which can be cached to general plan cache.
-var GeneralPlanCacheableOp = map[string]struct{}{
-	ast.And: {},
-	ast.GE:  {},
-	ast.LE:  {},
-	ast.EQ:  {},
-	ast.LT:  {},
-	ast.GT:  {},
+// NonPreparedPlanCacheableOp stores function which can be cached to non-prepared plan cache.
+var NonPreparedPlanCacheableOp = map[string]struct{}{
+	ast.LogicAnd: {},
+	ast.LogicOr:  {},
+	ast.GE:       {},
+	ast.LE:       {},
+	ast.EQ:       {},
+	ast.LT:       {},
+	ast.GT:       {},
 }
 
 // UnCacheableFunctions stores functions which can not be cached to plan cache.

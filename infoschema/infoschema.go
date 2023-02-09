@@ -42,6 +42,7 @@ type InfoSchema interface {
 	SchemaByID(id int64) (*model.DBInfo, bool)
 	SchemaByTable(tableInfo *model.TableInfo) (*model.DBInfo, bool)
 	PolicyByName(name model.CIStr) (*model.PolicyInfo, bool)
+	ResourceGroupByName(name model.CIStr) (*model.ResourceGroupInfo, bool)
 	TableByID(id int64) (table.Table, bool)
 	AllocByID(id int64) (autoid.Allocators, bool)
 	AllSchemaNames() []string
@@ -60,6 +61,8 @@ type InfoSchema interface {
 	AllPlacementBundles() []*placement.Bundle
 	// AllPlacementPolicies returns all placement policies
 	AllPlacementPolicies() []*model.PolicyInfo
+	// AllResourceGroups returns all resource groups
+	AllResourceGroups() []*model.ResourceGroupInfo
 	// HasTemporaryTable returns whether information schema has temporary table
 	HasTemporaryTable() bool
 	// GetTableReferredForeignKeys gets the table's ReferredFKInfo by lowercase schema and table name.
@@ -93,6 +96,10 @@ type infoSchema struct {
 	policyMutex sync.RWMutex
 	policyMap   map[string]*model.PolicyInfo
 
+	// resourceGroupMap stores all resource groups.
+	resourceGroupMutex sync.RWMutex
+	resourceGroupMap   map[string]*model.ResourceGroupInfo
+
 	schemaMap map[string]*schemaTables
 
 	// sortedTablesBuckets is a slice of sortedTables, a table's bucket index is (tableID % bucketCount).
@@ -120,6 +127,7 @@ func MockInfoSchema(tbList []*model.TableInfo) InfoSchema {
 	result := &infoSchema{}
 	result.schemaMap = make(map[string]*schemaTables)
 	result.policyMap = make(map[string]*model.PolicyInfo)
+	result.resourceGroupMap = make(map[string]*model.ResourceGroupInfo)
 	result.ruleBundleMap = make(map[int64]*placement.Bundle)
 	result.sortedTablesBuckets = make([]sortedTables, bucketCount)
 	dbInfo := &model.DBInfo{ID: 0, Name: model.NewCIStr("test"), Tables: tbList}
@@ -147,6 +155,7 @@ func MockInfoSchemaWithSchemaVer(tbList []*model.TableInfo, schemaVer int64) Inf
 	result := &infoSchema{}
 	result.schemaMap = make(map[string]*schemaTables)
 	result.policyMap = make(map[string]*model.PolicyInfo)
+	result.resourceGroupMap = make(map[string]*model.ResourceGroupInfo)
 	result.ruleBundleMap = make(map[int64]*placement.Bundle)
 	result.sortedTablesBuckets = make([]sortedTables, bucketCount)
 	dbInfo := &model.DBInfo{ID: 0, Name: model.NewCIStr("test"), Tables: tbList}
@@ -235,6 +244,17 @@ func (is *infoSchema) PolicyByID(id int64) (val *model.PolicyInfo, ok bool) {
 	return nil, false
 }
 
+func (is *infoSchema) ResourceGroupByID(id int64) (val *model.ResourceGroupInfo, ok bool) {
+	is.resourceGroupMutex.RLock()
+	defer is.resourceGroupMutex.RUnlock()
+	for _, v := range is.resourceGroupMap {
+		if v.ID == id {
+			return v, true
+		}
+	}
+	return nil, false
+}
+
 func (is *infoSchema) SchemaByID(id int64) (val *model.DBInfo, ok bool) {
 	for _, v := range is.schemaMap {
 		if v.dbInfo.ID == id {
@@ -270,7 +290,7 @@ func (is *infoSchema) TableByID(id int64) (val table.Table, ok bool) {
 func (is *infoSchema) AllocByID(id int64) (autoid.Allocators, bool) {
 	tbl, ok := is.TableByID(id)
 	if !ok {
-		return nil, false
+		return autoid.Allocators{}, false
 	}
 	return tbl.Allocators(nil), true
 }
@@ -393,6 +413,25 @@ func (is *infoSchema) PolicyByName(name model.CIStr) (*model.PolicyInfo, bool) {
 	return t, r
 }
 
+// ResourceGroupByName is used to find the resource group.
+func (is *infoSchema) ResourceGroupByName(name model.CIStr) (*model.ResourceGroupInfo, bool) {
+	is.resourceGroupMutex.RLock()
+	defer is.resourceGroupMutex.RUnlock()
+	t, r := is.resourceGroupMap[name.L]
+	return t, r
+}
+
+// AllResourceGroups returns all resource groups.
+func (is *infoSchema) AllResourceGroups() []*model.ResourceGroupInfo {
+	is.resourceGroupMutex.RLock()
+	defer is.resourceGroupMutex.RUnlock()
+	groups := make([]*model.ResourceGroupInfo, 0, len(is.resourceGroupMap))
+	for _, group := range is.resourceGroupMap {
+		groups = append(groups, group)
+	}
+	return groups
+}
+
 // AllPlacementPolicies returns all placement policies
 func (is *infoSchema) AllPlacementPolicies() []*model.PolicyInfo {
 	is.policyMutex.RLock()
@@ -415,6 +454,18 @@ func (is *infoSchema) AllPlacementBundles() []*placement.Bundle {
 		bundles = append(bundles, bundle)
 	}
 	return bundles
+}
+
+func (is *infoSchema) setResourceGroup(resourceGroup *model.ResourceGroupInfo) {
+	is.resourceGroupMutex.Lock()
+	defer is.resourceGroupMutex.Unlock()
+	is.resourceGroupMap[resourceGroup.Name.L] = resourceGroup
+}
+
+func (is *infoSchema) deleteResourceGroup(name string) {
+	is.resourceGroupMutex.Lock()
+	defer is.resourceGroupMutex.Unlock()
+	delete(is.resourceGroupMap, name)
 }
 
 func (is *infoSchema) setPolicy(policy *model.PolicyInfo) {
@@ -463,7 +514,7 @@ func (is *infoSchema) addReferredForeignKeys(schema model.CIStr, tbInfo *model.T
 			if newReferredFKList[i].ChildTable.L != newReferredFKList[j].ChildTable.L {
 				return newReferredFKList[i].ChildTable.L < newReferredFKList[j].ChildTable.L
 			}
-			return newReferredFKList[i].ChildFKName.L != newReferredFKList[j].ChildFKName.L
+			return newReferredFKList[i].ChildFKName.L < newReferredFKList[j].ChildFKName.L
 		})
 		is.referredForeignKeyMap[refer] = newReferredFKList
 	}
@@ -623,13 +674,23 @@ func (is *SessionTables) schemaTables(schema model.CIStr) *schemaTables {
 // So when a database is dropped, its temporary tables still exist and can be returned by TableByName/TableByID.
 type SessionExtendedInfoSchema struct {
 	InfoSchema
-	LocalTemporaryTables *SessionTables
+	LocalTemporaryTablesOnce sync.Once
+	LocalTemporaryTables     *SessionTables
+	MdlTables                *SessionTables
 }
 
 // TableByName implements InfoSchema.TableByName
 func (ts *SessionExtendedInfoSchema) TableByName(schema, table model.CIStr) (table.Table, error) {
-	if tbl, ok := ts.LocalTemporaryTables.TableByName(schema, table); ok {
-		return tbl, nil
+	if ts.LocalTemporaryTables != nil {
+		if tbl, ok := ts.LocalTemporaryTables.TableByName(schema, table); ok {
+			return tbl, nil
+		}
+	}
+
+	if ts.MdlTables != nil {
+		if tbl, ok := ts.MdlTables.TableByName(schema, table); ok {
+			return tbl, nil
+		}
 	}
 
 	return ts.InfoSchema.TableByName(schema, table)
@@ -637,8 +698,16 @@ func (ts *SessionExtendedInfoSchema) TableByName(schema, table model.CIStr) (tab
 
 // TableByID implements InfoSchema.TableByID
 func (ts *SessionExtendedInfoSchema) TableByID(id int64) (table.Table, bool) {
-	if tbl, ok := ts.LocalTemporaryTables.TableByID(id); ok {
-		return tbl, true
+	if ts.LocalTemporaryTables != nil {
+		if tbl, ok := ts.LocalTemporaryTables.TableByID(id); ok {
+			return tbl, true
+		}
+	}
+
+	if ts.MdlTables != nil {
+		if tbl, ok := ts.MdlTables.TableByID(id); ok {
+			return tbl, true
+		}
 	}
 
 	return ts.InfoSchema.TableByID(id)
@@ -650,14 +719,47 @@ func (ts *SessionExtendedInfoSchema) SchemaByTable(tableInfo *model.TableInfo) (
 		return nil, false
 	}
 
-	if db, ok := ts.LocalTemporaryTables.SchemaByTable(tableInfo); ok {
-		return db, true
+	if ts.LocalTemporaryTables != nil {
+		if db, ok := ts.LocalTemporaryTables.SchemaByTable(tableInfo); ok {
+			return db, true
+		}
+	}
+
+	if ts.MdlTables != nil {
+		if tbl, ok := ts.MdlTables.SchemaByTable(tableInfo); ok {
+			return tbl, true
+		}
 	}
 
 	return ts.InfoSchema.SchemaByTable(tableInfo)
 }
 
+// UpdateTableInfo implements InfoSchema.SchemaByTable.
+func (ts *SessionExtendedInfoSchema) UpdateTableInfo(db *model.DBInfo, tableInfo table.Table) error {
+	if ts.MdlTables == nil {
+		ts.MdlTables = NewSessionTables()
+	}
+	err := ts.MdlTables.AddTable(db, tableInfo)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // HasTemporaryTable returns whether information schema has temporary table
 func (ts *SessionExtendedInfoSchema) HasTemporaryTable() bool {
-	return ts.LocalTemporaryTables.Count() > 0 || ts.InfoSchema.HasTemporaryTable()
+	return ts.LocalTemporaryTables != nil && ts.LocalTemporaryTables.Count() > 0 || ts.InfoSchema.HasTemporaryTable()
+}
+
+// AttachMDLTableInfoSchema attach MDL related table information schema to is
+func AttachMDLTableInfoSchema(is InfoSchema) InfoSchema {
+	mdlTables := NewSessionTables()
+	if iss, ok := is.(*SessionExtendedInfoSchema); ok {
+		iss.MdlTables = mdlTables
+		return iss
+	}
+	return &SessionExtendedInfoSchema{
+		InfoSchema: is,
+		MdlTables:  mdlTables,
+	}
 }

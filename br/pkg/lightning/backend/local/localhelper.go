@@ -27,6 +27,7 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	sst "github.com/pingcap/kvproto/pkg/import_sstpb"
 	"github.com/pingcap/kvproto/pkg/metapb"
 	"github.com/pingcap/kvproto/pkg/pdpb"
@@ -177,7 +178,7 @@ func (local *local) SplitAndScatterRegionByRanges(
 			if err != nil {
 				log.FromContext(ctx).Warn("fetch table region size statistics failed",
 					zap.String("table", tableInfo.Name), zap.Error(err))
-				tableRegionStats = make(map[uint64]int64)
+				tableRegionStats, err = make(map[uint64]int64), nil
 			}
 		}
 
@@ -348,6 +349,9 @@ func (local *local) SplitAndScatterRegionByRanges(
 }
 
 func fetchTableRegionSizeStats(ctx context.Context, db *sql.DB, tableID int64) (map[uint64]int64, error) {
+	if db == nil {
+		return nil, errors.Errorf("db is nil")
+	}
 	exec := &common.SQLWithRetry{
 		DB:     db,
 		Logger: log.FromContext(ctx),
@@ -376,7 +380,14 @@ func fetchTableRegionSizeStats(ctx context.Context, db *sql.DB, tableID int64) (
 	return stats, errors.Trace(err)
 }
 
-func (local *local) BatchSplitRegions(ctx context.Context, region *split.RegionInfo, keys [][]byte) (*split.RegionInfo, []*split.RegionInfo, error) {
+func (local *local) BatchSplitRegions(
+	ctx context.Context,
+	region *split.RegionInfo,
+	keys [][]byte,
+) (*split.RegionInfo, []*split.RegionInfo, error) {
+	failpoint.Inject("failToSplit", func(_ failpoint.Value) {
+		failpoint.Return(nil, nil, errors.New("retryable error"))
+	})
 	region, newRegions, err := local.splitCli.BatchSplitRegionsWithOrigin(ctx, region, keys)
 	if err != nil {
 		return nil, nil, errors.Annotatef(err, "batch split regions failed")

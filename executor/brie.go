@@ -77,6 +77,16 @@ func (p *brieTaskProgress) Inc() {
 	atomic.AddInt64(&p.current, 1)
 }
 
+// IncBy implements glue.Progress
+func (p *brieTaskProgress) IncBy(cnt int64) {
+	atomic.AddInt64(&p.current, cnt)
+}
+
+// GetCurrent implements glue.Progress
+func (p *brieTaskProgress) GetCurrent() int64 {
+	return atomic.LoadInt64(&p.current)
+}
+
 // Close implements glue.Progress
 func (p *brieTaskProgress) Close() {
 	p.lock.Lock()
@@ -92,6 +102,7 @@ type brieTaskInfo struct {
 	storage     string
 	connID      uint64
 	backupTS    uint64
+	restoreTS   uint64
 	archiveSize uint64
 	message     string
 }
@@ -188,7 +199,7 @@ func (bq *brieQueue) clearTask(sc *stmtctx.StatementContext) {
 
 func (b *executorBuilder) parseTSString(ts string) (uint64, error) {
 	sc := &stmtctx.StatementContext{TimeZone: b.ctx.GetSessionVars().Location()}
-	t, err := types.ParseTime(sc, ts, mysql.TypeTimestamp, types.MaxFsp)
+	t, err := types.ParseTime(sc, ts, mysql.TypeTimestamp, types.MaxFsp, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -401,9 +412,17 @@ func (e *BRIEExec) Next(ctx context.Context, req *chunk.Chunk) error {
 
 	req.AppendString(0, e.info.storage)
 	req.AppendUint64(1, e.info.archiveSize)
-	req.AppendUint64(2, e.info.backupTS)
-	req.AppendTime(3, e.info.queueTime)
-	req.AppendTime(4, e.info.execTime)
+	switch e.info.kind {
+	case ast.BRIEKindBackup:
+		req.AppendUint64(2, e.info.backupTS)
+		req.AppendTime(3, e.info.queueTime)
+		req.AppendTime(4, e.info.execTime)
+	case ast.BRIEKindRestore:
+		req.AppendUint64(2, e.info.backupTS)
+		req.AppendUint64(3, e.info.restoreTS)
+		req.AppendTime(4, e.info.queueTime)
+		req.AppendTime(5, e.info.execTime)
+	}
 	e.info = nil
 	return nil
 }
@@ -496,7 +515,7 @@ func (gs *tidbGlueSession) CreateDatabase(ctx context.Context, schema *model.DBI
 }
 
 // CreateTable implements glue.Session
-func (gs *tidbGlueSession) CreateTable(ctx context.Context, dbName model.CIStr, table *model.TableInfo) error {
+func (gs *tidbGlueSession) CreateTable(ctx context.Context, dbName model.CIStr, table *model.TableInfo, cs ...ddl.CreateTableWithInfoConfigurier) error {
 	d := domain.GetDomain(gs.se).DDL()
 
 	// 512 is defaultCapOfCreateTable.
@@ -505,6 +524,8 @@ func (gs *tidbGlueSession) CreateTable(ctx context.Context, dbName model.CIStr, 
 		return err
 	}
 	gs.se.SetValue(sessionctx.QueryString, result.String())
+	// Disable foreign key check when batch create tables.
+	gs.se.GetSessionVars().ForeignKeyChecks = false
 
 	// Clone() does not clone partitions yet :(
 	table = table.Clone()
@@ -514,7 +535,7 @@ func (gs *tidbGlueSession) CreateTable(ctx context.Context, dbName model.CIStr, 
 		table.Partition = &newPartition
 	}
 
-	return d.CreateTableWithInfo(gs.se, dbName, table, ddl.OnExistIgnore)
+	return d.CreateTableWithInfo(gs.se, dbName, table, append(cs, ddl.OnExistIgnore)...)
 }
 
 // CreatePlacementPolicy implements glue.Session
@@ -559,6 +580,8 @@ func (gs *tidbGlueSession) Record(name string, value uint64) {
 	switch name {
 	case "BackupTS":
 		gs.info.backupTS = value
+	case "RestoreTS":
+		gs.info.restoreTS = value
 	case "Size":
 		gs.info.archiveSize = value
 	}

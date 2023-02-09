@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/config"
@@ -31,6 +30,7 @@ import (
 	"github.com/pingcap/tidb/sessiontxn/internal"
 	"github.com/pingcap/tidb/sessiontxn/staleread"
 	"github.com/pingcap/tidb/table/temptable"
+	"github.com/pingcap/tidb/util/tracing"
 	"github.com/tikv/client-go/v2/oracle"
 )
 
@@ -119,7 +119,12 @@ func (p *baseTxnContextProvider) OnInitialize(ctx context.Context, tp sessiontxn
 	if p.onInitializeTxnCtx != nil {
 		p.onInitializeTxnCtx(txnCtx)
 	}
+	sessVars.TxnCtxMu.Lock()
 	sessVars.TxnCtx = txnCtx
+	sessVars.TxnCtxMu.Unlock()
+	if variable.EnableMDL.Load() {
+		sessVars.TxnCtx.EnableMDL = true
+	}
 
 	txn, err := p.sctx.Txn(false)
 	if err != nil {
@@ -138,7 +143,17 @@ func (p *baseTxnContextProvider) GetTxnInfoSchema() infoschema.InfoSchema {
 	if is := p.sctx.GetSessionVars().SnapshotInfoschema; is != nil {
 		return is.(infoschema.InfoSchema)
 	}
+	if _, ok := p.infoSchema.(*infoschema.SessionExtendedInfoSchema); !ok {
+		p.infoSchema = &infoschema.SessionExtendedInfoSchema{
+			InfoSchema: p.infoSchema,
+		}
+		p.sctx.GetSessionVars().TxnCtx.InfoSchema = p.infoSchema
+	}
 	return p.infoSchema
+}
+
+func (p *baseTxnContextProvider) SetTxnInfoSchema(is infoschema.InfoSchema) {
+	p.infoSchema = is
 }
 
 // GetTxnScope returns the current txn scope
@@ -192,9 +207,25 @@ func (p *baseTxnContextProvider) OnStmtStart(ctx context.Context, _ ast.StmtNode
 	return nil
 }
 
+// OnHandlePessimisticStmtStart is the hook that should be called when starts handling a pessimistic DML or
+// a pessimistic select-for-update statements.
+func (p *baseTxnContextProvider) OnHandlePessimisticStmtStart(_ context.Context) error {
+	return nil
+}
+
 // OnStmtRetry is the hook that should be called when a statement is retried internally.
 func (p *baseTxnContextProvider) OnStmtRetry(ctx context.Context) error {
 	p.ctx = ctx
+	return nil
+}
+
+// OnStmtCommit is the hook that should be called when a statement is executed successfully.
+func (p *baseTxnContextProvider) OnStmtCommit(_ context.Context) error {
+	return nil
+}
+
+// OnStmtRollback is the hook that should be called when a statement fails to execute.
+func (p *baseTxnContextProvider) OnStmtRollback(_ context.Context, _ bool) error {
 	return nil
 }
 
@@ -252,6 +283,10 @@ func (p *baseTxnContextProvider) ActivateTxn() (kv.Transaction, error) {
 
 	sessVars := p.sctx.GetSessionVars()
 	sessVars.TxnCtx.StartTS = txn.StartTS()
+	if sessVars.MemDBFootprint != nil {
+		sessVars.MemDBFootprint.Detach()
+	}
+	sessVars.MemDBFootprint = nil
 
 	if p.enterNewTxnType == sessiontxn.EnterNewTxnBeforeStmt && !sessVars.IsAutocommit() && sessVars.SnapshotTS == 0 {
 		sessVars.SetInTxn(true)
@@ -439,11 +474,8 @@ func canReuseTxnWhenExplicitBegin(sctx sessionctx.Context) bool {
 
 // newOracleFuture creates new future according to the scope and the session context
 func newOracleFuture(ctx context.Context, sctx sessionctx.Context, scope string) oracle.Future {
-	if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
-		span1 := span.Tracer().StartSpan("isolation.newOracleFuture", opentracing.ChildOf(span.Context()))
-		defer span1.Finish()
-		ctx = opentracing.ContextWithSpan(ctx, span1)
-	}
+	r, ctx := tracing.StartRegionEx(ctx, "isolation.newOracleFuture")
+	defer r.End()
 
 	failpoint.Inject("requestTsoFromPD", func() {
 		sessiontxn.TsoRequestCountInc(sctx)
@@ -464,4 +496,66 @@ type funcFuture func() (uint64, error)
 // Wait returns a ts got from the func
 func (f funcFuture) Wait() (uint64, error) {
 	return f()
+}
+
+// basePessimisticTxnContextProvider extends baseTxnContextProvider with some functionalities that are commonly used in
+// pessimistic transactions.
+type basePessimisticTxnContextProvider struct {
+	baseTxnContextProvider
+}
+
+// OnHandlePessimisticStmtStart is the hook that should be called when starts handling a pessimistic DML or
+// a pessimistic select-for-update statements.
+func (p *basePessimisticTxnContextProvider) OnHandlePessimisticStmtStart(ctx context.Context) error {
+	if err := p.baseTxnContextProvider.OnHandlePessimisticStmtStart(ctx); err != nil {
+		return err
+	}
+	if p.sctx.GetSessionVars().PessimisticTransactionAggressiveLocking &&
+		p.txn != nil &&
+		p.sctx.GetSessionVars().ConnectionID != 0 &&
+		!p.sctx.GetSessionVars().InRestrictedSQL {
+		if err := p.txn.StartAggressiveLocking(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// OnStmtRetry is the hook that should be called when a statement is retried internally.
+func (p *basePessimisticTxnContextProvider) OnStmtRetry(ctx context.Context) error {
+	if err := p.baseTxnContextProvider.OnStmtRetry(ctx); err != nil {
+		return err
+	}
+	if p.txn != nil && p.txn.IsInAggressiveLockingMode() {
+		if err := p.txn.RetryAggressiveLocking(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// OnStmtCommit is the hook that should be called when a statement is executed successfully.
+func (p *basePessimisticTxnContextProvider) OnStmtCommit(ctx context.Context) error {
+	if err := p.baseTxnContextProvider.OnStmtCommit(ctx); err != nil {
+		return err
+	}
+	if p.txn != nil && p.txn.IsInAggressiveLockingMode() {
+		if err := p.txn.DoneAggressiveLocking(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// OnStmtRollback is the hook that should be called when a statement fails to execute.
+func (p *basePessimisticTxnContextProvider) OnStmtRollback(ctx context.Context, isForPessimisticRetry bool) error {
+	if err := p.baseTxnContextProvider.OnStmtRollback(ctx, isForPessimisticRetry); err != nil {
+		return err
+	}
+	if !isForPessimisticRetry && p.txn != nil && p.txn.IsInAggressiveLockingMode() {
+		if err := p.txn.CancelAggressiveLocking(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }

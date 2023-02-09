@@ -62,11 +62,15 @@ func postReportTelemetryData() {
 	postReportCTEUsage()
 	postReportAccountLockUsage()
 	postReportMultiSchemaChangeUsage()
+	postReportExchangePartitionUsage()
 	postReportTablePartitionUsage()
 	postReportSlowQueryStats()
 	postReportNonTransactionalCounter()
 	PostSavepointCount()
 	postReportLazyPessimisticUniqueCheckSetCount()
+	postReportDDLUsage()
+	postReportIndexMergeUsage()
+	postStoreBatchUsage()
 }
 
 // PostReportTelemetryDataForTest is for test.

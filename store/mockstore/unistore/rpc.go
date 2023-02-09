@@ -265,6 +265,11 @@ func (c *RPCClient) SendRequest(ctx context.Context, addr string, req *tikvrpc.R
 				failpoint.Return(nil, errors.New("rpc error"))
 			}
 		})
+		failpoint.Inject("MppVersionError", func(val failpoint.Value) {
+			if v := int64(val.(int)); v > req.EstablishMPPConn().GetReceiverMeta().GetMppVersion() || v > req.EstablishMPPConn().GetSenderMeta().GetMppVersion() {
+				failpoint.Return(nil, context.Canceled)
+			}
+		})
 		resp.Resp, err = c.handleEstablishMPPConnection(ctx, req.EstablishMPPConn(), timeout, storeID)
 	case tikvrpc.CmdMPPTask:
 		failpoint.Inject("mppDispatchTimeout", func(val failpoint.Value) {
@@ -272,10 +277,17 @@ func (c *RPCClient) SendRequest(ctx context.Context, addr string, req *tikvrpc.R
 				failpoint.Return(nil, errors.New("rpc error"))
 			}
 		})
+		failpoint.Inject("MppVersionError", func(val failpoint.Value) {
+			if v := int64(val.(int)); v > req.DispatchMPPTask().GetMeta().GetMppVersion() {
+				failpoint.Return(nil, context.Canceled)
+			}
+		})
 		resp.Resp, err = c.handleDispatchMPPTask(ctx, req.DispatchMPPTask(), storeID)
 	case tikvrpc.CmdMPPCancel:
 	case tikvrpc.CmdMvccGetByKey:
 		resp.Resp, err = c.usSvr.MvccGetByKey(ctx, req.MvccGetByKey())
+	case tikvrpc.CmdMPPAlive:
+		resp.Resp, err = c.usSvr.IsAlive(ctx, req.IsMPPAlive())
 	case tikvrpc.CmdMvccGetByStartTs:
 		resp.Resp, err = c.usSvr.MvccGetByStartTs(ctx, req.MvccGetByStartTs())
 	case tikvrpc.CmdSplitRegion:
@@ -293,7 +305,7 @@ func (c *RPCClient) SendRequest(ctx context.Context, addr string, req *tikvrpc.R
 		return nil, err
 	}
 	var regErr *errorpb.Error
-	if req.Type != tikvrpc.CmdBatchCop && req.Type != tikvrpc.CmdMPPConn && req.Type != tikvrpc.CmdMPPTask {
+	if req.Type != tikvrpc.CmdBatchCop && req.Type != tikvrpc.CmdMPPConn && req.Type != tikvrpc.CmdMPPTask && req.Type != tikvrpc.CmdMPPAlive {
 		regErr, err = resp.GetRegionError()
 	}
 	if err != nil {
