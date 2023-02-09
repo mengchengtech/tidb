@@ -42,7 +42,6 @@ go_test(
     ],
     embed = [":checkpoints"],
     flaky = True,
-    race = "on",
     deps = [
         "//br/pkg/lightning/checkpoints/checkpointspb",
         "//br/pkg/lightning/config",

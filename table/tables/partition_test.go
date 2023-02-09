@@ -52,9 +52,11 @@ PARTITION BY RANGE COLUMNS ( id ) (
 
 	tk.MustQuery("select * from partition_basic where id = 7").Check(testkit.Rows("7"))
 	tk.MustQuery("select * from partition_basic partition (p1)").Check(testkit.Rows("7"))
-	tk.MustExecToErr("select * from partition_basic partition (p5)")
+	_, err := tk.Exec("select * from partition_basic partition (p5)")
+	require.Error(t, err)
 
-	tk.MustExecToErr("update partition_basic set id = 666 where id = 7")
+	_, err = tk.Exec("update partition_basic set id = 666 where id = 7")
+	require.Error(t, err)
 	tk.MustExec("update partition_basic set id = 9 where id = 7")
 	tk.MustExec("delete from partition_basic where id = 7")
 	tk.MustExec("delete from partition_basic where id = 9")

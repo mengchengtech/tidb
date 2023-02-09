@@ -100,7 +100,7 @@ func NewGlobalConfig() *GlobalConfig {
 			LogLevel:   "error",
 		},
 		Mydumper: GlobalMydumper{
-			Filter: GetDefaultFilter(),
+			Filter: DefaultFilter,
 		},
 		TikvImporter: GlobalImporter{
 			Backend: "",

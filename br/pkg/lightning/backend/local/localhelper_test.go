@@ -47,7 +47,7 @@ func init() {
 	splitRetryTimes = 2
 }
 
-type testSplitClient struct {
+type testClient struct {
 	mu           sync.RWMutex
 	stores       map[uint64]*metapb.Store
 	regions      map[uint64]*split.RegionInfo
@@ -57,17 +57,17 @@ type testSplitClient struct {
 	hook         clientHook
 }
 
-func newTestSplitClient(
+func newTestClient(
 	stores map[uint64]*metapb.Store,
 	regions map[uint64]*split.RegionInfo,
 	nextRegionID uint64,
 	hook clientHook,
-) *testSplitClient {
+) *testClient {
 	regionsInfo := &pdtypes.RegionTree{}
 	for _, regionInfo := range regions {
 		regionsInfo.SetRegion(pdtypes.NewRegionInfo(regionInfo.Region, regionInfo.Leader))
 	}
-	return &testSplitClient{
+	return &testClient{
 		stores:       stores,
 		regions:      regions,
 		regionsInfo:  regionsInfo,
@@ -77,17 +77,17 @@ func newTestSplitClient(
 }
 
 // ScatterRegions scatters regions in a batch.
-func (c *testSplitClient) ScatterRegions(ctx context.Context, regionInfo []*split.RegionInfo) error {
+func (c *testClient) ScatterRegions(ctx context.Context, regionInfo []*split.RegionInfo) error {
 	return nil
 }
 
-func (c *testSplitClient) GetAllRegions() map[uint64]*split.RegionInfo {
+func (c *testClient) GetAllRegions() map[uint64]*split.RegionInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.regions
 }
 
-func (c *testSplitClient) GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error) {
+func (c *testClient) GetStore(ctx context.Context, storeID uint64) (*metapb.Store, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	store, ok := c.stores[storeID]
@@ -97,18 +97,19 @@ func (c *testSplitClient) GetStore(ctx context.Context, storeID uint64) (*metapb
 	return store, nil
 }
 
-func (c *testSplitClient) GetRegion(ctx context.Context, key []byte) (*split.RegionInfo, error) {
+func (c *testClient) GetRegion(ctx context.Context, key []byte) (*split.RegionInfo, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for _, region := range c.regions {
-		if bytes.Compare(key, region.Region.StartKey) >= 0 && beforeEnd(key, region.Region.EndKey) {
+		if bytes.Compare(key, region.Region.StartKey) >= 0 &&
+			(len(region.Region.EndKey) == 0 || bytes.Compare(key, region.Region.EndKey) < 0) {
 			return region, nil
 		}
 	}
 	return nil, errors.Errorf("region not found: key=%s", string(key))
 }
 
-func (c *testSplitClient) GetRegionByID(ctx context.Context, regionID uint64) (*split.RegionInfo, error) {
+func (c *testClient) GetRegionByID(ctx context.Context, regionID uint64) (*split.RegionInfo, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	region, ok := c.regions[regionID]
@@ -118,7 +119,7 @@ func (c *testSplitClient) GetRegionByID(ctx context.Context, regionID uint64) (*
 	return region, nil
 }
 
-func (c *testSplitClient) SplitRegion(
+func (c *testClient) SplitRegion(
 	ctx context.Context,
 	regionInfo *split.RegionInfo,
 	key []byte,
@@ -129,7 +130,7 @@ func (c *testSplitClient) SplitRegion(
 	splitKey := codec.EncodeBytes([]byte{}, key)
 	for _, region := range c.regions {
 		if bytes.Compare(splitKey, region.Region.StartKey) >= 0 &&
-			beforeEnd(splitKey, region.Region.EndKey) {
+			(len(region.Region.EndKey) == 0 || bytes.Compare(splitKey, region.Region.EndKey) < 0) {
 			target = region
 		}
 	}
@@ -158,7 +159,7 @@ func (c *testSplitClient) SplitRegion(
 	return newRegion, nil
 }
 
-func (c *testSplitClient) BatchSplitRegionsWithOrigin(
+func (c *testClient) BatchSplitRegionsWithOrigin(
 	ctx context.Context, regionInfo *split.RegionInfo, keys [][]byte,
 ) (*split.RegionInfo, []*split.RegionInfo, error) {
 	c.mu.Lock()
@@ -233,24 +234,24 @@ func (c *testSplitClient) BatchSplitRegionsWithOrigin(
 	return target, newRegions, err
 }
 
-func (c *testSplitClient) BatchSplitRegions(
+func (c *testClient) BatchSplitRegions(
 	ctx context.Context, regionInfo *split.RegionInfo, keys [][]byte,
 ) ([]*split.RegionInfo, error) {
 	_, newRegions, err := c.BatchSplitRegionsWithOrigin(ctx, regionInfo, keys)
 	return newRegions, err
 }
 
-func (c *testSplitClient) ScatterRegion(ctx context.Context, regionInfo *split.RegionInfo) error {
+func (c *testClient) ScatterRegion(ctx context.Context, regionInfo *split.RegionInfo) error {
 	return nil
 }
 
-func (c *testSplitClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error) {
+func (c *testClient) GetOperator(ctx context.Context, regionID uint64) (*pdpb.GetOperatorResponse, error) {
 	return &pdpb.GetOperatorResponse{
 		Header: new(pdpb.ResponseHeader),
 	}, nil
 }
 
-func (c *testSplitClient) ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*split.RegionInfo, error) {
+func (c *testClient) ScanRegions(ctx context.Context, key, endKey []byte, limit int) ([]*split.RegionInfo, error) {
 	if c.hook != nil {
 		key, endKey, limit = c.hook.BeforeScanRegions(ctx, key, endKey, limit)
 	}
@@ -271,19 +272,19 @@ func (c *testSplitClient) ScanRegions(ctx context.Context, key, endKey []byte, l
 	return regions, err
 }
 
-func (c *testSplitClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (r pdtypes.Rule, err error) {
+func (c *testClient) GetPlacementRule(ctx context.Context, groupID, ruleID string) (r pdtypes.Rule, err error) {
 	return
 }
 
-func (c *testSplitClient) SetPlacementRule(ctx context.Context, rule pdtypes.Rule) error {
+func (c *testClient) SetPlacementRule(ctx context.Context, rule pdtypes.Rule) error {
 	return nil
 }
 
-func (c *testSplitClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
+func (c *testClient) DeletePlacementRule(ctx context.Context, groupID, ruleID string) error {
 	return nil
 }
 
-func (c *testSplitClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
+func (c *testClient) SetStoresLabel(ctx context.Context, stores []uint64, labelKey, labelValue string) error {
 	return nil
 }
 
@@ -304,7 +305,7 @@ func cloneRegion(region *split.RegionInfo) *split.RegionInfo {
 
 // For keys ["", "aay", "bba", "bbh", "cca", ""], the key ranges of
 // regions are [, aay), [aay, bba), [bba, bbh), [bbh, cca), [cca, ).
-func initTestSplitClient(keys [][]byte, hook clientHook) *testSplitClient {
+func initTestClient(keys [][]byte, hook clientHook) *testClient {
 	peers := make([]*metapb.Peer, 1)
 	peers[0] = &metapb.Peer{
 		Id:      1,
@@ -328,56 +329,13 @@ func initTestSplitClient(keys [][]byte, hook clientHook) *testSplitClient {
 				EndKey:      endKey,
 				RegionEpoch: &metapb.RegionEpoch{ConfVer: 1, Version: 1},
 			},
-			Leader: peers[0],
 		}
 	}
 	stores := make(map[uint64]*metapb.Store)
 	stores[1] = &metapb.Store{
 		Id: 1,
 	}
-	return newTestSplitClient(stores, regions, uint64(len(keys)), hook)
-}
-
-// initTestSplitClient3Replica will create a client that each region has 3 replicas, and their IDs and StoreIDs are
-// (1, 2, 3), (11, 12, 13), ...
-// For keys ["", "aay", "bba", "bbh", "cca", ""], the key ranges of
-// region ranges are [, aay), [aay, bba), [bba, bbh), [bbh, cca), [cca, ).
-func initTestSplitClient3Replica(keys [][]byte, hook clientHook) *testSplitClient {
-	regions := make(map[uint64]*split.RegionInfo)
-	stores := make(map[uint64]*metapb.Store)
-	for i := uint64(1); i < uint64(len(keys)); i++ {
-		startKey := keys[i-1]
-		if len(startKey) != 0 {
-			startKey = codec.EncodeBytes([]byte{}, startKey)
-		}
-		endKey := keys[i]
-		if len(endKey) != 0 {
-			endKey = codec.EncodeBytes([]byte{}, endKey)
-		}
-		baseID := (i-1)*10 + 1
-		peers := make([]*metapb.Peer, 3)
-		for j := 0; j < 3; j++ {
-			peers[j] = &metapb.Peer{
-				Id:      baseID + uint64(j),
-				StoreId: baseID + uint64(j),
-			}
-		}
-
-		regions[baseID] = &split.RegionInfo{
-			Region: &metapb.Region{
-				Id:          baseID,
-				Peers:       peers,
-				StartKey:    startKey,
-				EndKey:      endKey,
-				RegionEpoch: &metapb.RegionEpoch{ConfVer: 1, Version: 1},
-			},
-			Leader: peers[0],
-		}
-		stores[baseID] = &metapb.Store{
-			Id: baseID,
-		}
-	}
-	return newTestSplitClient(stores, regions, uint64(len(keys)), hook)
+	return newTestClient(stores, regions, uint64(len(keys)), hook)
 }
 
 func checkRegionRanges(t *testing.T, regions []*split.RegionInfo, keys [][]byte) {
@@ -418,7 +376,7 @@ func (h *noopHook) AfterScanRegions(res []*split.RegionInfo, err error) ([]*spli
 
 type batchSplitHook interface {
 	setup(t *testing.T) func()
-	check(t *testing.T, cli *testSplitClient)
+	check(t *testing.T, cli *testClient)
 }
 
 type defaultHook struct{}
@@ -434,7 +392,7 @@ func (d defaultHook) setup(t *testing.T) func() {
 	}
 }
 
-func (d defaultHook) check(t *testing.T, cli *testSplitClient) {
+func (d defaultHook) check(t *testing.T, cli *testClient) {
 	// so with a batch split size of 4, there will be 7 time batch split
 	// 1. region: [aay, bba), keys: [b, ba, bb]
 	// 2. region: [bbh, cca), keys: [bc, bd, be, bf]
@@ -456,7 +414,7 @@ func doTestBatchSplitRegionByRanges(ctx context.Context, t *testing.T, hook clie
 	defer deferFunc()
 
 	keys := [][]byte{[]byte(""), []byte("aay"), []byte("bba"), []byte("bbh"), []byte("cca"), []byte("")}
-	client := initTestSplitClient(keys, hook)
+	client := initTestClient(keys, hook)
 	local := &local{
 		splitCli: client,
 		g:        glue.NewExternalTiDBGlue(nil, mysql.ModeNone),
@@ -521,7 +479,7 @@ func (h batchSizeHook) setup(t *testing.T) func() {
 	}
 }
 
-func (h batchSizeHook) check(t *testing.T, cli *testSplitClient) {
+func (h batchSizeHook) check(t *testing.T, cli *testClient) {
 	// so with a batch split key size of 6, there will be 9 time batch split
 	// 1. region: [aay, bba), keys: [b, ba, bb]
 	// 2. region: [bbh, cca), keys: [bc, bd, be]
@@ -625,7 +583,7 @@ func TestSplitAndScatterRegionInBatches(t *testing.T) {
 	defer deferFunc()
 
 	keys := [][]byte{[]byte(""), []byte("a"), []byte("b"), []byte("")}
-	client := initTestSplitClient(keys, nil)
+	client := initTestClient(keys, nil)
 	local := &local{
 		splitCli: client,
 		g:        glue.NewExternalTiDBGlue(nil, mysql.ModeNone),
@@ -712,7 +670,7 @@ func doTestBatchSplitByRangesWithClusteredIndex(t *testing.T, hook clientHook) {
 		keys = append(keys, key)
 	}
 	keys = append(keys, tableEndKey, []byte(""))
-	client := initTestSplitClient(keys, hook)
+	client := initTestClient(keys, hook)
 	local := &local{
 		splitCli: client,
 		g:        glue.NewExternalTiDBGlue(nil, mysql.ModeNone),

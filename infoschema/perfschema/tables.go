@@ -15,7 +15,6 @@
 package perfschema
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -220,7 +219,7 @@ func initTableIndices(t *perfSchemaTable) error {
 	return nil
 }
 
-func (vt *perfSchemaTable) getRows(ctx context.Context, sctx sessionctx.Context, cols []*table.Column) (fullRows [][]types.Datum, err error) {
+func (vt *perfSchemaTable) getRows(ctx sessionctx.Context, cols []*table.Column) (fullRows [][]types.Datum, err error) {
 	switch vt.meta.Name.O {
 	case tableNameTiDBProfileCPU:
 		fullRows, err = (&profile.Collector{}).ProfileGraph("cpu")
@@ -236,22 +235,22 @@ func (vt *perfSchemaTable) getRows(ctx context.Context, sctx sessionctx.Context,
 		fullRows, err = (&profile.Collector{}).ProfileGraph("goroutine")
 	case tableNameTiKVProfileCPU:
 		interval := fmt.Sprintf("%d", profile.CPUProfileInterval/time.Second)
-		fullRows, err = dataForRemoteProfile(sctx, "tikv", "/debug/pprof/profile?seconds="+interval, false)
+		fullRows, err = dataForRemoteProfile(ctx, "tikv", "/debug/pprof/profile?seconds="+interval, false)
 	case tableNamePDProfileCPU:
 		interval := fmt.Sprintf("%d", profile.CPUProfileInterval/time.Second)
-		fullRows, err = dataForRemoteProfile(sctx, "pd", "/pd/api/v1/debug/pprof/profile?seconds="+interval, false)
+		fullRows, err = dataForRemoteProfile(ctx, "pd", "/pd/api/v1/debug/pprof/profile?seconds="+interval, false)
 	case tableNamePDProfileMemory:
-		fullRows, err = dataForRemoteProfile(sctx, "pd", "/pd/api/v1/debug/pprof/heap", false)
+		fullRows, err = dataForRemoteProfile(ctx, "pd", "/pd/api/v1/debug/pprof/heap", false)
 	case tableNamePDProfileMutex:
-		fullRows, err = dataForRemoteProfile(sctx, "pd", "/pd/api/v1/debug/pprof/mutex", false)
+		fullRows, err = dataForRemoteProfile(ctx, "pd", "/pd/api/v1/debug/pprof/mutex", false)
 	case tableNamePDProfileAllocs:
-		fullRows, err = dataForRemoteProfile(sctx, "pd", "/pd/api/v1/debug/pprof/allocs", false)
+		fullRows, err = dataForRemoteProfile(ctx, "pd", "/pd/api/v1/debug/pprof/allocs", false)
 	case tableNamePDProfileBlock:
-		fullRows, err = dataForRemoteProfile(sctx, "pd", "/pd/api/v1/debug/pprof/block", false)
+		fullRows, err = dataForRemoteProfile(ctx, "pd", "/pd/api/v1/debug/pprof/block", false)
 	case tableNamePDProfileGoroutines:
-		fullRows, err = dataForRemoteProfile(sctx, "pd", "/pd/api/v1/debug/pprof/goroutine?debug=2", true)
+		fullRows, err = dataForRemoteProfile(ctx, "pd", "/pd/api/v1/debug/pprof/goroutine?debug=2", true)
 	case tableNameSessionVariables:
-		fullRows, err = infoschema.GetDataFromSessionVariables(ctx, sctx)
+		fullRows, err = infoschema.GetDataFromSessionVariables(ctx)
 	}
 	if err != nil {
 		return
@@ -271,8 +270,9 @@ func (vt *perfSchemaTable) getRows(ctx context.Context, sctx sessionctx.Context,
 }
 
 // IterRecords implements table.Table IterRecords interface.
-func (vt *perfSchemaTable) IterRecords(ctx context.Context, sctx sessionctx.Context, cols []*table.Column, fn table.RecordIterFunc) error {
-	rows, err := vt.getRows(ctx, sctx, cols)
+func (vt *perfSchemaTable) IterRecords(ctx sessionctx.Context, cols []*table.Column,
+	fn table.RecordIterFunc) error {
+	rows, err := vt.getRows(ctx, cols)
 	if err != nil {
 		return err
 	}

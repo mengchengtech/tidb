@@ -64,7 +64,7 @@ var (
 func getSlowQueryStats() (*slowQueryStats, error) {
 	slowQueryBucket, err := getSlowQueryBucket()
 	if err != nil {
-		logutil.BgLogger().Info("Failed to get Slow Query Stats", zap.Error(err))
+		logutil.BgLogger().Info(err.Error())
 		return nil, err
 	}
 

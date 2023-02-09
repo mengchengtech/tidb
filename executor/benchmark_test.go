@@ -102,11 +102,6 @@ func (mp *mockDataPhysicalPlan) SelectBlockOffset() int {
 	return 0
 }
 
-// MemoryUsage of mockDataPhysicalPlan is only for testing
-func (mp *mockDataPhysicalPlan) MemoryUsage() (sum int64) {
-	return
-}
-
 func buildMockDataPhysicalPlan(ctx sessionctx.Context, srcExec Executor) *mockDataPhysicalPlan {
 	return &mockDataPhysicalPlan{
 		schema: srcExec.Schema(),
@@ -906,44 +901,35 @@ func prepare4HashJoin(testCase *hashJoinTestCase, innerExec, outerExec Executor)
 		joinSchema.Append(cols1...)
 	}
 
-	joinKeysColIdx := make([]int, 0, len(testCase.keyIdx))
-	joinKeysColIdx = append(joinKeysColIdx, testCase.keyIdx...)
-	probeKeysColIdx := make([]int, 0, len(testCase.keyIdx))
-	probeKeysColIdx = append(probeKeysColIdx, testCase.keyIdx...)
+	joinKeys := make([]*expression.Column, 0, len(testCase.keyIdx))
+	for _, keyIdx := range testCase.keyIdx {
+		joinKeys = append(joinKeys, cols0[keyIdx])
+	}
+	probeKeys := make([]*expression.Column, 0, len(testCase.keyIdx))
+	for _, keyIdx := range testCase.keyIdx {
+		probeKeys = append(probeKeys, cols1[keyIdx])
+	}
 	e := &HashJoinExec{
-		baseExecutor: newBaseExecutor(testCase.ctx, joinSchema, 5, innerExec, outerExec),
-		hashJoinCtx: &hashJoinCtx{
-			sessCtx:         testCase.ctx,
-			joinType:        testCase.joinType, // 0 for InnerJoin, 1 for LeftOutersJoin, 2 for RightOuterJoin
-			isOuterJoin:     false,
-			useOuterToBuild: testCase.useOuterToBuild,
-			concurrency:     uint(testCase.concurrency),
-			probeTypes:      retTypes(outerExec),
-			buildTypes:      retTypes(innerExec),
-		},
-		probeSideTupleFetcher: &probeSideTupleFetcher{
-			probeSideExec: outerExec,
-		},
-		probeWorkers: make([]*probeWorker, testCase.concurrency),
-		buildWorker: &buildWorker{
-			buildKeyColIdx: joinKeysColIdx,
-			buildSideExec:  innerExec,
-		},
+		baseExecutor:      newBaseExecutor(testCase.ctx, joinSchema, 5, innerExec, outerExec),
+		concurrency:       uint(testCase.concurrency),
+		joinType:          testCase.joinType, // 0 for InnerJoin, 1 for LeftOutersJoin, 2 for RightOuterJoin
+		isOuterJoin:       false,
+		buildKeys:         joinKeys,
+		probeKeys:         probeKeys,
+		buildSideExec:     innerExec,
+		probeSideExec:     outerExec,
+		buildSideEstCount: float64(testCase.rows),
+		useOuterToBuild:   testCase.useOuterToBuild,
 	}
 
 	childrenUsedSchema := markChildrenUsedCols(e.Schema(), e.children[0].Schema(), e.children[1].Schema())
-	defaultValues := make([]types.Datum, e.buildWorker.buildSideExec.Schema().Len())
+	defaultValues := make([]types.Datum, e.buildSideExec.Schema().Len())
 	lhsTypes, rhsTypes := retTypes(innerExec), retTypes(outerExec)
+	e.joiners = make([]joiner, e.concurrency)
 	for i := uint(0); i < e.concurrency; i++ {
-		e.probeWorkers[i] = &probeWorker{
-			workerID:    i,
-			hashJoinCtx: e.hashJoinCtx,
-			joiner: newJoiner(testCase.ctx, e.joinType, true, defaultValues,
-				nil, lhsTypes, rhsTypes, childrenUsedSchema, false),
-			probeKeyColIdx: probeKeysColIdx,
-		}
+		e.joiners[i] = newJoiner(testCase.ctx, e.joinType, true, defaultValues,
+			nil, lhsTypes, rhsTypes, childrenUsedSchema)
 	}
-	e.buildWorker.hashJoinCtx = e.hashJoinCtx
 	memLimit := int64(-1)
 	if testCase.disk {
 		memLimit = 1
@@ -951,10 +937,8 @@ func prepare4HashJoin(testCase *hashJoinTestCase, innerExec, outerExec Executor)
 	t := memory.NewTracker(-1, memLimit)
 	t.SetActionOnExceed(nil)
 	t2 := disk.NewTracker(-1, -1)
-	e.ctx.GetSessionVars().MemTracker = t
-	e.ctx.GetSessionVars().StmtCtx.MemTracker.AttachTo(t)
-	e.ctx.GetSessionVars().DiskTracker = t2
-	e.ctx.GetSessionVars().StmtCtx.DiskTracker.AttachTo(t2)
+	e.ctx.GetSessionVars().StmtCtx.MemTracker = t
+	e.ctx.GetSessionVars().StmtCtx.DiskTracker = t2
 	return e
 }
 
@@ -1201,7 +1185,7 @@ func benchmarkBuildHashTable(b *testing.B, casTest *hashJoinTestCase, dataSource
 	close(innerResultCh)
 
 	b.StartTimer()
-	if err := exec.buildWorker.buildHashTableForList(innerResultCh); err != nil {
+	if err := exec.buildHashTableForList(innerResultCh); err != nil {
 		b.Fatal(err)
 	}
 
@@ -1351,7 +1335,7 @@ func prepare4IndexInnerHashJoin(tc *indexJoinTestCase, outerDS *mockDataSource, 
 			hashCols:      tc.innerHashKeyIdx,
 		},
 		workerWg:      new(sync.WaitGroup),
-		joiner:        newJoiner(tc.ctx, 0, false, defaultValues, nil, leftTypes, rightTypes, nil, false),
+		joiner:        newJoiner(tc.ctx, 0, false, defaultValues, nil, leftTypes, rightTypes, nil),
 		isOuterJoin:   false,
 		keyOff2IdxOff: keyOff2IdxOff,
 		lastColHelper: nil,
@@ -1435,7 +1419,7 @@ func prepare4IndexMergeJoin(tc *indexJoinTestCase, outerDS *mockDataSource, inne
 	concurrency := e.ctx.GetSessionVars().IndexLookupJoinConcurrency()
 	joiners := make([]joiner, concurrency)
 	for i := 0; i < concurrency; i++ {
-		joiners[i] = newJoiner(tc.ctx, 0, false, defaultValues, nil, leftTypes, rightTypes, nil, false)
+		joiners[i] = newJoiner(tc.ctx, 0, false, defaultValues, nil, leftTypes, rightTypes, nil)
 	}
 	e.joiners = joiners
 	return e, nil
@@ -1554,7 +1538,6 @@ func prepareMergeJoinExec(tc *mergeJoinTestCase, joinSchema *expression.Schema, 
 		retTypes(leftExec),
 		retTypes(rightExec),
 		tc.childrenUsedSchema,
-		false,
 	)
 
 	mergeJoinExec.innerTable = &mergeJoinTable{

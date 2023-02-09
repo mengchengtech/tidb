@@ -529,7 +529,7 @@ func (b *builtinCastJSONAsTimeSig) vecEvalTime(input *chunk.Chunk, result *chunk
 			if err != nil {
 				return err
 			}
-			tm, err := types.ParseTime(stmtCtx, s, b.tp.GetType(), fsp, nil)
+			tm, err := types.ParseTime(stmtCtx, s, b.tp.GetType(), fsp)
 			if err != nil {
 				if err = handleInvalidTimeError(b.ctx, err); err != nil {
 					return err
@@ -1186,11 +1186,7 @@ func (b *builtinCastJSONAsStringSig) vecEvalString(input *chunk.Chunk, result *c
 			result.AppendNull()
 			continue
 		}
-		s, err := types.ProduceStrWithSpecifiedTp(buf.GetJSON(i).String(), b.tp, b.ctx.GetSessionVars().StmtCtx, false)
-		if err != nil {
-			return err
-		}
-		result.AppendString(s)
+		result.AppendString(buf.GetJSON(i).String())
 	}
 	return nil
 }
@@ -1766,7 +1762,7 @@ func (b *builtinCastStringAsTimeSig) vecEvalTime(input *chunk.Chunk, result *chu
 		if result.IsNull(i) {
 			continue
 		}
-		tm, err := types.ParseTime(stmtCtx, buf.GetString(i), b.tp.GetType(), fsp, nil)
+		tm, err := types.ParseTime(stmtCtx, buf.GetString(i), b.tp.GetType(), fsp)
 		if err != nil {
 			if err = handleInvalidTimeError(b.ctx, err); err != nil {
 				return err

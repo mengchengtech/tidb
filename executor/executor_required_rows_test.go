@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/expression/aggregation"
 	"github.com/pingcap/tidb/parser/ast"
@@ -212,7 +211,6 @@ func defaultCtx() sessionctx.Context {
 	ctx.GetSessionVars().StmtCtx.MemTracker = memory.NewTracker(-1, ctx.GetSessionVars().MemQuotaQuery)
 	ctx.GetSessionVars().StmtCtx.DiskTracker = disk.NewTracker(-1, -1)
 	ctx.GetSessionVars().SnapshotTS = uint64(1)
-	domain.BindDomain(ctx, domain.NewMockDomain())
 	return ctx
 }
 
@@ -861,11 +859,6 @@ func (mp *mockPlan) GetExecutor() Executor {
 
 func (mp *mockPlan) Schema() *expression.Schema {
 	return mp.exec.Schema()
-}
-
-// MemoryUsage of mockPlan is only for testing
-func (mp *mockPlan) MemoryUsage() (sum int64) {
-	return
 }
 
 func TestVecGroupCheckerDATARACE(t *testing.T) {

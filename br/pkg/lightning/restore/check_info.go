@@ -155,10 +155,3 @@ func (rc *Controller) checkSourceSchema(ctx context.Context) error {
 	}
 	return rc.doPreCheckOnItem(ctx, CheckSourceSchemaValid)
 }
-
-func (rc *Controller) checkCDCPiTR(ctx context.Context) error {
-	if rc.cfg.TikvImporter.Backend == config.BackendTiDB {
-		return nil
-	}
-	return rc.doPreCheckOnItem(ctx, CheckTargetUsingCDCPITR)
-}

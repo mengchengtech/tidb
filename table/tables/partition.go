@@ -44,7 +44,6 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/mock"
 	"github.com/pingcap/tidb/util/ranger"
-	"github.com/pingcap/tidb/util/stringutil"
 	"go.uber.org/zap"
 )
 
@@ -115,7 +114,6 @@ func newPartitionedTable(tbl *TableCommon, tblInfo *model.TableInfo) (table.Tabl
 }
 
 func newPartitionExpr(tblInfo *model.TableInfo) (*PartitionExpr, error) {
-	// a partitioned table cannot rely on session context/sql modes, so use a default one!
 	ctx := mock.NewContext()
 	dbName := model.NewCIStr(ctx.GetSessionVars().CurrentDB)
 	columns, names, err := expression.ColumnInfos2ColumnsAndNames(ctx, dbName, tblInfo.Name, tblInfo.Cols(), tblInfo)
@@ -177,30 +175,24 @@ func initEvalBuffer(t *partitionedTable) *chunk.MutRow {
 
 // ForRangeColumnsPruning is used for range partition pruning.
 type ForRangeColumnsPruning struct {
-	// LessThan contains expressions for [Partition][column].
-	// If Maxvalue, then nil
-	LessThan [][]*expression.Expression
+	LessThan []expression.Expression
+	MaxValue bool
 }
 
 func dataForRangeColumnsPruning(ctx sessionctx.Context, pi *model.PartitionInfo, schema *expression.Schema, names []*types.FieldName, p *parser.Parser) (*ForRangeColumnsPruning, error) {
 	var res ForRangeColumnsPruning
-	res.LessThan = make([][]*expression.Expression, 0, len(pi.Definitions))
+	res.LessThan = make([]expression.Expression, len(pi.Definitions))
 	for i := 0; i < len(pi.Definitions); i++ {
-		lessThanCols := make([]*expression.Expression, 0, len(pi.Columns))
-		for j := range pi.Definitions[i].LessThan {
-			if strings.EqualFold(pi.Definitions[i].LessThan[j], "MAXVALUE") {
-				// Use a nil pointer instead of math.MaxInt64 to avoid the corner cases.
-				lessThanCols = append(lessThanCols, nil)
-				// No column after MAXVALUE matters
-				break
-			}
-			tmp, err := parseSimpleExprWithNames(p, ctx, pi.Definitions[i].LessThan[j], schema, names)
+		if strings.EqualFold(pi.Definitions[i].LessThan[0], "MAXVALUE") {
+			// Use a bool flag instead of math.MaxInt64 to avoid the corner cases.
+			res.MaxValue = true
+		} else {
+			tmp, err := parseSimpleExprWithNames(p, ctx, pi.Definitions[i].LessThan[0], schema, names)
 			if err != nil {
 				return nil, err
 			}
-			lessThanCols = append(lessThanCols, &tmp)
+			res.LessThan[i] = tmp
 		}
-		res.LessThan = append(res.LessThan, lessThanCols)
 	}
 	return &res, nil
 }
@@ -476,17 +468,20 @@ func fixOldVersionPartitionInfo(sctx sessionctx.Context, str string) (int64, boo
 	return ret, true
 }
 
-func rangePartitionExprStrings(pi *model.PartitionInfo) []string {
-	var s []string
-	if len(pi.Columns) > 0 {
-		s = make([]string, 0, len(pi.Columns))
-		for _, col := range pi.Columns {
-			s = append(s, stringutil.Escape(col.O, mysql.ModeNone))
-		}
-	} else {
-		s = []string{pi.Expr}
+// rangePartitionString returns the partition string for a range typed partition.
+func rangePartitionString(pi *model.PartitionInfo) string {
+	// partition by range expr
+	if len(pi.Columns) == 0 {
+		return pi.Expr
 	}
-	return s
+
+	// partition by range columns (c1)
+	if len(pi.Columns) == 1 {
+		return "`" + pi.Columns[0].L + "`"
+	}
+
+	// partition by range columns (c1, c2, ...)
+	panic("create table assert len(columns) = 1")
 }
 
 func generateRangePartitionExpr(ctx sessionctx.Context, pi *model.PartitionInfo,
@@ -496,24 +491,13 @@ func generateRangePartitionExpr(ctx sessionctx.Context, pi *model.PartitionInfo,
 	var buf bytes.Buffer
 	p := parser.New()
 	schema := expression.NewSchema(columns...)
-	partStrs := rangePartitionExprStrings(pi)
+	partStr := rangePartitionString(pi)
 	for i := 0; i < len(pi.Definitions); i++ {
 		if strings.EqualFold(pi.Definitions[i].LessThan[0], "MAXVALUE") {
 			// Expr less than maxvalue is always true.
 			fmt.Fprintf(&buf, "true")
 		} else {
-			maxValueFound := false
-			for j := range partStrs[1:] {
-				if strings.EqualFold(pi.Definitions[i].LessThan[j+1], "MAXVALUE") {
-					// if any column will be less than MAXVALUE, so change < to <= of the previous prefix of columns
-					fmt.Fprintf(&buf, "((%s) <= (%s))", strings.Join(partStrs[:j+1], ","), strings.Join(pi.Definitions[i].LessThan[:j+1], ","))
-					maxValueFound = true
-					break
-				}
-			}
-			if !maxValueFound {
-				fmt.Fprintf(&buf, "((%s) < (%s))", strings.Join(partStrs, ","), strings.Join(pi.Definitions[i].LessThan, ","))
-			}
+			fmt.Fprintf(&buf, "((%s) < (%s))", partStr, pi.Definitions[i].LessThan[0])
 		}
 
 		expr, err := parseSimpleExprWithNames(p, ctx, buf.String(), schema, names)
@@ -529,25 +513,42 @@ func generateRangePartitionExpr(ctx sessionctx.Context, pi *model.PartitionInfo,
 		UpperBounds: locateExprs,
 	}
 
-	partExpr, _, offset, err := extractPartitionExprColumns(ctx, pi, columns, names)
+	// build column offset.
+	partExp := pi.Expr
+	if len(pi.Columns) == 1 {
+		partExp = "`" + pi.Columns[0].L + "`"
+	}
+	exprs, err := parseSimpleExprWithNames(p, ctx, partExp, schema, names)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, err
+	}
+	partitionCols := expression.ExtractColumns(exprs)
+	offset := make([]int, len(partitionCols))
+	for i, col := range columns {
+		for j, partitionCol := range partitionCols {
+			if partitionCol.UniqueID == col.UniqueID {
+				offset[j] = i
+			}
+		}
 	}
 	ret.ColumnOffset = offset
 
-	if len(pi.Columns) < 1 {
+	switch len(pi.Columns) {
+	case 0:
 		tmp, err := dataForRangePruning(ctx, pi)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		ret.Expr = partExpr
+		ret.Expr = exprs
 		ret.ForRangePruning = tmp
-	} else {
+	case 1:
 		tmp, err := dataForRangeColumnsPruning(ctx, pi, schema, names, p)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		ret.ForRangeColumnsPruning = tmp
+	default:
+		panic("range column partition currently support only one column")
 	}
 	return ret, nil
 }
@@ -571,7 +572,7 @@ func findIdxByColUniqueID(cols []*expression.Column, col *expression.Column) int
 	return -1
 }
 
-func extractPartitionExprColumns(ctx sessionctx.Context, pi *model.PartitionInfo, columns []*expression.Column, names types.NameSlice) (expression.Expression, []*expression.Column, []int, error) {
+func extractListPartitionExprColumns(ctx sessionctx.Context, pi *model.PartitionInfo, columns []*expression.Column, names types.NameSlice) (expression.Expression, []*expression.Column, []int, error) {
 	var cols []*expression.Column
 	var partExpr expression.Expression
 	if len(pi.Columns) == 0 {
@@ -606,7 +607,7 @@ func generateListPartitionExpr(ctx sessionctx.Context, tblInfo *model.TableInfo,
 	columns []*expression.Column, names types.NameSlice) (*PartitionExpr, error) {
 	// The caller should assure partition info is not nil.
 	pi := tblInfo.GetPartitionInfo()
-	partExpr, exprCols, offset, err := extractPartitionExprColumns(ctx, pi, columns, names)
+	partExpr, exprCols, offset, err := extractListPartitionExprColumns(ctx, pi, columns, names)
 	if err != nil {
 		return nil, err
 	}
@@ -1002,28 +1003,32 @@ func (t *partitionedTable) locatePartition(ctx sessionctx.Context, pi *model.Par
 }
 
 func (t *partitionedTable) locateRangeColumnPartition(ctx sessionctx.Context, pi *model.PartitionInfo, r []types.Datum) (int, error) {
-	var lastError error
+	var err error
+	var isNull bool
 	partitionExprs := t.partitionExpr.UpperBounds
 	evalBuffer := t.evalBufferPool.Get().(*chunk.MutRow)
 	defer t.evalBufferPool.Put(evalBuffer)
+	var ret int64
 	idx := sort.Search(len(partitionExprs), func(i int) bool {
 		evalBuffer.SetDatums(r...)
-		ret, isNull, err := partitionExprs[i].EvalInt(ctx, evalBuffer.ToRow())
+		ret, isNull, err = partitionExprs[i].EvalInt(ctx, evalBuffer.ToRow())
 		if err != nil {
-			lastError = err
-			return true // Does not matter, will propagate the last error anyway.
+			return true // Break the search.
 		}
 		if isNull {
 			// If the column value used to determine the partition is NULL, the row is inserted into the lowest partition.
 			// See https://dev.mysql.com/doc/mysql-partitioning-excerpt/5.7/en/partitioning-handling-nulls.html
-			return true // Always less than any other value (NULL cannot be in the partition definition VALUE LESS THAN).
+			return true // Break the search.
 		}
 		return ret > 0
 	})
-	if lastError != nil {
-		return 0, errors.Trace(lastError)
+	if err != nil {
+		return 0, errors.Trace(err)
 	}
-	if idx >= len(partitionExprs) {
+	if isNull {
+		idx = 0
+	}
+	if idx < 0 || idx >= len(partitionExprs) {
 		// The data does not belong to any of the partition returns `table has no partition for value %s`.
 		var valueMsg string
 		if pi.Expr != "" {

@@ -10,7 +10,6 @@ go_test(
         "session_fail_test.go",
     ],
     flaky = True,
-    race = "on",
     deps = [
         "//config",
         "//executor",

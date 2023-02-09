@@ -8,7 +8,6 @@ go_test(
         "mem_test.go",
     ],
     flaky = True,
-    race = "on",
     deps = [
         "//config",
         "//meta/autoid",

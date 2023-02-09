@@ -24,7 +24,6 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/require"
-	"go.opencensus.io/stats/view"
 )
 
 var (
@@ -102,7 +101,6 @@ func createReadOnlySuite(t *testing.T) *ReadOnlySuite {
 		require.NoError(t, s.db.Close())
 		require.NoError(t, s.rdb.Close())
 		require.NoError(t, s.udb.Close())
-		view.Stop()
 	})
 	return s
 }
@@ -157,11 +155,6 @@ func TestRestriction(t *testing.T) {
 	err = setVariable(t, s.rdb, TiDBSuperReadOnly, 0)
 	require.Error(t, err)
 	require.Equal(t, err.Error(), PriviledgedErrMsg)
-
-	// can't do flashback cluster
-	_, err = s.udb.Exec("flashback cluster to timestamp ''")
-	require.Error(t, err)
-	require.Equal(t, err.Error(), ReadOnlyErrMsg)
 
 	// can do some Admin stmts
 	_, err = s.udb.Exec("admin show ddl jobs")

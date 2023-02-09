@@ -29,15 +29,6 @@ const (
 	resetTSRetryTime       = 16
 	resetTSWaitInterval    = 50 * time.Millisecond
 	resetTSMaxWaitInterval = 500 * time.Millisecond
-
-	resetTSRetryTimeExt       = 600
-	resetTSWaitIntervalExt    = 500 * time.Millisecond
-	resetTSMaxWaitIntervalExt = 300 * time.Second
-
-	// region heartbeat are 10 seconds by default, if some region has 2 heartbeat missing (15 seconds), it appear to be a network issue between PD and TiKV.
-	flashbackRetryTime       = 3
-	flashbackWaitInterval    = 3000 * time.Millisecond
-	flashbackMaxWaitInterval = 15 * time.Second
 )
 
 // RetryState is the mutable state needed for retrying.
@@ -167,14 +158,6 @@ func NewPDReqBackoffer() Backoffer {
 	}
 }
 
-func NewPDReqBackofferExt() Backoffer {
-	return &pdReqBackoffer{
-		attempt:      resetTSRetryTimeExt,
-		delayTime:    resetTSWaitIntervalExt,
-		maxDelayTime: resetTSMaxWaitIntervalExt,
-	}
-}
-
 func (bo *pdReqBackoffer) NextBackoff(err error) time.Duration {
 	// bo.delayTime = 2 * bo.delayTime
 	// bo.attempt--
@@ -184,9 +167,6 @@ func (bo *pdReqBackoffer) NextBackoff(err error) time.Duration {
 		// Excepted error, finish the operation
 		bo.delayTime = 0
 		bo.attempt = 0
-	case berrors.ErrRestoreTotalKVMismatch:
-		bo.delayTime = 2 * bo.delayTime
-		bo.attempt--
 	default:
 		switch status.Code(e) {
 		case codes.DeadlineExceeded, codes.NotFound, codes.AlreadyExists, codes.PermissionDenied, codes.ResourceExhausted, codes.Aborted, codes.OutOfRange, codes.Unavailable, codes.DataLoss, codes.Unknown:
@@ -207,36 +187,5 @@ func (bo *pdReqBackoffer) NextBackoff(err error) time.Duration {
 }
 
 func (bo *pdReqBackoffer) Attempt() int {
-	return bo.attempt
-}
-
-type flashbackBackoffer struct {
-	attempt      int
-	delayTime    time.Duration
-	maxDelayTime time.Duration
-}
-
-// NewBackoffer creates a new controller regulating a truncated exponential backoff.
-func NewFlashBackBackoffer() Backoffer {
-	return &flashbackBackoffer{
-		attempt:      flashbackRetryTime,
-		delayTime:    flashbackWaitInterval,
-		maxDelayTime: flashbackMaxWaitInterval,
-	}
-}
-
-// retry 3 times when prepare flashback failure.
-func (bo *flashbackBackoffer) NextBackoff(err error) time.Duration {
-	bo.delayTime = 2 * bo.delayTime
-	bo.attempt--
-	log.Warn("region may not ready to serve, retry it...", zap.Error(err))
-
-	if bo.delayTime > bo.maxDelayTime {
-		return bo.maxDelayTime
-	}
-	return bo.delayTime
-}
-
-func (bo *flashbackBackoffer) Attempt() int {
 	return bo.attempt
 }

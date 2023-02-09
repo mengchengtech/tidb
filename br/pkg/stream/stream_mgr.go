@@ -186,17 +186,7 @@ func (m *MetadataHelper) InitCacheEntry(path string, ref int) {
 	}
 }
 
-func (m *MetadataHelper) decodeCompressedData(data []byte, compressionType backuppb.CompressionType) ([]byte, error) {
-	switch compressionType {
-	case backuppb.CompressionType_UNKNOWN:
-		return data, nil
-	case backuppb.CompressionType_ZSTD:
-		return m.decoder.DecodeAll(data, nil)
-	}
-	return nil, errors.Errorf("failed to decode compressed data: compression type is unimplemented. type id is %d", compressionType)
-}
-
-func (m *MetadataHelper) ReadFile(ctx context.Context, path string, offset uint64, length uint64, compressionType backuppb.CompressionType, storage storage.ExternalStorage) ([]byte, error) {
+func (m *MetadataHelper) ReadFile(ctx context.Context, path string, offset uint64, length uint64, storage storage.ExternalStorage) ([]byte, error) {
 	var err error
 	cref, exist := m.cache[path]
 	if !exist {
@@ -206,11 +196,7 @@ func (m *MetadataHelper) ReadFile(ctx context.Context, path string, offset uint6
 			// But the file is from metaV2.
 			return nil, errors.Errorf("the cache entry is uninitialized")
 		}
-		data, err := storage.ReadFile(ctx, path)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return m.decodeCompressedData(data, compressionType)
+		return storage.ReadFile(ctx, path)
 	}
 
 	cref.ref -= 1
@@ -222,7 +208,7 @@ func (m *MetadataHelper) ReadFile(ctx context.Context, path string, offset uint6
 		}
 	}
 
-	buf, err := m.decodeCompressedData(cref.data[offset:offset+length], compressionType)
+	buf, err := m.decoder.DecodeAll(cref.data[offset:offset+length], nil)
 
 	if cref.ref <= 0 {
 		cref.data = nil
@@ -312,6 +298,7 @@ func FastUnmarshalMetaData(
 		}
 		readPath := path
 		pool.ApplyOnErrorGroup(eg, func() error {
+			log.Info("fast read meta file from storage", zap.String("path", readPath))
 			b, err := s.ReadFile(ectx, readPath)
 			if err != nil {
 				log.Error("failed to read file", zap.String("file", readPath))

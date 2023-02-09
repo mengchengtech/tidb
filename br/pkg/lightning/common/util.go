@@ -16,7 +16,6 @@ package common
 
 import (
 	"context"
-	"crypto/tls"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -24,6 +23,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -44,63 +44,42 @@ const (
 	retryTimeout = 3 * time.Second
 
 	defaultMaxRetry = 3
-
-	dbTimeout = 30 * time.Second
 )
 
 // MySQLConnectParam records the parameters needed to connect to a MySQL database.
 type MySQLConnectParam struct {
-	Host                     string
-	Port                     int
-	User                     string
-	Password                 string
-	SQLMode                  string
-	MaxAllowedPacket         uint64
-	TLSConfig                *tls.Config
-	AllowFallbackToPlaintext bool
-	Net                      string
-	Vars                     map[string]string
+	Host             string
+	Port             int
+	User             string
+	Password         string
+	SQLMode          string
+	MaxAllowedPacket uint64
+	TLS              string
+	Vars             map[string]string
 }
 
-func (param *MySQLConnectParam) ToDriverConfig() *mysql.Config {
-	cfg := mysql.NewConfig()
-	cfg.Params = make(map[string]string)
-
-	cfg.User = param.User
-	cfg.Passwd = param.Password
-	cfg.Net = "tcp"
-	if param.Net != "" {
-		cfg.Net = param.Net
-	}
-	cfg.Addr = net.JoinHostPort(param.Host, strconv.Itoa(param.Port))
-	cfg.Params["charset"] = "utf8mb4"
-	cfg.Params["sql_mode"] = fmt.Sprintf("'%s'", param.SQLMode)
-	cfg.MaxAllowedPacket = int(param.MaxAllowedPacket)
-	cfg.ReadTimeout = dbTimeout
-	cfg.WriteTimeout = dbTimeout
-
-	cfg.TLS = param.TLSConfig
-	cfg.AllowFallbackToPlaintext = param.AllowFallbackToPlaintext
+func (param *MySQLConnectParam) ToDSN() string {
+	hostPort := net.JoinHostPort(param.Host, strconv.Itoa(param.Port))
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/?charset=utf8mb4&sql_mode='%s'&maxAllowedPacket=%d&tls=%s",
+		param.User, param.Password, hostPort,
+		param.SQLMode, param.MaxAllowedPacket, param.TLS)
 
 	for k, v := range param.Vars {
-		cfg.Params[k] = fmt.Sprintf("'%s'", v)
+		dsn += fmt.Sprintf("&%s='%s'", k, url.QueryEscape(v))
 	}
-	return cfg
+
+	return dsn
 }
 
-func tryConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {
-	failpoint.Inject("MustMySQLPassword", func(val failpoint.Value) {
-		pwd := val.(string)
-		if cfg.Passwd != pwd {
-			failpoint.Return(nil, &mysql.MySQLError{Number: tmysql.ErrAccessDenied, Message: "access denied"})
-		}
-		failpoint.Return(nil, nil)
+func tryConnectMySQL(dsn string) (*sql.DB, error) {
+	driverName := "mysql"
+	failpoint.Inject("MockMySQLDriver", func(val failpoint.Value) {
+		driverName = val.(string)
 	})
-	c, err := mysql.NewConnector(cfg)
+	db, err := sql.Open(driverName, dsn)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	db := sql.OpenDB(c)
 	if err = db.Ping(); err != nil {
 		_ = db.Close()
 		return nil, errors.Trace(err)
@@ -110,9 +89,13 @@ func tryConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {
 
 // ConnectMySQL connects MySQL with the dsn. If access is denied and the password is a valid base64 encoding,
 // we will try to connect MySQL with the base64 decoding of the password.
-func ConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {
+func ConnectMySQL(dsn string) (*sql.DB, error) {
+	cfg, err := mysql.ParseDSN(dsn)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	// Try plain password first.
-	db, firstErr := tryConnectMySQL(cfg)
+	db, firstErr := tryConnectMySQL(dsn)
 	if firstErr == nil {
 		return db, nil
 	}
@@ -121,9 +104,9 @@ func ConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {
 		// If password is encoded by base64, try the decoded string as well.
 		if password, decodeErr := base64.StdEncoding.DecodeString(cfg.Passwd); decodeErr == nil && string(password) != cfg.Passwd {
 			cfg.Passwd = string(password)
-			db2, err := tryConnectMySQL(cfg)
+			db, err = tryConnectMySQL(cfg.FormatDSN())
 			if err == nil {
-				return db2, nil
+				return db, nil
 			}
 		}
 	}
@@ -132,7 +115,7 @@ func ConnectMySQL(cfg *mysql.Config) (*sql.DB, error) {
 }
 
 func (param *MySQLConnectParam) Connect() (*sql.DB, error) {
-	db, err := ConnectMySQL(param.ToDriverConfig())
+	db, err := ConnectMySQL(param.ToDSN())
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -312,7 +295,7 @@ func InterpolateMySQLString(s string) string {
 }
 
 // TableExists return whether table with specified name exists in target db
-func TableExists(ctx context.Context, db utils.QueryExecutor, schema, table string) (bool, error) {
+func TableExists(ctx context.Context, db *sql.DB, schema, table string) (bool, error) {
 	query := "SELECT 1 from INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
 	var exist string
 	err := db.QueryRowContext(ctx, query, schema, table).Scan(&exist)
@@ -323,21 +306,6 @@ func TableExists(ctx context.Context, db utils.QueryExecutor, schema, table stri
 		return false, nil
 	default:
 		return false, errors.Annotatef(err, "check table exists failed")
-	}
-}
-
-// SchemaExists return whether schema with specified name exists.
-func SchemaExists(ctx context.Context, db utils.QueryExecutor, schema string) (bool, error) {
-	query := "SELECT 1 from INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?"
-	var exist string
-	err := db.QueryRowContext(ctx, query, schema).Scan(&exist)
-	switch {
-	case err == nil:
-		return true, nil
-	case err == sql.ErrNoRows:
-		return false, nil
-	default:
-		return false, errors.Annotatef(err, "check schema exists failed")
 	}
 }
 

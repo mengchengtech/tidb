@@ -20,13 +20,13 @@ package tables
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/kv"
@@ -49,7 +49,6 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/stringutil"
 	"github.com/pingcap/tidb/util/tableutil"
-	"github.com/pingcap/tidb/util/tracing"
 	"github.com/pingcap/tipb/go-binlog"
 	"github.com/pingcap/tipb/go-tipb"
 	"go.uber.org/zap"
@@ -85,7 +84,7 @@ func MockTableFromMeta(tblInfo *model.TableInfo) table.Table {
 	}
 
 	var t TableCommon
-	initTableCommon(&t, tblInfo, tblInfo.ID, columns, autoid.NewAllocators(false))
+	initTableCommon(&t, tblInfo, tblInfo.ID, columns, nil)
 	if tblInfo.TableCacheStatusType != model.TableCacheStatusDisable {
 		ret, err := newCachedTable(&t)
 		if err != nil {
@@ -526,12 +525,7 @@ func (t *TableCommon) rebuildIndices(ctx sessionctx.Context, txn kv.Transaction,
 			break
 		}
 		// If txn is auto commit and index is untouched, no need to write index value.
-		// If InHandleForeignKeyTrigger or ForeignKeyTriggerCtx.HasFKCascades is true indicate we may have
-		// foreign key cascade need to handle later, then we still need to write index value,
-		// otherwise, the later foreign cascade executor may see data-index inconsistency in txn-mem-buffer.
-		sessVars := ctx.GetSessionVars()
-		if untouched && !sessVars.InTxn() &&
-			!sessVars.StmtCtx.InHandleForeignKeyTrigger && !sessVars.StmtCtx.ForeignKeyTriggerCtx.HasFKCascades {
+		if untouched && !ctx.GetSessionVars().InTxn() {
 			continue
 		}
 		newVs, err := idx.FetchValues(newData, nil)
@@ -700,9 +694,11 @@ func (t *TableCommon) AddRecord(sctx sessionctx.Context, r []types.Datum, opts .
 	var ctx context.Context
 	if opt.Ctx != nil {
 		ctx = opt.Ctx
-		var r tracing.Region
-		r, ctx = tracing.StartRegionEx(ctx, "table.AddRecord")
-		defer r.End()
+		if span := opentracing.SpanFromContext(ctx); span != nil && span.Tracer() != nil {
+			span1 := span.Tracer().StartSpan("table.AddRecord", opentracing.ChildOf(span.Context()))
+			defer span1.Finish()
+			ctx = opentracing.ContextWithSpan(ctx, span1)
+		}
 	} else {
 		ctx = context.Background()
 	}
@@ -849,7 +845,7 @@ func (t *TableCommon) AddRecord(sctx sessionctx.Context, r []types.Datum, opts .
 		}
 		if err == nil {
 			handleStr := getDuplicateErrorHandleString(t, recordID, r)
-			return recordID, kv.ErrKeyExists.FastGenByArgs(handleStr, t.Meta().Name.String()+".PRIMARY")
+			return recordID, kv.ErrKeyExists.FastGenByArgs(handleStr, "PRIMARY")
 		} else if !kv.ErrNotExist.Equal(err) {
 			return recordID, err
 		}
@@ -857,8 +853,7 @@ func (t *TableCommon) AddRecord(sctx sessionctx.Context, r []types.Datum, opts .
 
 	if setPresume {
 		flags := []kv.FlagsOp{kv.SetPresumeKeyNotExists}
-		if !sessVars.ConstraintCheckInPlacePessimistic && sessVars.TxnCtx.IsPessimistic && sessVars.InTxn() &&
-			!sessVars.InRestrictedSQL && sessVars.ConnectionID > 0 {
+		if !sessVars.ConstraintCheckInPlacePessimistic && sessVars.TxnCtx.IsPessimistic && sessVars.InTxn() {
 			flags = append(flags, kv.SetNeedConstraintCheckInPrewrite)
 		}
 		err = memBuffer.SetWithFlags(key, value, flags...)
@@ -979,9 +974,10 @@ func (t *TableCommon) addIndices(sctx sessionctx.Context, recordID kv.Handle, r 
 			if err != nil {
 				return nil, err
 			}
-			dupErr = kv.ErrKeyExists.FastGenByArgs(entryKey, fmt.Sprintf("%s.%s", v.TableMeta().Name.String(), v.Meta().Name.String()))
+			idxMeta := v.Meta()
+			dupErr = kv.ErrKeyExists.FastGenByArgs(entryKey, idxMeta.Name.String())
 		}
-		rsData := TryGetHandleRestoredDataWrapper(t.meta, r, nil, v.Meta())
+		rsData := TryGetHandleRestoredDataWrapper(t, r, nil, v.Meta())
 		if dupHandle, err := v.Create(sctx, txn, indexVals, recordID, rsData, opts...); err != nil {
 			if kv.ErrKeyExists.Equal(err) {
 				return dupHandle, dupErr
@@ -1349,7 +1345,7 @@ func (t *TableCommon) buildIndexForRow(ctx sessionctx.Context, h kv.Handle, vals
 	if untouched {
 		opts = append(opts, table.IndexIsUntouched)
 	}
-	rsData := TryGetHandleRestoredDataWrapper(t.meta, newData, nil, idx.Meta())
+	rsData := TryGetHandleRestoredDataWrapper(t, newData, nil, idx.Meta())
 	if _, err := idx.Create(ctx, txn, vals, h, rsData, opts...); err != nil {
 		if kv.ErrKeyExists.Equal(err) {
 			// Make error message consistent with MySQL.
@@ -1359,7 +1355,7 @@ func (t *TableCommon) buildIndexForRow(ctx sessionctx.Context, h kv.Handle, vals
 				return err
 			}
 
-			return kv.ErrKeyExists.FastGenByArgs(entryKey, fmt.Sprintf("%s.%s", idx.TableMeta().Name.String(), idx.Meta().Name.String()))
+			return kv.ErrKeyExists.FastGenByArgs(entryKey, idx.Meta().Name)
 		}
 		return err
 	}
@@ -1519,7 +1515,8 @@ func allocHandleIDs(ctx context.Context, sctx sessionctx.Context, t table.Table,
 			// shard = 0010000000000000000000000000000000000000000000000000000000000000
 			return 0, 0, autoid.ErrAutoincReadFailed
 		}
-		shard := sctx.GetSessionVars().GetCurrentShard(int(n))
+		txnCtx := sctx.GetSessionVars().TxnCtx
+		shard := txnCtx.GetCurrentShard(int(n))
 		base = shardFmt.Compose(shard, base)
 		maxID = shardFmt.Compose(shard, maxID)
 	}
@@ -1544,7 +1541,7 @@ func (t *TableCommon) Allocators(ctx sessionctx.Context) autoid.Allocators {
 		// Use an independent allocator for global temporary tables.
 		if t.meta.TempTableType == model.TempTableGlobal {
 			if alloc := ctx.GetSessionVars().GetTemporaryTable(t.meta).GetAutoIDAllocator(); alloc != nil {
-				return autoid.NewAllocators(false, alloc)
+				return autoid.Allocators{alloc}
 			}
 			// If the session is not in a txn, for example, in "show create table", use the original allocator.
 			// Otherwise the would be a nil pointer dereference.
@@ -1554,9 +1551,8 @@ func (t *TableCommon) Allocators(ctx sessionctx.Context) autoid.Allocators {
 
 	// Replace the row id allocator with the one in session variables.
 	sessAlloc := ctx.GetSessionVars().IDAllocator
-	allocs := t.allocs.Allocs
-	retAllocs := make([]autoid.Allocator, 0, len(allocs))
-	copy(retAllocs, allocs)
+	retAllocs := make([]autoid.Allocator, 0, len(t.allocs))
+	copy(retAllocs, t.allocs)
 
 	overwritten := false
 	for i, a := range retAllocs {
@@ -1569,7 +1565,7 @@ func (t *TableCommon) Allocators(ctx sessionctx.Context) autoid.Allocators {
 	if !overwritten {
 		retAllocs = append(retAllocs, sessAlloc)
 	}
-	return autoid.NewAllocators(t.allocs.SepAutoInc, retAllocs...)
+	return retAllocs
 }
 
 // Type implements table.Table Type interface.
@@ -1870,14 +1866,14 @@ func (t *TableCommon) GetSequenceCommon() *sequenceCommon {
 }
 
 // TryGetHandleRestoredDataWrapper tries to get the restored data for handle if needed. The argument can be a slice or a map.
-func TryGetHandleRestoredDataWrapper(tblInfo *model.TableInfo, row []types.Datum, rowMap map[int64]types.Datum, idx *model.IndexInfo) []types.Datum {
-	if !collate.NewCollationEnabled() || !tblInfo.IsCommonHandle || tblInfo.CommonHandleVersion == 0 {
+func TryGetHandleRestoredDataWrapper(t table.Table, row []types.Datum, rowMap map[int64]types.Datum, idx *model.IndexInfo) []types.Datum {
+	if !collate.NewCollationEnabled() || !t.Meta().IsCommonHandle || t.Meta().CommonHandleVersion == 0 {
 		return nil
 	}
 	rsData := make([]types.Datum, 0, 4)
-	pkIdx := FindPrimaryIndex(tblInfo)
+	pkIdx := FindPrimaryIndex(t.Meta())
 	for _, pkIdxCol := range pkIdx.Columns {
-		pkCol := tblInfo.Columns[pkIdxCol.Offset]
+		pkCol := t.Meta().Columns[pkIdxCol.Offset]
 		if !types.NeedRestoredData(&pkCol.FieldType) {
 			continue
 		}
@@ -1887,35 +1883,26 @@ func TryGetHandleRestoredDataWrapper(tblInfo *model.TableInfo, row []types.Datum
 		} else {
 			datum = row[pkCol.Offset]
 		}
-		TryTruncateRestoredData(&datum, pkCol, pkIdxCol, idx)
-		ConvertDatumToTailSpaceCount(&datum, pkCol)
-		rsData = append(rsData, datum)
-	}
-	return rsData
-}
-
-// TryTruncateRestoredData tries to truncate index values.
-// Says that primary key(a (8)),
-// For index t(a), don't truncate the value.
-// For index t(a(9)), truncate to a(9).
-// For index t(a(7)), truncate to a(8).
-func TryTruncateRestoredData(datum *types.Datum, pkCol *model.ColumnInfo,
-	pkIdxCol *model.IndexColumn, idx *model.IndexInfo) {
-	truncateTargetCol := pkIdxCol
-	for _, idxCol := range idx.Columns {
-		if idxCol.Offset == pkIdxCol.Offset {
-			truncateTargetCol = maxIndexLen(pkIdxCol, idxCol)
-			break
+		// Try to truncate index values.
+		// Says that primary key(a (8)),
+		// For index t(a), don't truncate the value.
+		// For index t(a(9)), truncate to a(9).
+		// For index t(a(7)), truncate to a(8).
+		truncateTargetCol := pkIdxCol
+		for _, idxCol := range idx.Columns {
+			if idxCol.Offset == pkCol.Offset {
+				truncateTargetCol = maxIndexLen(pkIdxCol, idxCol)
+				break
+			}
+		}
+		tablecodec.TruncateIndexValue(&datum, truncateTargetCol, pkCol)
+		if collate.IsBinCollation(pkCol.GetCollate()) {
+			rsData = append(rsData, types.NewIntDatum(stringutil.GetTailSpaceCount(datum.GetString())))
+		} else {
+			rsData = append(rsData, datum)
 		}
 	}
-	tablecodec.TruncateIndexValue(datum, truncateTargetCol, pkCol)
-}
-
-// ConvertDatumToTailSpaceCount converts a string datum to an int datum that represents the tail space count.
-func ConvertDatumToTailSpaceCount(datum *types.Datum, col *model.ColumnInfo) {
-	if collate.IsBinCollation(col.GetCollate()) {
-		*datum = types.NewIntDatum(stringutil.GetTailSpaceCount(datum.GetString()))
-	}
+	return rsData
 }
 
 func maxIndexLen(idxA, idxB *model.IndexColumn) *model.IndexColumn {
@@ -1932,7 +1919,7 @@ func maxIndexLen(idxA, idxB *model.IndexColumn) *model.IndexColumn {
 }
 
 func getSequenceAllocator(allocs autoid.Allocators) (autoid.Allocator, error) {
-	for _, alloc := range allocs.Allocs {
+	for _, alloc := range allocs {
 		if alloc.GetType() == autoid.SequenceType {
 			return alloc, nil
 		}
@@ -1946,7 +1933,7 @@ func BuildTableScanFromInfos(tableInfo *model.TableInfo, columnInfos []*model.Co
 	pkColIds := TryGetCommonPkColumnIds(tableInfo)
 	tsExec := &tipb.TableScan{
 		TableId:          tableInfo.ID,
-		Columns:          util.ColumnsToProto(columnInfos, tableInfo.PKIsHandle, false),
+		Columns:          util.ColumnsToProto(columnInfos, tableInfo.PKIsHandle),
 		PrimaryColumnIds: pkColIds,
 	}
 	if tableInfo.IsCommonHandle {
@@ -1960,7 +1947,7 @@ func BuildPartitionTableScanFromInfos(tableInfo *model.TableInfo, columnInfos []
 	pkColIds := TryGetCommonPkColumnIds(tableInfo)
 	tsExec := &tipb.PartitionTableScan{
 		TableId:          tableInfo.ID,
-		Columns:          util.ColumnsToProto(columnInfos, tableInfo.PKIsHandle, false),
+		Columns:          util.ColumnsToProto(columnInfos, tableInfo.PKIsHandle),
 		PrimaryColumnIds: pkColIds,
 		IsFastScan:       &fastScan,
 	}
@@ -1968,35 +1955,6 @@ func BuildPartitionTableScanFromInfos(tableInfo *model.TableInfo, columnInfos []
 		tsExec.PrimaryPrefixColumnIds = PrimaryPrefixColumnIDs(tableInfo)
 	}
 	return tsExec
-}
-
-// SetPBColumnsDefaultValue sets the default values of tipb.ColumnInfo.
-func SetPBColumnsDefaultValue(ctx sessionctx.Context, pbColumns []*tipb.ColumnInfo, columns []*model.ColumnInfo) error {
-	for i, c := range columns {
-		// For virtual columns, we set their default values to NULL so that TiKV will return NULL properly,
-		// They real values will be computed later.
-		if c.IsGenerated() && !c.GeneratedStored {
-			pbColumns[i].DefaultVal = []byte{codec.NilFlag}
-		}
-		if c.GetOriginDefaultValue() == nil {
-			continue
-		}
-
-		sessVars := ctx.GetSessionVars()
-		originStrict := sessVars.StrictSQLMode
-		sessVars.StrictSQLMode = false
-		d, err := table.GetColOriginDefaultValue(ctx, c)
-		sessVars.StrictSQLMode = originStrict
-		if err != nil {
-			return err
-		}
-
-		pbColumns[i].DefaultVal, err = tablecodec.EncodeValue(sessVars.StmtCtx, nil, d)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // TemporaryTable is used to store transaction-specific or session-specific information for global / local temporary tables.

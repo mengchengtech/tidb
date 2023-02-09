@@ -189,12 +189,7 @@ func (g *TargetInfoGetterImpl) IsTableEmpty(ctx context.Context, schemaName stri
 	}
 	var dump int
 	err = exec.QueryRow(ctx, "check table empty",
-		// Here we use the `USE INDEX()` hint to skip fetch the record from index.
-		// In Lightning, if previous importing is halted half-way, it is possible that
-		// the data is partially imported, but the index data has not been imported.
-		// In this situation, if no hint is added, the SQL executor might fetch the record from index,
-		// which is empty.  This will result in missing check.
-		fmt.Sprintf("SELECT 1 FROM %s USE INDEX() LIMIT 1", common.UniqueTable(schemaName, tableName)),
+		fmt.Sprintf("SELECT 1 FROM %s LIMIT 1", common.UniqueTable(schemaName, tableName)),
 		&dump,
 	)
 
@@ -449,7 +444,15 @@ func (p *PreRestoreInfoGetterImpl) ReadFirstNRowsByTableName(ctx context.Context
 // ReadFirstNRowsByFileMeta reads the first N rows of an data file.
 // It implements the PreRestoreInfoGetter interface.
 func (p *PreRestoreInfoGetterImpl) ReadFirstNRowsByFileMeta(ctx context.Context, dataFileMeta mydump.SourceFileMeta, n int) ([]string, [][]types.Datum, error) {
-	reader, err := openReader(ctx, dataFileMeta, p.srcStorage)
+	var (
+		reader storage.ReadSeekCloser
+		err    error
+	)
+	if dataFileMeta.Type == mydump.SourceTypeParquet {
+		reader, err = mydump.OpenParquetReader(ctx, p.srcStorage, dataFileMeta.Path, dataFileMeta.FileSize)
+	} else {
+		reader, err = p.srcStorage.Open(ctx, dataFileMeta.Path)
+	}
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
@@ -587,7 +590,13 @@ func (p *PreRestoreInfoGetterImpl) sampleDataFromTable(
 		return resultIndexRatio, isRowOrdered, nil
 	}
 	sampleFile := tableMeta.DataFiles[0].FileMeta
-	reader, err := openReader(ctx, sampleFile, p.srcStorage)
+	var reader storage.ReadSeekCloser
+	var err error
+	if sampleFile.Type == mydump.SourceTypeParquet {
+		reader, err = mydump.OpenParquetReader(ctx, p.srcStorage, sampleFile.Path, sampleFile.FileSize)
+	} else {
+		reader, err = p.srcStorage.Open(ctx, sampleFile.Path)
+	}
 	if err != nil {
 		return 0.0, false, errors.Trace(err)
 	}
@@ -639,12 +648,9 @@ func (p *PreRestoreInfoGetterImpl) sampleDataFromTable(
 	}
 
 	initializedColumns := false
-	var (
-		columnPermutation []int
-		kvSize            uint64 = 0
-		rowSize           uint64 = 0
-		extendVals        []types.Datum
-	)
+	var columnPermutation []int
+	var kvSize uint64 = 0
+	var rowSize uint64 = 0
 	rowCount := 0
 	dataKVs := p.encBuilder.MakeEmptyRows()
 	indexKVs := p.encBuilder.MakeEmptyRows()
@@ -659,32 +665,17 @@ outloop:
 		switch errors.Cause(err) {
 		case nil:
 			if !initializedColumns {
-				ignoreColsMap := igCols.ColumnsMap()
 				if len(columnPermutation) == 0 {
 					columnPermutation, err = createColumnPermutation(
 						columnNames,
-						ignoreColsMap,
+						igCols.ColumnsMap(),
 						tableInfo,
 						log.FromContext(ctx))
 					if err != nil {
 						return 0.0, false, errors.Trace(err)
 					}
 				}
-				if len(sampleFile.ExtendData.Columns) > 0 {
-					_, extendVals = filterColumns(columnNames, sampleFile.ExtendData, ignoreColsMap, tableInfo)
-				}
 				initializedColumns = true
-				lastRow := parser.LastRow()
-				lastRowLen := len(lastRow.Row)
-				extendColsMap := make(map[string]int)
-				for i, c := range sampleFile.ExtendData.Columns {
-					extendColsMap[c] = lastRowLen + i
-				}
-				for i, col := range tableInfo.Columns {
-					if p, ok := extendColsMap[col.Name.O]; ok {
-						columnPermutation[i] = p
-					}
-				}
 			}
 		case io.EOF:
 			break outloop
@@ -694,7 +685,6 @@ outloop:
 		}
 		lastRow := parser.LastRow()
 		rowCount++
-		lastRow.Row = append(lastRow.Row, extendVals...)
 
 		var dataChecksum, indexChecksum verification.KVChecksum
 		kvs, encodeErr := kvEncoder.Encode(logTask.Logger, lastRow.Row, lastRow.RowID, columnPermutation, sampleFile.Path, offset)

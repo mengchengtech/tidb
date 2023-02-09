@@ -28,7 +28,6 @@ import (
 	pd "github.com/tikv/pd/client"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type TLS struct {
@@ -105,7 +104,7 @@ func (tc *TLS) ToGRPCDialOption() grpc.DialOption {
 	if tc.inner != nil {
 		return grpc.WithTransportCredentials(credentials.NewTLS(tc.inner))
 	}
-	return grpc.WithTransportCredentials(insecure.NewCredentials())
+	return grpc.WithInsecure()
 }
 
 // WrapListener places a TLS layer on top of the existing listener.

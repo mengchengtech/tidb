@@ -15,7 +15,6 @@
 package core_test
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -46,7 +45,7 @@ func runSQL(t *testing.T, ctx sessionctx.Context, is infoschema.InfoSchema, sql 
 	if inPrepare {
 		opts = append(opts, core.InPrepare)
 	}
-	err = core.Preprocess(context.Background(), ctx, stmt, append(opts, core.WithPreprocessorReturn(&core.PreprocessorReturn{InfoSchema: is}))...)
+	err = core.Preprocess(ctx, stmt, append(opts, core.WithPreprocessorReturn(&core.PreprocessorReturn{InfoSchema: is}))...)
 	require.Truef(t, terror.ErrorEqual(err, terr), "sql: %s, err:%v", sql, err)
 }
 
@@ -416,7 +415,7 @@ func TestPreprocessCTE(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, stmts, 1)
 
-		err = core.Preprocess(context.Background(), tk.Session(), stmts[0])
+		err = core.Preprocess(tk.Session(), stmts[0])
 		require.NoError(t, err)
 
 		var rs strings.Builder

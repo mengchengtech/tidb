@@ -29,11 +29,9 @@ import (
 	"github.com/pingcap/tidb/planner/util"
 	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/plancodec"
 	"github.com/pingcap/tidb/util/stringutil"
 	"github.com/pingcap/tipb/go-tipb"
-	"go.uber.org/zap"
 )
 
 // ExplainInfo implements Plan interface.
@@ -173,11 +171,15 @@ func (p *PhysicalTableScan) ExplainNormalizedInfo() string {
 // OperatorInfo implements dataAccesser interface.
 func (p *PhysicalTableScan) OperatorInfo(normalized bool) string {
 	var buffer strings.Builder
-	if len(p.rangeInfo) > 0 {
-		// TODO: deal with normalized case
-		buffer.WriteString("range: decided by ")
-		buffer.WriteString(p.rangeInfo)
-		buffer.WriteString(", ")
+	if len(p.rangeDecidedBy) > 0 {
+		buffer.WriteString("range: decided by [")
+		for i, rangeDecidedBy := range p.rangeDecidedBy {
+			if i != 0 {
+				buffer.WriteString(" ")
+			}
+			buffer.WriteString(rangeDecidedBy.String())
+		}
+		buffer.WriteString("], ")
 	} else if p.haveCorCol() {
 		if normalized {
 			buffer.WriteString("range: decided by ")
@@ -228,7 +230,7 @@ func (p *PhysicalTableScan) haveCorCol() bool {
 }
 
 func (p *PhysicalTableScan) isFullScan() bool {
-	if len(p.rangeInfo) > 0 || p.haveCorCol() {
+	if len(p.rangeDecidedBy) > 0 || p.haveCorCol() {
 		return false
 	}
 	var unsignedIntHandle bool
@@ -247,17 +249,11 @@ func (p *PhysicalTableScan) isFullScan() bool {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalTableReader) ExplainInfo() string {
-	tablePlanInfo := "data:" + p.tablePlan.ExplainID().String()
-
-	if p.ReadReqType == MPP {
-		return fmt.Sprintf("MppVersion: %d, %s", p.ctx.GetSessionVars().ChooseMppVersion(), tablePlanInfo)
-	}
-
-	return tablePlanInfo
+	return "data:" + p.tablePlan.ExplainID().String()
 }
 
 // ExplainNormalizedInfo implements Plan interface.
-func (*PhysicalTableReader) ExplainNormalizedInfo() string {
+func (p *PhysicalTableReader) ExplainNormalizedInfo() string {
 	return ""
 }
 
@@ -292,10 +288,7 @@ func (p *PhysicalIndexLookUpReader) ExplainInfo() string {
 
 // ExplainInfo implements Plan interface.
 func (p *PhysicalIndexMergeReader) ExplainInfo() string {
-	if p.IsIntersectionType {
-		return "type: intersection"
-	}
-	return "type: union"
+	return ""
 }
 
 // ExplainInfo implements Plan interface.
@@ -391,9 +384,6 @@ func (p *basePhysicalAgg) explainInfo(normalized bool) string {
 			builder.WriteString(", ")
 		}
 	}
-	if p.TiFlashFineGrainedShuffleStreamCount > 0 {
-		builder.WriteString(fmt.Sprintf(", stream_count: %d", p.TiFlashFineGrainedShuffleStreamCount))
-	}
 	return builder.String()
 }
 
@@ -439,7 +429,6 @@ func (p *PhysicalIndexJoin) explainInfo(normalized bool, isIndexMergeJoin bool) 
 		for i := range p.OuterHashKeys {
 			expr, err := expression.NewFunctionBase(MockContext(), ast.EQ, types.NewFieldType(mysql.TypeLonglong), p.OuterHashKeys[i], p.InnerHashKeys[i])
 			if err != nil {
-				logutil.BgLogger().Warn("fail to NewFunctionBase", zap.Error(err))
 			}
 			exprs = append(exprs, expr)
 		}
@@ -490,11 +479,7 @@ func (p *PhysicalHashJoin) explainInfo(normalized bool) string {
 	buffer := new(strings.Builder)
 
 	if len(p.EqualConditions) == 0 {
-		if len(p.NAEqualConditions) == 0 {
-			buffer.WriteString("CARTESIAN ")
-		} else {
-			buffer.WriteString("Null-aware ")
-		}
+		buffer.WriteString("CARTESIAN ")
 	}
 
 	buffer.WriteString(p.JoinType.String())
@@ -510,21 +495,6 @@ func (p *PhysicalHashJoin) explainInfo(normalized bool) string {
 					buffer.WriteString(" ")
 				}
 				buffer.WriteString(EqualConditions.String())
-			}
-			buffer.WriteString("]")
-		}
-	}
-	if len(p.NAEqualConditions) > 0 {
-		if normalized {
-			buffer.WriteString(", equal:")
-			buffer.Write(expression.SortedExplainNormalizedScalarFuncList(p.NAEqualConditions))
-		} else {
-			buffer.WriteString(", equal:[")
-			for i, NAEqualCondition := range p.NAEqualConditions {
-				if i != 0 {
-					buffer.WriteString(" ")
-				}
-				buffer.WriteString(NAEqualCondition.String())
 			}
 			buffer.WriteString("]")
 		}
@@ -551,9 +521,6 @@ func (p *PhysicalHashJoin) explainInfo(normalized bool) string {
 	if len(p.OtherConditions) > 0 {
 		buffer.WriteString(", other cond:")
 		buffer.Write(sortedExplainExpressionList(p.OtherConditions))
-	}
-	if p.TiFlashFineGrainedShuffleStreamCount > 0 {
-		buffer.WriteString(fmt.Sprintf(", stream_count: %d", p.TiFlashFineGrainedShuffleStreamCount))
 	}
 	return buffer.String()
 }
@@ -616,7 +583,7 @@ func (p *PhysicalTopN) ExplainNormalizedInfo() string {
 	return buffer.String()
 }
 
-func (*PhysicalWindow) formatFrameBound(buffer *bytes.Buffer, bound *FrameBound) {
+func (p *PhysicalWindow) formatFrameBound(buffer *bytes.Buffer, bound *FrameBound) {
 	if bound.Type == ast.CurrentRow {
 		buffer.WriteString("current row")
 		return
@@ -811,11 +778,6 @@ func (p *PhysicalExchangeSender) ExplainInfo() string {
 		fmt.Fprintf(buffer, "Broadcast")
 	case tipb.ExchangeType_Hash:
 		fmt.Fprintf(buffer, "HashPartition")
-	}
-	if p.CompressionMode != kv.ExchangeCompressionModeNONE {
-		fmt.Fprintf(buffer, ", Compression: %s", p.CompressionMode.Name())
-	}
-	if p.ExchangeType == tipb.ExchangeType_Hash {
 		fmt.Fprintf(buffer, ", Hash Cols: %s", property.ExplainColumnList(p.HashCols))
 	}
 	if len(p.Tasks) > 0 {
@@ -888,10 +850,10 @@ func (p *LogicalSort) ExplainInfo() string {
 }
 
 // ExplainInfo implements Plan interface.
-func (lt *LogicalTopN) ExplainInfo() string {
+func (p *LogicalTopN) ExplainInfo() string {
 	buffer := bytes.NewBufferString("")
-	buffer = explainByItems(buffer, lt.ByItems)
-	fmt.Fprintf(buffer, ", offset:%v, count:%v", lt.Offset, lt.Count)
+	buffer = explainByItems(buffer, p.ByItems)
+	fmt.Fprintf(buffer, ", offset:%v, count:%v", p.Offset, p.Count)
 	return buffer.String()
 }
 

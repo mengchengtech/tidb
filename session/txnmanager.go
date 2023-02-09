@@ -51,7 +51,7 @@ type txnManager struct {
 	ctxProvider sessiontxn.TxnContextProvider
 
 	// We always reuse the same OptimisticTxnContextProvider in one session to reduce memory allocation cost for every new txn.
-	reservedOptimisticProviders [2]isolation.OptimisticTxnContextProvider
+	reservedOptimisticProvider isolation.OptimisticTxnContextProvider
 }
 
 func newTxnManager(sctx sessionctx.Context) *txnManager {
@@ -68,13 +68,6 @@ func (m *txnManager) GetTxnInfoSchema() infoschema.InfoSchema {
 	}
 
 	return nil
-}
-
-func (m *txnManager) SetTxnInfoSchema(is infoschema.InfoSchema) {
-	if m.ctxProvider == nil {
-		return
-	}
-	m.ctxProvider.SetTxnInfoSchema(is)
 }
 
 func (m *txnManager) GetStmtReadTS() (uint64, error) {
@@ -175,15 +168,6 @@ func (m *txnManager) OnStmtStart(ctx context.Context, node ast.StmtNode) error {
 	return m.ctxProvider.OnStmtStart(ctx, m.stmtNode)
 }
 
-// OnHandlePessimisticStmtStart is the hook that should be called when starts handling a pessimistic DML or
-// a pessimistic select-for-update statements.
-func (m *txnManager) OnHandlePessimisticStmtStart(ctx context.Context) error {
-	if m.ctxProvider == nil {
-		return errors.New("context provider not set")
-	}
-	return m.ctxProvider.OnHandlePessimisticStmtStart(ctx)
-}
-
 // OnStmtErrorForNextAction is the hook that should be called when a new statement get an error
 func (m *txnManager) OnStmtErrorForNextAction(point sessiontxn.StmtErrorHandlePoint, err error) (sessiontxn.StmtErrorAction, error) {
 	if m.ctxProvider == nil {
@@ -206,22 +190,6 @@ func (m *txnManager) OnStmtRetry(ctx context.Context) error {
 		return errors.New("context provider not set")
 	}
 	return m.ctxProvider.OnStmtRetry(ctx)
-}
-
-// OnStmtCommit is the hook that should be called when a statement is executed successfully.
-func (m *txnManager) OnStmtCommit(ctx context.Context) error {
-	if m.ctxProvider == nil {
-		return errors.New("context provider not set")
-	}
-	return m.ctxProvider.OnStmtCommit(ctx)
-}
-
-// OnStmtRollback is the hook that should be called when a statement fails to execute.
-func (m *txnManager) OnStmtRollback(ctx context.Context, isForPessimisticRetry bool) error {
-	if m.ctxProvider == nil {
-		return errors.New("context provider not set")
-	}
-	return m.ctxProvider.OnStmtRollback(ctx, isForPessimisticRetry)
 }
 
 // OnLocalTemporaryTableCreated is the hook that should be called when a temporary table created.
@@ -266,13 +234,8 @@ func (m *txnManager) newProviderWithRequest(r *sessiontxn.EnterNewTxnRequest) (s
 	switch txnMode {
 	case "", ast.Optimistic:
 		// When txnMode is 'OPTIMISTIC' or '', the transaction should be optimistic
-		provider := &m.reservedOptimisticProviders[0]
-		if old, ok := m.ctxProvider.(*isolation.OptimisticTxnContextProvider); ok && old == provider {
-			// We should make sure the new provider is not the same with the old one
-			provider = &m.reservedOptimisticProviders[1]
-		}
-		provider.ResetForNewTxn(m.sctx, r.CausalConsistencyOnly)
-		return provider, nil
+		m.reservedOptimisticProvider.ResetForNewTxn(m.sctx, r.CausalConsistencyOnly)
+		return &m.reservedOptimisticProvider, nil
 	case ast.Pessimistic:
 		// When txnMode is 'PESSIMISTIC', the provider should be determined by the isolation level
 		switch sessVars.IsolationLevelForNewTxn() {

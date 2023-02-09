@@ -336,11 +336,6 @@ func (sr *SchemasReplace) rewriteTableInfo(value []byte, dbID int64) ([]byte, bo
 		}
 	}
 
-	// Force to disable TTL_ENABLE when restore
-	if newTableInfo.TTLInfo != nil {
-		newTableInfo.TTLInfo.Enable = false
-	}
-
 	if sr.AfterTableRewritten != nil {
 		sr.AfterTableRewritten(false, newTableInfo)
 	}
@@ -456,18 +451,11 @@ func (sr *SchemasReplace) rewriteValueV2(value []byte, cf string, rewrite func([
 			return rewriteResult{}, errors.Trace(err)
 		}
 
-		if rawWriteCFValue.IsDelete() {
+		if rawWriteCFValue.t == WriteTypeDelete {
 			return rewriteResult{
 				NewValue:    value,
 				NeedRewrite: true,
 				Deleted:     true,
-			}, nil
-		}
-		if rawWriteCFValue.IsRollback() {
-			return rewriteResult{
-				NewValue:    value,
-				NeedRewrite: true,
-				Deleted:     false,
 			}, nil
 		}
 		if !rawWriteCFValue.HasShortValue() {
@@ -479,9 +467,6 @@ func (sr *SchemasReplace) rewriteValueV2(value []byte, cf string, rewrite func([
 
 		shortValue, needWrite, err := rewrite(rawWriteCFValue.GetShortValue())
 		if err != nil {
-			log.Info("failed to rewrite short value",
-				zap.ByteString("write-type", []byte{rawWriteCFValue.GetWriteType()}),
-				zap.Int("short-value-len", len(rawWriteCFValue.GetShortValue())))
 			return rewriteResult{}, errors.Trace(err)
 		}
 		if !needWrite {

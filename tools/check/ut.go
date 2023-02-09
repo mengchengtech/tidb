@@ -837,7 +837,7 @@ func skipDIR(pkg string) bool {
 
 func buildTestBinary(pkg string) error {
 	// go test -c
-	cmd := exec.Command("go", "test", "-c", "-vet", "off", "--tags=intest", "-o", testFileName(pkg))
+	cmd := exec.Command("go", "test", "-c", "-vet", "off", "-o", testFileName(pkg))
 	if coverprofile != "" {
 		cmd.Args = append(cmd.Args, "-cover")
 	}
@@ -906,12 +906,9 @@ func listNewTestCases(pkg string) ([]string, error) {
 	// session.test -test.list Test
 	cmd := exec.Command(exe, "-test.list", "Test")
 	cmd.Dir = path.Join(workDir, pkg)
-	var buf bytes.Buffer
-	cmd.Stdout = &buf
-	err := cmd.Run()
-	res := strings.Split(buf.String(), "\n")
-	if err != nil && len(res) == 0 {
-		fmt.Println("err ==", err)
+	res, err := cmdToLines(cmd)
+	if err != nil {
+		return nil, withTrace(err)
 	}
 	return filter(res, func(s string) bool {
 		return strings.HasPrefix(s, "Test") && s != "TestT" && s != "TestBenchDaily"

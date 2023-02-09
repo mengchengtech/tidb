@@ -8,10 +8,8 @@ go_test(
         "show_test.go",
     ],
     flaky = True,
-    race = "on",
     shard_count = 45,
     deps = [
-        "//autoid_service",
         "//config",
         "//executor",
         "//infoschema",

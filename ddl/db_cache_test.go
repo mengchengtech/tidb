@@ -22,6 +22,8 @@ import (
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/parser/auth"
 	"github.com/pingcap/tidb/parser/model"
+	"github.com/pingcap/tidb/session"
+	"github.com/pingcap/tidb/store/mockstore"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/testkit/external"
 	"github.com/pingcap/tidb/util/dbterror"
@@ -127,10 +129,20 @@ func TestIndexOnCacheTable(t *testing.T) {
 }
 
 func TestAlterTableCache(t *testing.T) {
-	store, dom := testkit.CreateMockStoreAndDomain(t)
+	store, err := mockstore.NewMockStore()
+	require.NoError(t, err)
+	session.SetSchemaLease(600 * time.Millisecond)
+	session.DisableStats4Test()
+	dom, err := session.BootstrapSession(store)
+	require.NoError(t, err)
 
 	dom.SetStatsUpdating(true)
 
+	t.Cleanup(func() {
+		dom.Close()
+		err := store.Close()
+		require.NoError(t, err)
+	})
 	tk := testkit.NewTestKit(t, store)
 	tk2 := testkit.NewTestKit(t, store)
 
@@ -145,7 +157,6 @@ func TestAlterTableCache(t *testing.T) {
 	checkTableCacheStatus(t, tk, "test", "t1", model.TableCacheStatusEnable)
 	tk.MustExec("alter table t1 nocache")
 	tk.MustExec("drop table if exists t1")
-	tk.MustExec("set global tidb_enable_metadata_lock=0")
 	/*Test can't skip schema checker*/
 	tk.MustExec("drop table if exists t1,t2")
 	tk.MustExec("CREATE TABLE t1 (a int)")
@@ -232,14 +243,7 @@ func TestCacheTableSizeLimit(t *testing.T) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-
-	// require.True(t, cached)
-	if !cached {
-		// cached should be true, but it depends on the hardward.
-		// If the CI environment is too slow, 200 iteration would not be enough,
-		// check the result makes this test unstable, so skip the following.
-		return
-	}
+	require.True(t, cached)
 
 	// Forbit the insert once the table size limit is detected.
 	tk.MustGetErrCode("insert into cache_t2 select * from tmp;", errno.ErrOptOnCacheTable)

@@ -9,7 +9,6 @@ go_library(
         "//parser/auth",
         "//parser/mysql",
         "//sessionctx",
-        "//sessionctx/variable",
         "//types",
     ],
 )

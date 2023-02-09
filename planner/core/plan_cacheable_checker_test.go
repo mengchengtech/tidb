@@ -26,14 +26,11 @@ import (
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/testkit"
 	driver "github.com/pingcap/tidb/types/parser_driver"
-	"github.com/pingcap/tidb/util/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCacheable(t *testing.T) {
 	store := testkit.CreateMockStore(t)
-	mockCtx := mock.NewContext()
-	mockCtx.GetSessionVars().EnablePlanCacheForParamLimit = true
 
 	tk := testkit.NewTestKit(t, store)
 
@@ -56,9 +53,7 @@ func TestCacheable(t *testing.T) {
 
 	tableRefsClause := &ast.TableRefsClause{TableRefs: &ast.Join{Left: &ast.TableSource{Source: tbl}}}
 	// test InsertStmt
-	stmt = &ast.InsertStmt{Table: tableRefsClause} // insert-values-stmt
-	require.False(t, core.Cacheable(stmt, is))
-	stmt = &ast.InsertStmt{Table: tableRefsClause, Select: &ast.SelectStmt{}} // insert-select-stmt
+	stmt = &ast.InsertStmt{Table: tableRefsClause}
 	require.True(t, core.Cacheable(stmt, is))
 
 	// test DeleteStmt
@@ -90,8 +85,7 @@ func TestCacheable(t *testing.T) {
 		TableRefs: tableRefsClause,
 		Limit:     limitStmt,
 	}
-	c, _ := core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.False(t, core.Cacheable(stmt, is))
 
 	limitStmt = &ast.Limit{
 		Offset: &driver.ParamMarkerExpr{},
@@ -100,16 +94,14 @@ func TestCacheable(t *testing.T) {
 		TableRefs: tableRefsClause,
 		Limit:     limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.False(t, core.Cacheable(stmt, is))
 
 	limitStmt = &ast.Limit{}
 	stmt = &ast.DeleteStmt{
 		TableRefs: tableRefsClause,
 		Limit:     limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.True(t, core.Cacheable(stmt, is))
 
 	stmt.(*ast.DeleteStmt).TableHints = append(stmt.(*ast.DeleteStmt).TableHints, &ast.TableOptimizerHint{
 		HintName: model.NewCIStr(core.HintIgnorePlanCache),
@@ -145,8 +137,7 @@ func TestCacheable(t *testing.T) {
 		TableRefs: tableRefsClause,
 		Limit:     limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.False(t, core.Cacheable(stmt, is))
 
 	limitStmt = &ast.Limit{
 		Offset: &driver.ParamMarkerExpr{},
@@ -155,16 +146,14 @@ func TestCacheable(t *testing.T) {
 		TableRefs: tableRefsClause,
 		Limit:     limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.False(t, core.Cacheable(stmt, is))
 
 	limitStmt = &ast.Limit{}
 	stmt = &ast.UpdateStmt{
 		TableRefs: tableRefsClause,
 		Limit:     limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.True(t, core.Cacheable(stmt, is))
 
 	stmt.(*ast.UpdateStmt).TableHints = append(stmt.(*ast.UpdateStmt).TableHints, &ast.TableOptimizerHint{
 		HintName: model.NewCIStr(core.HintIgnorePlanCache),
@@ -197,8 +186,7 @@ func TestCacheable(t *testing.T) {
 	stmt = &ast.SelectStmt{
 		Limit: limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.False(t, core.Cacheable(stmt, is))
 
 	limitStmt = &ast.Limit{
 		Offset: &driver.ParamMarkerExpr{},
@@ -206,15 +194,13 @@ func TestCacheable(t *testing.T) {
 	stmt = &ast.SelectStmt{
 		Limit: limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.False(t, core.Cacheable(stmt, is))
 
 	limitStmt = &ast.Limit{}
 	stmt = &ast.SelectStmt{
 		Limit: limitStmt,
 	}
-	c, _ = core.CacheableWithCtx(mockCtx, stmt, is)
-	require.True(t, c)
+	require.True(t, core.Cacheable(stmt, is))
 
 	paramExpr := &driver.ParamMarkerExpr{}
 	orderByClause := &ast.OrderByClause{Items: []*ast.ByItem{{Expr: paramExpr}}}
@@ -261,7 +247,7 @@ func TestCacheable(t *testing.T) {
 	require.True(t, core.Cacheable(stmt, is))
 }
 
-func TestNonPreparedPlanCacheable(t *testing.T) {
+func TestGeneralPlanCacheable(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 
 	tk := testkit.NewTestKit(t, store)
@@ -284,9 +270,6 @@ func TestNonPreparedPlanCacheable(t *testing.T) {
 		"select * from t where d>8",
 		"select * from t where c=8 and d>10",
 		"select * from t where a<12 and b<13 and c<12 and d>2",
-		"select * from t where a in (1, 2, 3)",
-		"select * from t where a<13 or b<15",
-		"select * from t where a<13 or b<15 and c=13",
 	}
 
 	unsupported := []string{
@@ -302,21 +285,17 @@ func TestNonPreparedPlanCacheable(t *testing.T) {
 		"insert into t1(a, b) select a, b from t1",                                         // insert into select
 		"update t1 set a = 1 where b = 2",                                                  // update
 		"delete from t1 where b = 1",                                                       // delete
-
-		"select * from t where a+b=13",      // '+'
-		"select * from t where mod(a, 3)=1", // mod
-		"select * from t where d>now()",     // now
 	}
 
 	for _, q := range unsupported {
 		stmt, err := p.ParseOneStmt(q, charset, collation)
 		require.NoError(t, err)
-		require.False(t, core.NonPreparedPlanCacheable(stmt, is))
+		require.False(t, core.GeneralPlanCacheable(stmt, is))
 	}
 
 	for _, q := range supported {
 		stmt, err := p.ParseOneStmt(q, charset, collation)
 		require.NoError(t, err)
-		require.True(t, core.NonPreparedPlanCacheable(stmt, is))
+		require.True(t, core.GeneralPlanCacheable(stmt, is))
 	}
 }

@@ -21,8 +21,12 @@ import (
 	"github.com/pingcap/tidb/util/disjointset"
 )
 
-// ResolveIndicesItself resolve indices for PhysicalPlan itself
-func (p *PhysicalProjection) ResolveIndicesItself() (err error) {
+// ResolveIndices implements Plan interface.
+func (p *PhysicalProjection) ResolveIndices() (err error) {
+	err = p.physicalSchemaProducer.ResolveIndices()
+	if err != nil {
+		return err
+	}
 	for i, expr := range p.Exprs {
 		p.Exprs[i], err = expr.ResolveIndices(p.children[0].Schema())
 		if err != nil {
@@ -35,15 +39,6 @@ func (p *PhysicalProjection) ResolveIndicesItself() (err error) {
 	}
 	refine4NeighbourProj(p, childProj)
 	return
-}
-
-// ResolveIndices implements Plan interface.
-func (p *PhysicalProjection) ResolveIndices() (err error) {
-	err = p.physicalSchemaProducer.ResolveIndices()
-	if err != nil {
-		return err
-	}
-	return p.ResolveIndicesItself()
 }
 
 // refine4NeighbourProj refines the index for p.Exprs whose type is *Column when
@@ -79,8 +74,12 @@ func refine4NeighbourProj(p, childProj *PhysicalProjection) {
 	}
 }
 
-// ResolveIndicesItself resolve indices for PhyicalPlan itself
-func (p *PhysicalHashJoin) ResolveIndicesItself() (err error) {
+// ResolveIndices implements Plan interface.
+func (p *PhysicalHashJoin) ResolveIndices() (err error) {
+	err = p.physicalSchemaProducer.ResolveIndices()
+	if err != nil {
+		return err
+	}
 	lSchema := p.children[0].Schema()
 	rSchema := p.children[1].Schema()
 	for i, fun := range p.EqualConditions {
@@ -95,19 +94,6 @@ func (p *PhysicalHashJoin) ResolveIndicesItself() (err error) {
 		}
 		p.RightJoinKeys[i] = rArg.(*expression.Column)
 		p.EqualConditions[i] = expression.NewFunctionInternal(fun.GetCtx(), fun.FuncName.L, fun.GetType(), lArg, rArg).(*expression.ScalarFunction)
-	}
-	for i, fun := range p.NAEqualConditions {
-		lArg, err := fun.GetArgs()[0].ResolveIndices(lSchema)
-		if err != nil {
-			return err
-		}
-		p.LeftNAJoinKeys[i] = lArg.(*expression.Column)
-		rArg, err := fun.GetArgs()[1].ResolveIndices(rSchema)
-		if err != nil {
-			return err
-		}
-		p.RightNAJoinKeys[i] = rArg.(*expression.Column)
-		p.NAEqualConditions[i] = expression.NewFunctionInternal(fun.GetCtx(), fun.FuncName.L, fun.GetType(), lArg, rArg).(*expression.ScalarFunction)
 	}
 	for i, expr := range p.LeftConditions {
 		p.LeftConditions[i], err = expr.ResolveIndices(lSchema)
@@ -128,15 +114,6 @@ func (p *PhysicalHashJoin) ResolveIndicesItself() (err error) {
 		}
 	}
 	return
-}
-
-// ResolveIndices implements Plan interface.
-func (p *PhysicalHashJoin) ResolveIndices() (err error) {
-	err = p.physicalSchemaProducer.ResolveIndices()
-	if err != nil {
-		return err
-	}
-	return p.ResolveIndicesItself()
 }
 
 // ResolveIndices implements Plan interface.
@@ -390,8 +367,12 @@ func (p *PhysicalSelection) ResolveIndices() (err error) {
 	return nil
 }
 
-// ResolveIndicesItself resolve indices for PhyicalPlan itself
-func (p *PhysicalExchangeSender) ResolveIndicesItself() (err error) {
+// ResolveIndices implements Plan interface.
+func (p *PhysicalExchangeSender) ResolveIndices() (err error) {
+	err = p.basePhysicalPlan.ResolveIndices()
+	if err != nil {
+		return err
+	}
 	for i, col := range p.HashCols {
 		colExpr, err1 := col.Col.ResolveIndices(p.children[0].Schema())
 		if err1 != nil {
@@ -399,16 +380,7 @@ func (p *PhysicalExchangeSender) ResolveIndicesItself() (err error) {
 		}
 		p.HashCols[i].Col, _ = colExpr.(*expression.Column)
 	}
-	return
-}
-
-// ResolveIndices implements Plan interface.
-func (p *PhysicalExchangeSender) ResolveIndices() (err error) {
-	err = p.basePhysicalPlan.ResolveIndices()
-	if err != nil {
-		return err
-	}
-	return p.ResolveIndicesItself()
+	return err
 }
 
 // ResolveIndices implements Plan interface.
@@ -594,13 +566,6 @@ func (p *PhysicalApply) ResolveIndices() (err error) {
 			return err
 		}
 		p.PhysicalHashJoin.EqualConditions[i] = newSf.(*expression.ScalarFunction)
-	}
-	for i, cond := range p.PhysicalHashJoin.NAEqualConditions {
-		newSf, err := cond.ResolveIndices(joinedSchema)
-		if err != nil {
-			return err
-		}
-		p.PhysicalHashJoin.NAEqualConditions[i] = newSf.(*expression.ScalarFunction)
 	}
 	return
 }

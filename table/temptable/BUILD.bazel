@@ -41,7 +41,6 @@ go_test(
     deps = [
         "//infoschema",
         "//kv",
-        "//meta/autoid",
         "//parser/model",
         "//parser/mysql",
         "//sessionctx",

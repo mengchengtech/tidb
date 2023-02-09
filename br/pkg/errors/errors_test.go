@@ -22,9 +22,3 @@ func TestIsContextCanceled(t *testing.T) {
 	require.True(t, berrors.IsContextCanceled(&url.Error{Err: context.Canceled}))
 	require.True(t, berrors.IsContextCanceled(&url.Error{Err: context.DeadlineExceeded}))
 }
-
-func TestEqual(t *testing.T) {
-	err := errors.Annotate(berrors.ErrPDBatchScanRegion, "test error equla")
-	r := berrors.ErrPDBatchScanRegion.Equal(err)
-	require.True(t, r)
-}

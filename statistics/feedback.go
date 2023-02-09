@@ -20,7 +20,6 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-	goatomic "sync/atomic"
 	"time"
 
 	"github.com/pingcap/errors"
@@ -56,14 +55,14 @@ type Feedback struct {
 // QueryFeedback is used to represent the query feedback info. It contains the query's scan ranges and number of rows
 // in each range.
 type QueryFeedback struct {
-	Hist       *Histogram
-	Feedback   []Feedback
 	PhysicalID int64
+	Hist       *Histogram
 	Tp         int
-	Expected   int64         // Expected is the Expected scan count of corresponding query.
-	actual     int64         // actual is the actual scan count of corresponding query.
-	Valid      goatomic.Bool // Valid represents the whether this query feedback is still Valid.
-	desc       bool          // desc represents the corresponding query is desc scan.
+	Feedback   []Feedback
+	Expected   int64 // Expected is the Expected scan count of corresponding query.
+	actual     int64 // actual is the actual scan count of corresponding query.
+	Valid      bool  // Valid represents the whether this query feedback is still Valid.
+	desc       bool  // desc represents the corresponding query is desc scan.
 }
 
 // NewQueryFeedback returns a new query feedback.
@@ -75,15 +74,14 @@ func NewQueryFeedback(physicalID int64, hist *Histogram, expected int64, desc bo
 	if hist != nil && hist.IsIndexHist() {
 		tp = IndexType
 	}
-	rs := &QueryFeedback{
+	return &QueryFeedback{
 		PhysicalID: physicalID,
+		Valid:      true,
 		Tp:         tp,
 		Hist:       hist,
 		Expected:   expected,
 		desc:       desc,
 	}
-	rs.Valid.Store(FeedbackProbability.Load() > 0)
-	return rs
 }
 
 // QueryFeedbackKey is the key for a group of feedbacks on the same index/column.
@@ -278,13 +276,13 @@ func (q *QueryFeedback) StoreRanges(ranges []*ranger.Range) {
 func (q *QueryFeedback) Invalidate() {
 	q.Feedback = nil
 	q.Hist = nil
-	q.Valid.Store(false)
+	q.Valid = false
 	q.actual = -1
 }
 
 // Actual gets the actual row count.
 func (q *QueryFeedback) Actual() int64 {
-	if !q.Valid.Load() {
+	if !q.Valid {
 		return -1
 	}
 	return q.actual
@@ -307,7 +305,7 @@ func (q *QueryFeedback) Update(startKey kv.Key, counts, ndvs []int64) {
 	}
 	metrics.DistSQLScanKeysPartialHistogram.Observe(float64(sum))
 	q.actual += sum
-	if !q.Valid.Load() || q.Hist == nil {
+	if !q.Valid || q.Hist == nil {
 		return
 	}
 

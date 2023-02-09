@@ -262,29 +262,6 @@ func (ccp *ChunkCheckpoint) DeepCopy() *ChunkCheckpoint {
 	}
 }
 
-func (ccp *ChunkCheckpoint) UnfinishedSize() int64 {
-	if ccp.FileMeta.Compression == mydump.CompressionNone {
-		return ccp.Chunk.EndOffset - ccp.Chunk.Offset
-	}
-	return ccp.FileMeta.FileSize - ccp.Chunk.RealOffset
-}
-
-func (ccp *ChunkCheckpoint) TotalSize() int64 {
-	if ccp.FileMeta.Compression == mydump.CompressionNone {
-		return ccp.Chunk.EndOffset - ccp.Key.Offset
-	}
-	// TODO: compressed file won't be split into chunks, so using FileSize as TotalSize is ok
-	//  change this when we support split compressed file into chunks
-	return ccp.FileMeta.FileSize
-}
-
-func (ccp *ChunkCheckpoint) FinishedSize() int64 {
-	if ccp.FileMeta.Compression == mydump.CompressionNone {
-		return ccp.Chunk.Offset - ccp.Key.Offset
-	}
-	return ccp.Chunk.RealOffset - ccp.Key.Offset
-}
-
 type EngineCheckpoint struct {
 	Status CheckpointStatus
 	Chunks []*ChunkCheckpoint // a sorted array
@@ -540,15 +517,7 @@ func OpenCheckpointsDB(ctx context.Context, cfg *config.Config) (DB, error) {
 
 	switch cfg.Checkpoint.Driver {
 	case config.CheckpointDriverMySQL:
-		var (
-			db  *sql.DB
-			err error
-		)
-		if cfg.Checkpoint.MySQLParam != nil {
-			db, err = cfg.Checkpoint.MySQLParam.Connect()
-		} else {
-			db, err = sql.Open("mysql", cfg.Checkpoint.DSN)
-		}
+		db, err := common.ConnectMySQL(cfg.Checkpoint.DSN)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -577,15 +546,7 @@ func IsCheckpointsDBExists(ctx context.Context, cfg *config.Config) (bool, error
 	}
 	switch cfg.Checkpoint.Driver {
 	case config.CheckpointDriverMySQL:
-		var (
-			db  *sql.DB
-			err error
-		)
-		if cfg.Checkpoint.MySQLParam != nil {
-			db, err = cfg.Checkpoint.MySQLParam.Connect()
-		} else {
-			db, err = sql.Open("mysql", cfg.Checkpoint.DSN)
-		}
+		db, err := sql.Open("mysql", cfg.Checkpoint.DSN)
 		if err != nil {
 			return false, errors.Trace(err)
 		}

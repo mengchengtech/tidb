@@ -19,7 +19,6 @@ package realtikvtest
 import (
 	"flag"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -37,21 +36,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv/transaction"
-	"go.opencensus.io/stats/view"
 	"go.uber.org/goleak"
 )
 
-var (
-	// WithRealTiKV is a flag identify whether tests run with real TiKV
-	WithRealTiKV = flag.Bool("with-real-tikv", false, "whether tests run with real TiKV")
-
-	// TiKVPath is the path of the TiKV Storage.
-	TiKVPath = flag.String("tikv-path", "tikv://127.0.0.1:2379?disableGC=true", "TiKV addr")
-
-	// KeyspaceName is an option to specify the name of keyspace that the tests run on,
-	// this option is only valid while the flag WithRealTiKV is set.
-	KeyspaceName = flag.String("keyspace-name", "", "the name of keyspace that the tests run on")
-)
+// WithRealTiKV is a flag identify whether tests run with real TiKV
+var WithRealTiKV = flag.Bool("with-real-tikv", false, "whether tests run with real TiKV")
 
 // RunTestMain run common setups for all real tikv tests.
 func RunTestMain(m *testing.M) {
@@ -65,10 +54,10 @@ func RunTestMain(m *testing.M) {
 	tikv.EnableFailpoints()
 	opts := []goleak.Option{
 		goleak.IgnoreTopFunction("github.com/golang/glog.(*loggingT).flushDaemon"),
-		goleak.IgnoreTopFunction("github.com/lestrrat-go/httprc.runFetchWorker"),
 		goleak.IgnoreTopFunction("github.com/tikv/client-go/v2/internal/retry.newBackoffFn.func1"),
 		goleak.IgnoreTopFunction("go.etcd.io/etcd/client/v3.waitRetryBackoff"),
 		goleak.IgnoreTopFunction("go.etcd.io/etcd/client/pkg/v3/logutil.(*MergeLogger).outputLoop"),
+		goleak.IgnoreTopFunction("go.opencensus.io/stats/view.(*worker).start"),
 		goleak.IgnoreTopFunction("google.golang.org/grpc.(*addrConn).resetTransport"),
 		goleak.IgnoreTopFunction("google.golang.org/grpc.(*ccBalancerWrapper).watcher"),
 		goleak.IgnoreTopFunction("google.golang.org/grpc/internal/transport.(*controlBuffer).get"),
@@ -107,9 +96,8 @@ func CreateMockStoreAndDomainAndSetup(t *testing.T, opts ...mockstore.MockTiKVSt
 		var d driver.TiKVDriver
 		config.UpdateGlobal(func(conf *config.Config) {
 			conf.TxnLocalLatches.Enabled = false
-			conf.KeyspaceName = *KeyspaceName
 		})
-		store, err = d.Open(*TiKVPath)
+		store, err = d.Open("tikv://127.0.0.1:2379?disableGC=true")
 		require.NoError(t, err)
 
 		dom, err = session.BootstrapSession(store)
@@ -121,12 +109,8 @@ func CreateMockStoreAndDomainAndSetup(t *testing.T, opts ...mockstore.MockTiKVSt
 		tk.MustExec(fmt.Sprintf("set global innodb_lock_wait_timeout = %d", variable.DefInnodbLockWaitTimeout))
 		tk.MustExec("use test")
 		rs := tk.MustQuery("show tables")
-		tables := []string{}
 		for _, row := range rs.Rows() {
-			tables = append(tables, fmt.Sprintf("`%v`", row[0]))
-		}
-		if len(tables) > 0 {
-			tk.MustExec(fmt.Sprintf("drop table %s", strings.Join(tables, ",")))
+			tk.MustExec(fmt.Sprintf("drop table %s", row[0]))
 		}
 	} else {
 		store, err = mockstore.NewMockStore(opts...)
@@ -142,7 +126,6 @@ func CreateMockStoreAndDomainAndSetup(t *testing.T, opts ...mockstore.MockTiKVSt
 		dom.Close()
 		require.NoError(t, store.Close())
 		transaction.PrewriteMaxBackoff.Store(20000)
-		view.Stop()
 	})
 	return store, dom
 }

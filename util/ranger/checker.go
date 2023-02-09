@@ -24,83 +24,57 @@ import (
 
 // conditionChecker checks if this condition can be pushed to index planner.
 type conditionChecker struct {
-	checkerCol               *expression.Column
-	length                   int
-	optPrefixIndexSingleScan bool
+	checkerCol    *expression.Column
+	colUniqueID   int64
+	length        int
+	shouldReserve bool // check if a access condition should be reserved in filter conditions.
 }
 
-func (c *conditionChecker) isFullLengthColumn() bool {
-	return c.length == types.UnspecifiedLength || c.length == c.checkerCol.GetType().GetFlen()
-}
-
-// check returns two values, isAccessCond and shouldReserve.
-// isAccessCond indicates whether the condition can be used to build ranges.
-// shouldReserve indicates whether the condition should be reserved in filter conditions.
-func (c *conditionChecker) check(condition expression.Expression) (isAccessCond, shouldReserve bool) {
+func (c *conditionChecker) check(condition expression.Expression) bool {
 	switch x := condition.(type) {
 	case *expression.ScalarFunction:
 		return c.checkScalarFunction(x)
 	case *expression.Column:
 		if x.RetType.EvalType() == types.ETString {
-			return false, true
+			return false
 		}
 		return c.checkColumn(x)
 	case *expression.Constant:
-		return true, false
+		return true
 	}
-	return false, true
+	return false
 }
 
-func (c *conditionChecker) checkScalarFunction(scalar *expression.ScalarFunction) (isAccessCond, shouldReserve bool) {
+func (c *conditionChecker) checkScalarFunction(scalar *expression.ScalarFunction) bool {
 	_, collation := scalar.CharsetAndCollation()
 	switch scalar.FuncName.L {
 	case ast.LogicOr, ast.LogicAnd:
-		isAccessCond0, shouldReserve0 := c.check(scalar.GetArgs()[0])
-		isAccessCond1, shouldReserve1 := c.check(scalar.GetArgs()[1])
-		if isAccessCond0 && isAccessCond1 {
-			return true, shouldReserve0 || shouldReserve1
-		}
-		return false, true
+		return c.check(scalar.GetArgs()[0]) && c.check(scalar.GetArgs()[1])
 	case ast.EQ, ast.NE, ast.GE, ast.GT, ast.LE, ast.LT, ast.NullEQ:
 		if _, ok := scalar.GetArgs()[0].(*expression.Constant); ok {
-			if c.matchColumn(scalar.GetArgs()[1]) {
+			if c.checkColumn(scalar.GetArgs()[1]) {
 				// Checks whether the scalar function is calculated use the collation compatible with the column.
 				if scalar.GetArgs()[1].GetType().EvalType() == types.ETString && !collate.CompatibleCollate(scalar.GetArgs()[1].GetType().GetCollate(), collation) {
-					return false, true
+					return false
 				}
-				isFullLength := c.isFullLengthColumn()
-				if scalar.FuncName.L == ast.NE {
-					return isFullLength, !isFullLength
-				}
-				return true, !isFullLength
+				return scalar.FuncName.L != ast.NE || c.length == types.UnspecifiedLength
 			}
 		}
 		if _, ok := scalar.GetArgs()[1].(*expression.Constant); ok {
-			if c.matchColumn(scalar.GetArgs()[0]) {
+			if c.checkColumn(scalar.GetArgs()[0]) {
 				// Checks whether the scalar function is calculated use the collation compatible with the column.
 				if scalar.GetArgs()[0].GetType().EvalType() == types.ETString && !collate.CompatibleCollate(scalar.GetArgs()[0].GetType().GetCollate(), collation) {
-					return false, true
+					return false
 				}
-				isFullLength := c.isFullLengthColumn()
-				if scalar.FuncName.L == ast.NE {
-					return isFullLength, !isFullLength
-				}
-				return true, !isFullLength
+				return scalar.FuncName.L != ast.NE || c.length == types.UnspecifiedLength
 			}
 		}
 	case ast.IsNull:
-		if c.matchColumn(scalar.GetArgs()[0]) {
-			var isNullReserve bool // We can know whether the column is null from prefix column of any length.
-			if !c.optPrefixIndexSingleScan {
-				isNullReserve = !c.isFullLengthColumn()
-			}
-			return true, isNullReserve
-		}
-		return false, true
+		return c.checkColumn(scalar.GetArgs()[0])
 	case ast.IsTruthWithoutNull, ast.IsFalsity, ast.IsTruthWithNull:
 		if s, ok := scalar.GetArgs()[0].(*expression.Column); ok {
 			if s.RetType.EvalType() == types.ETString {
-				return false, true
+				return false
 			}
 		}
 		return c.checkColumn(scalar.GetArgs()[0])
@@ -109,35 +83,34 @@ func (c *conditionChecker) checkScalarFunction(scalar *expression.ScalarFunction
 		s, ok := scalar.GetArgs()[0].(*expression.ScalarFunction)
 		if !ok {
 			// "not column" or "not constant" can't lead to a range.
-			return false, true
+			return false
 		}
-		if s.FuncName.L == ast.Like || s.FuncName.L == ast.NullEQ {
-			return false, true
+		if s.FuncName.L == ast.Like {
+			return false
 		}
 		return c.check(scalar.GetArgs()[0])
 	case ast.In:
-		if !c.matchColumn(scalar.GetArgs()[0]) {
-			return false, true
+		if !c.checkColumn(scalar.GetArgs()[0]) {
+			return false
 		}
 		if scalar.GetArgs()[0].GetType().EvalType() == types.ETString && !collate.CompatibleCollate(scalar.GetArgs()[0].GetType().GetCollate(), collation) {
-			return false, true
+			return false
 		}
 		for _, v := range scalar.GetArgs()[1:] {
 			if _, ok := v.(*expression.Constant); !ok {
-				return false, true
+				return false
 			}
 		}
-		return true, !c.isFullLengthColumn()
+		return true
 	case ast.Like:
 		return c.checkLikeFunc(scalar)
 	case ast.GetParam:
-		// TODO
-		return true, false
+		return true
 	}
-	return false, true
+	return false
 }
 
-func (c *conditionChecker) checkLikeFunc(scalar *expression.ScalarFunction) (isAccessCond, shouldReserve bool) {
+func (c *conditionChecker) checkLikeFunc(scalar *expression.ScalarFunction) bool {
 	_, collation := scalar.CharsetAndCollation()
 	if collate.NewCollationEnabled() && !collate.IsBinCollation(collation) {
 		// The algorithm constructs the range in byte-level: for example, ab% is mapped to [ab, ac] by adding 1 to the last byte.
@@ -147,30 +120,29 @@ func (c *conditionChecker) checkLikeFunc(scalar *expression.ScalarFunction) (isA
 		// Finally, the range comes to be [`, A], which is actually an empty range.
 		// See https://github.com/pingcap/tidb/issues/31174 for more details.
 		// In short, when the column type is non-binary collation string, we cannot use `like` expressions to generate the range.
-		return false, true
+		return false
 	}
 	if !collate.CompatibleCollate(scalar.GetArgs()[0].GetType().GetCollate(), collation) {
-		return false, true
+		return false
 	}
-	if !c.matchColumn(scalar.GetArgs()[0]) {
-		return false, true
+	if !c.checkColumn(scalar.GetArgs()[0]) {
+		return false
 	}
 	pattern, ok := scalar.GetArgs()[1].(*expression.Constant)
 	if !ok {
-		return false, true
+		return false
 	}
 	if pattern.Value.IsNull() {
-		return false, true
+		return false
 	}
 	patternStr, err := pattern.Value.ToString()
 	if err != nil {
-		return false, true
+		return false
 	}
 	if len(patternStr) == 0 {
-		return true, !c.isFullLengthColumn()
+		return true
 	}
 	escape := byte(scalar.GetArgs()[2].(*expression.Constant).Value.GetInt64())
-	likeFuncReserve := !c.isFullLengthColumn()
 	for i := 0; i < len(patternStr); i++ {
 		if patternStr[i] == escape {
 			i++
@@ -180,16 +152,16 @@ func (c *conditionChecker) checkLikeFunc(scalar *expression.ScalarFunction) (isA
 			break
 		}
 		if i == 0 && (patternStr[i] == '%' || patternStr[i] == '_') {
-			return false, true
+			return false
 		}
 		if patternStr[i] == '%' {
 			// We currently do not support using `enum like 'xxx%'` to build range
 			// see https://github.com/pingcap/tidb/issues/27130 for more details
 			if scalar.GetArgs()[0].GetType().GetType() == mysql.TypeEnum {
-				return false, true
+				return false
 			}
 			if i != len(patternStr)-1 {
-				likeFuncReserve = true
+				c.shouldReserve = true
 			}
 			break
 		}
@@ -197,26 +169,23 @@ func (c *conditionChecker) checkLikeFunc(scalar *expression.ScalarFunction) (isA
 			// We currently do not support using `enum like 'xxx_'` to build range
 			// see https://github.com/pingcap/tidb/issues/27130 for more details
 			if scalar.GetArgs()[0].GetType().GetType() == mysql.TypeEnum {
-				return false, true
+				return false
 			}
-			likeFuncReserve = true
+			c.shouldReserve = true
 			break
 		}
 	}
-	return true, likeFuncReserve
+	return true
 }
 
-func (c *conditionChecker) matchColumn(expr expression.Expression) bool {
+func (c *conditionChecker) checkColumn(expr expression.Expression) bool {
+	col, ok := expr.(*expression.Column)
+	if !ok {
+		return false
+	}
 	// Check if virtual expression column matched
 	if c.checkerCol != nil {
-		return c.checkerCol.EqualByExprAndID(nil, expr)
+		return c.checkerCol.EqualByExprAndID(nil, col)
 	}
-	return false
-}
-
-func (c *conditionChecker) checkColumn(expr expression.Expression) (isAccessCond, shouldReserve bool) {
-	if c.matchColumn(expr) {
-		return true, !c.isFullLengthColumn()
-	}
-	return false, true
+	return c.colUniqueID == col.UniqueID
 }

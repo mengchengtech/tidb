@@ -42,9 +42,8 @@ func NewConsistencyController(ctx context.Context, conf *Config, session *sql.DB
 		}, nil
 	case ConsistencyTypeLock:
 		return &ConsistencyLockDumpingTables{
-			conn:         conn,
-			conf:         conf,
-			emptyLockSQL: false,
+			conn: conn,
+			conf: conf,
 		}, nil
 	case ConsistencyTypeSnapshot:
 		if conf.ServerInfo.ServerType != version.ServerTypeTiDB {
@@ -119,9 +118,8 @@ func (c *ConsistencyFlushTableWithReadLock) PingContext(ctx context.Context) err
 
 // ConsistencyLockDumpingTables execute lock tables read on all tables before dump
 type ConsistencyLockDumpingTables struct {
-	conn         *sql.Conn
-	conf         *Config
-	emptyLockSQL bool
+	conn *sql.Conn
+	conf *Config
 }
 
 // Setup implements ConsistencyController.Setup
@@ -137,15 +135,7 @@ func (c *ConsistencyLockDumpingTables) Setup(tctx *tcontext.Context) error {
 	blockList := make(map[string]map[string]interface{})
 	return utils.WithRetry(tctx, func() error {
 		lockTablesSQL := buildLockTablesSQL(c.conf.Tables, blockList)
-		var err error
-		if len(lockTablesSQL) == 0 {
-			c.emptyLockSQL = true
-			// transfer to ConsistencyNone
-			_ = c.conn.Close()
-			c.conn = nil
-		} else {
-			_, err = c.conn.ExecContext(tctx, lockTablesSQL)
-		}
+		_, err := c.conn.ExecContext(tctx, lockTablesSQL)
 		if err == nil {
 			if len(blockList) > 0 {
 				filterTablesFunc(tctx, c.conf, func(db string, tbl string) bool {
@@ -176,9 +166,6 @@ func (c *ConsistencyLockDumpingTables) TearDown(ctx context.Context) error {
 
 // PingContext implements ConsistencyController.PingContext
 func (c *ConsistencyLockDumpingTables) PingContext(ctx context.Context) error {
-	if c.emptyLockSQL {
-		return nil
-	}
 	if c.conn == nil {
 		return errors.New("consistency connection has already been closed")
 	}

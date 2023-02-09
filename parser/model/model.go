@@ -77,41 +77,6 @@ func (s SchemaState) String() string {
 	}
 }
 
-// BackfillState is the state used by the backfill-merge process.
-type BackfillState byte
-
-const (
-	// BackfillStateInapplicable means the backfill-merge process is not used.
-	BackfillStateInapplicable BackfillState = iota
-	// BackfillStateRunning is the state that the backfill process is running.
-	// In this state, the index's write and delete operations are redirected to a temporary index.
-	BackfillStateRunning
-	// BackfillStateReadyToMerge is the state that the temporary index's records are ready to be merged back
-	// to the origin index.
-	// In this state, the index's write and delete operations are copied to a temporary index.
-	// This state is used to make sure that all the TiDB instances are aware of the copy during the merge(BackfillStateMerging).
-	BackfillStateReadyToMerge
-	// BackfillStateMerging is the state that the temp index is merging back to the origin index.
-	// In this state, the index's write and delete operations are copied to a temporary index.
-	BackfillStateMerging
-)
-
-// String implements fmt.Stringer interface.
-func (s BackfillState) String() string {
-	switch s {
-	case BackfillStateRunning:
-		return "backfill state running"
-	case BackfillStateReadyToMerge:
-		return "backfill state ready to merge"
-	case BackfillStateMerging:
-		return "backfill state merging"
-	case BackfillStateInapplicable:
-		return "backfill state inapplicable"
-	default:
-		return "backfill state unknown"
-	}
-}
-
 const (
 	// ColumnInfoVersion0 means the column info version is 0.
 	ColumnInfoVersion0 = uint64(0)
@@ -164,9 +129,6 @@ type ColumnInfo struct {
 
 // Clone clones ColumnInfo.
 func (c *ColumnInfo) Clone() *ColumnInfo {
-	if c == nil {
-		return nil
-	}
 	nc := *c
 	return &nc
 }
@@ -336,9 +298,6 @@ func (c *ColumnInfo) GetTypeDesc() string {
 	return desc
 }
 
-// EmptyColumnInfoSize is the memory usage of ColumnInfoSize
-const EmptyColumnInfoSize = int64(unsafe.Sizeof(ColumnInfo{}))
-
 // FindColumnInfo finds ColumnInfo in cols by name.
 func FindColumnInfo(cols []*ColumnInfo, name string) *ColumnInfo {
 	name = strings.ToLower(name)
@@ -381,8 +340,8 @@ func FindFKInfoByName(fks []*FKInfo, name string) *FKInfo {
 }
 
 // FindIndexByColumns find IndexInfo in indices which is cover the specified columns.
-func FindIndexByColumns(tbInfo *TableInfo, indices []*IndexInfo, cols ...CIStr) *IndexInfo {
-	for _, index := range indices {
+func FindIndexByColumns(tbInfo *TableInfo, cols ...CIStr) *IndexInfo {
+	for _, index := range tbInfo.Indices {
 		if IsIndexPrefixCovered(tbInfo, index, cols...) {
 			return index
 		}
@@ -446,16 +405,14 @@ const (
 	// However, the convert is missed in some scenarios before v2.1.9, so for all those tables prior to TableInfoVersion3, their
 	// charsets / collations will be converted to lower-case while loading from the storage.
 	TableInfoVersion3 = uint16(3)
-	// TableInfoVersion4 is not used.
-	TableInfoVersion4 = uint16(4)
-	// TableInfoVersion5 indicates that the auto_increment allocator in TiDB has been separated from
-	// _tidb_rowid allocator when AUTO_ID_CACHE is 1. This version is introduced to preserve the compatibility of old tables:
-	// the tables with version <= TableInfoVersion4 still use a single allocator for auto_increment and _tidb_rowid.
+	// TableInfoVersion4 indicates that the auto_increment allocator in TiDB has been separated from
+	// _tidb_rowid allocator. This version is introduced to preserve the compatibility of old tables:
+	// the tables with version < TableInfoVersion4 still use a single allocator for auto_increment and _tidb_rowid.
 	// Also see https://github.com/pingcap/tidb/issues/982.
-	TableInfoVersion5 = uint16(5)
+	TableInfoVersion4 = uint16(4)
 
 	// CurrLatestTableInfoVersion means the latest table info in the current TiDB.
-	CurrLatestTableInfoVersion = TableInfoVersion5
+	CurrLatestTableInfoVersion = TableInfoVersion4
 )
 
 // ExtraHandleName is the name of ExtraHandle Column.
@@ -550,13 +507,6 @@ type TableInfo struct {
 	StatsOptions *StatsOptions `json:"stats_options"`
 
 	ExchangePartitionInfo *ExchangePartitionInfo `json:"exchange_partition_info"`
-
-	TTLInfo *TTLInfo `json:"ttl_info"`
-}
-
-// SepAutoInc decides whether _rowid and auto_increment id use separate allocator.
-func (t *TableInfo) SepAutoInc() bool {
-	return t.Version >= TableInfoVersion5 && t.AutoIdCache == 1
 }
 
 // TableCacheStatusType is the type of the table cache status
@@ -755,10 +705,6 @@ func (t *TableInfo) Clone() *TableInfo {
 
 	for i := range t.ForeignKeys {
 		nt.ForeignKeys[i] = t.ForeignKeys[i].Clone()
-	}
-
-	if t.TTLInfo != nil {
-		nt.TTLInfo = t.TTLInfo.Clone()
 	}
 
 	return &nt
@@ -1302,30 +1248,6 @@ func (ci *PartitionDefinition) Clone() PartitionDefinition {
 	return nci
 }
 
-const emptyPartitionDefinitionSize = int64(unsafe.Sizeof(PartitionState{}))
-
-// MemoryUsage return the memory usage of PartitionDefinition
-func (ci *PartitionDefinition) MemoryUsage() (sum int64) {
-	if ci == nil {
-		return
-	}
-
-	sum = emptyPartitionDefinitionSize + ci.Name.MemoryUsage()
-	if ci.PlacementPolicyRef != nil {
-		sum += int64(unsafe.Sizeof(ci.PlacementPolicyRef.ID)) + ci.PlacementPolicyRef.Name.MemoryUsage()
-	}
-
-	for _, str := range ci.LessThan {
-		sum += int64(len(str))
-	}
-	for _, strs := range ci.InValues {
-		for _, str := range strs {
-			sum += int64(len(str))
-		}
-	}
-	return
-}
-
 // FindPartitionDefinitionByName finds PartitionDefinition by name.
 func (t *TableInfo) FindPartitionDefinitionByName(partitionDefinitionName string) *PartitionDefinition {
 	lowConstrName := strings.ToLower(partitionDefinitionName)
@@ -1407,26 +1329,21 @@ const (
 // It corresponds to the statement `CREATE INDEX Name ON Table (Column);`
 // See https://dev.mysql.com/doc/refman/5.7/en/create-index.html
 type IndexInfo struct {
-	ID            int64          `json:"id"`
-	Name          CIStr          `json:"idx_name"` // Index name.
-	Table         CIStr          `json:"tbl_name"` // Table name.
-	Columns       []*IndexColumn `json:"idx_cols"` // Index columns.
-	State         SchemaState    `json:"state"`
-	BackfillState BackfillState  `json:"backfill_state"`
-	Comment       string         `json:"comment"`      // Comment
-	Tp            IndexType      `json:"index_type"`   // Index type: Btree, Hash or Rtree
-	Unique        bool           `json:"is_unique"`    // Whether the index is unique.
-	Primary       bool           `json:"is_primary"`   // Whether the index is primary key.
-	Invisible     bool           `json:"is_invisible"` // Whether the index is invisible.
-	Global        bool           `json:"is_global"`    // Whether the index is global.
-	MVIndex       bool           `json:"mv_index"`     // Whether the index is multivalued index.
+	ID        int64          `json:"id"`
+	Name      CIStr          `json:"idx_name"` // Index name.
+	Table     CIStr          `json:"tbl_name"` // Table name.
+	Columns   []*IndexColumn `json:"idx_cols"` // Index columns.
+	State     SchemaState    `json:"state"`
+	Comment   string         `json:"comment"`      // Comment
+	Tp        IndexType      `json:"index_type"`   // Index type: Btree, Hash or Rtree
+	Unique    bool           `json:"is_unique"`    // Whether the index is unique.
+	Primary   bool           `json:"is_primary"`   // Whether the index is primary key.
+	Invisible bool           `json:"is_invisible"` // Whether the index is invisible.
+	Global    bool           `json:"is_global"`    // Whether the index is global.
 }
 
 // Clone clones IndexInfo.
 func (index *IndexInfo) Clone() *IndexInfo {
-	if index == nil {
-		return nil
-	}
 	ni := *index
 	ni.Columns = make([]*IndexColumn, len(index.Columns))
 	for i := range index.Columns {
@@ -1589,7 +1506,7 @@ func (fk *FKInfo) String(db, tb string) string {
 	buf.WriteString(fk.Name.O + "` FOREIGN KEY (")
 	for i, col := range fk.Cols {
 		if i > 0 {
-			buf.WriteString(", ")
+			buf.WriteByte(byte(','))
 		}
 		buf.WriteString("`" + col.O + "`")
 	}
@@ -1602,7 +1519,7 @@ func (fk *FKInfo) String(db, tb string) string {
 	buf.WriteString("` (")
 	for i, col := range fk.RefCols {
 		if i > 0 {
-			buf.WriteString(", ")
+			buf.WriteByte(byte(','))
 		}
 		buf.WriteString("`" + col.O + "`")
 	}
@@ -1736,7 +1653,6 @@ type PlacementSettings struct {
 	LearnerConstraints  string `json:"learner_constraints"`
 	FollowerConstraints string `json:"follower_constraints"`
 	VoterConstraints    string `json:"voter_constraints"`
-	SurvivalPreferences string `json:"survival_preferences"`
 }
 
 // PolicyInfo is the struct to store the placement policy.
@@ -1751,23 +1667,6 @@ type PolicyInfo struct {
 func (p *PolicyInfo) Clone() *PolicyInfo {
 	cloned := *p
 	cloned.PlacementSettings = p.PlacementSettings.Clone()
-	return &cloned
-}
-
-// TTLInfo records the TTL config
-type TTLInfo struct {
-	ColumnName      CIStr  `json:"column"`
-	IntervalExprStr string `json:"interval_expr"`
-	// `IntervalTimeUnit` is actually ast.TimeUnitType. Use `int` to avoid cycle dependency
-	IntervalTimeUnit int  `json:"interval_time_unit"`
-	Enable           bool `json:"enable"`
-	// JobInterval is the interval between two TTL scan jobs.
-	JobInterval string `json:"job_interval"`
-}
-
-// Clone clones TTLInfo
-func (t *TTLInfo) Clone() *TTLInfo {
-	cloned := *t
 	return &cloned
 }
 
@@ -1836,71 +1735,6 @@ func (p *PlacementSettings) String() string {
 // Clone clones the placement settings.
 func (p *PlacementSettings) Clone() *PlacementSettings {
 	cloned := *p
-	return &cloned
-}
-
-// ResourceGroupRefInfo is the struct to refer the resource group.
-type ResourceGroupRefInfo struct {
-	ID   int64 `json:"id"`
-	Name CIStr `json:"name"`
-}
-
-// ResourceGroupSettings is the settings of the resource group
-type ResourceGroupSettings struct {
-	RURate           uint64 `json:"ru_per_sec"`
-	CPULimiter       string `json:"cpu_limit"`
-	IOReadBandwidth  string `json:"io_read_bandwidth"`
-	IOWriteBandwidth string `json:"io_write_bandwidth"`
-	BurstLimit       int64  `json:"burst_limit"`
-}
-
-func (p *ResourceGroupSettings) String() string {
-	sb := new(strings.Builder)
-	if p.RURate != 0 {
-		writeSettingIntegerToBuilder(sb, "RU_PER_SEC", p.RURate)
-	}
-	if len(p.CPULimiter) > 0 {
-		writeSettingStringToBuilder(sb, "CPU", p.CPULimiter)
-	}
-	if len(p.IOReadBandwidth) > 0 {
-		writeSettingStringToBuilder(sb, "IO_READ_BANDWIDTH", p.IOReadBandwidth)
-	}
-	if len(p.IOWriteBandwidth) > 0 {
-		writeSettingStringToBuilder(sb, "IO_WRITE_BANDWIDTH", p.IOWriteBandwidth)
-	}
-	// Once burst limit is negative, meaning allow burst with unlimit.
-	if p.BurstLimit < 0 {
-		writeSettingItemToBuilder(sb, "BURSTABLE")
-	}
-	return sb.String()
-}
-
-// Adjust adjusts the resource group settings.
-func (p *ResourceGroupSettings) Adjust() {
-	// Curretly we only support ru_per_sec sytanx, so BurstLimit(capicity) is always same as ru_per_sec.
-	if p.BurstLimit == 0 {
-		p.BurstLimit = int64(p.RURate)
-	}
-}
-
-// Clone clones the resource group settings.
-func (p *ResourceGroupSettings) Clone() *ResourceGroupSettings {
-	cloned := *p
-	return &cloned
-}
-
-// ResourceGroupInfo is the struct to store the resource group.
-type ResourceGroupInfo struct {
-	*ResourceGroupSettings
-	ID    int64       `json:"id"`
-	Name  CIStr       `json:"name"`
-	State SchemaState `json:"state"`
-}
-
-// Clone clones the ResourceGroupInfo.
-func (p *ResourceGroupInfo) Clone() *ResourceGroupInfo {
-	cloned := *p
-	cloned.ResourceGroupSettings = p.ResourceGroupSettings.Clone()
 	return &cloned
 }
 

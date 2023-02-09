@@ -51,11 +51,11 @@ var (
 type GrantExec struct {
 	baseExecutor
 
-	Privs                 []*ast.PrivElem
-	ObjectType            ast.ObjectTypeType
-	Level                 *ast.GrantLevel
-	Users                 []*ast.UserSpec
-	AuthTokenOrTLSOptions []*ast.AuthTokenOrTLSOption
+	Privs      []*ast.PrivElem
+	ObjectType ast.ObjectTypeType
+	Level      *ast.GrantLevel
+	Users      []*ast.UserSpec
+	TLSOptions []*ast.TLSOption
 
 	is        infoschema.InfoSchema
 	WithGrant bool
@@ -130,7 +130,6 @@ func (e *GrantExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	// Create internal session to start internal transaction.
 	isCommit := false
 	internalSession, err := e.getSysSession()
-	internalSession.GetSessionVars().User = e.ctx.GetSessionVars().User
 	if err != nil {
 		return err
 	}
@@ -186,7 +185,7 @@ func (e *GrantExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		// DB scope:			mysql.DB
 		// Table scope:			mysql.Tables_priv
 		// Column scope:		mysql.Columns_priv
-		if e.AuthTokenOrTLSOptions != nil {
+		if e.TLSOptions != nil {
 			err = checkAndInitGlobalPriv(internalSession, user.User.Username, user.User.Hostname)
 			if err != nil {
 				return err
@@ -356,10 +355,10 @@ func initColumnPrivEntry(sctx sessionctx.Context, user string, host string, db s
 // grantGlobalPriv grants priv to user in global scope.
 func (e *GrantExec) grantGlobalPriv(sctx sessionctx.Context, user *ast.UserSpec) error {
 	ctx := kv.WithInternalSourceType(context.Background(), kv.InternalTxnPrivilege)
-	if len(e.AuthTokenOrTLSOptions) == 0 {
+	if len(e.TLSOptions) == 0 {
 		return nil
 	}
-	priv, err := tlsOption2GlobalPriv(e.AuthTokenOrTLSOptions)
+	priv, err := tlsOption2GlobalPriv(e.TLSOptions)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -367,13 +366,13 @@ func (e *GrantExec) grantGlobalPriv(sctx sessionctx.Context, user *ast.UserSpec)
 	return err
 }
 
-func tlsOption2GlobalPriv(authTokenOrTLSOptions []*ast.AuthTokenOrTLSOption) (priv []byte, err error) {
-	if len(authTokenOrTLSOptions) == 0 {
+func tlsOption2GlobalPriv(tlsOptions []*ast.TLSOption) (priv []byte, err error) {
+	if len(tlsOptions) == 0 {
 		priv = []byte("{}")
 		return
 	}
-	dupSet := make(map[ast.AuthTokenOrTLSOptionType]struct{})
-	for _, opt := range authTokenOrTLSOptions {
+	dupSet := make(map[int]struct{})
+	for _, opt := range tlsOptions {
 		if _, dup := dupSet[opt.Type]; dup {
 			var typeName string
 			switch opt.Type {
@@ -385,7 +384,6 @@ func tlsOption2GlobalPriv(authTokenOrTLSOptions []*ast.AuthTokenOrTLSOption) (pr
 				typeName = "SUBJECT"
 			case ast.SAN:
 				typeName = "SAN"
-			case ast.TokenIssuer:
 			}
 			err = errors.Errorf("Duplicate require %s clause", typeName)
 			return
@@ -393,8 +391,8 @@ func tlsOption2GlobalPriv(authTokenOrTLSOptions []*ast.AuthTokenOrTLSOption) (pr
 		dupSet[opt.Type] = struct{}{}
 	}
 	gp := privileges.GlobalPrivValue{SSLType: privileges.SslTypeNotSpecified}
-	for _, opt := range authTokenOrTLSOptions {
-		switch opt.Type {
+	for _, tlsOpt := range tlsOptions {
+		switch tlsOpt.Type {
 		case ast.TlsNone:
 			gp.SSLType = privileges.SslTypeNone
 		case ast.Ssl:
@@ -403,37 +401,36 @@ func tlsOption2GlobalPriv(authTokenOrTLSOptions []*ast.AuthTokenOrTLSOption) (pr
 			gp.SSLType = privileges.SslTypeX509
 		case ast.Cipher:
 			gp.SSLType = privileges.SslTypeSpecified
-			if len(opt.Value) > 0 {
-				if _, ok := util.SupportCipher[opt.Value]; !ok {
-					err = errors.Errorf("Unsupported cipher suit: %s", opt.Value)
+			if len(tlsOpt.Value) > 0 {
+				if _, ok := util.SupportCipher[tlsOpt.Value]; !ok {
+					err = errors.Errorf("Unsupported cipher suit: %s", tlsOpt.Value)
 					return
 				}
-				gp.SSLCipher = opt.Value
+				gp.SSLCipher = tlsOpt.Value
 			}
 		case ast.Issuer:
-			err = util.CheckSupportX509NameOneline(opt.Value)
+			err = util.CheckSupportX509NameOneline(tlsOpt.Value)
 			if err != nil {
 				return
 			}
 			gp.SSLType = privileges.SslTypeSpecified
-			gp.X509Issuer = opt.Value
+			gp.X509Issuer = tlsOpt.Value
 		case ast.Subject:
-			err = util.CheckSupportX509NameOneline(opt.Value)
+			err = util.CheckSupportX509NameOneline(tlsOpt.Value)
 			if err != nil {
 				return
 			}
 			gp.SSLType = privileges.SslTypeSpecified
-			gp.X509Subject = opt.Value
+			gp.X509Subject = tlsOpt.Value
 		case ast.SAN:
 			gp.SSLType = privileges.SslTypeSpecified
-			_, err = util.ParseAndCheckSAN(opt.Value)
+			_, err = util.ParseAndCheckSAN(tlsOpt.Value)
 			if err != nil {
 				return
 			}
-			gp.SAN = opt.Value
-		case ast.TokenIssuer:
+			gp.SAN = tlsOpt.Value
 		default:
-			err = errors.Errorf("Unknown ssl type: %#v", opt.Type)
+			err = errors.Errorf("Unknown ssl type: %#v", tlsOpt.Type)
 			return
 		}
 	}

@@ -58,7 +58,7 @@ func (c *cowExprRef) Set(i int, changed bool, val Expression) {
 		return
 	}
 	c.new = make([]Expression, len(c.ref))
-	copy(c.new, c.ref)
+	copy(c.new, c.ref[:i])
 	c.new[i] = val
 }
 
@@ -415,63 +415,47 @@ func ColumnSubstituteImpl(expr Expression, schema *Schema, newExprs []Expression
 		if v.InOperand {
 			newExpr = SetExprColumnInOperand(newExpr)
 		}
+		newExpr.SetCoercibility(v.Coercibility())
 		return true, false, newExpr
 	case *ScalarFunction:
 		substituted := false
 		hasFail := false
 		if v.FuncName.L == ast.Cast {
-			var newArg Expression
-			substituted, hasFail, newArg = ColumnSubstituteImpl(v.GetArgs()[0], schema, newExprs, fail1Return)
+			newFunc := v.Clone().(*ScalarFunction)
+			substituted, hasFail, newFunc.GetArgs()[0] = ColumnSubstituteImpl(newFunc.GetArgs()[0], schema, newExprs, fail1Return)
 			if fail1Return && hasFail {
-				return substituted, hasFail, v
+				return substituted, hasFail, newFunc
 			}
 			if substituted {
-				flag := v.RetType.GetFlag()
-				e := BuildCastFunction(v.GetCtx(), newArg, v.RetType)
+				// Workaround for issue https://github.com/pingcap/tidb/issues/28804
+				e := NewFunctionInternal(v.GetCtx(), v.FuncName.L, v.RetType, newFunc.GetArgs()...)
 				e.SetCoercibility(v.Coercibility())
-				e.GetType().SetFlag(flag)
 				return true, false, e
 			}
-			return false, false, v
+			return false, false, newFunc
 		}
 		// cowExprRef is a copy-on-write util, args array allocation happens only
 		// when expr in args is changed
 		refExprArr := cowExprRef{v.GetArgs(), nil}
-		oldCollEt, err := CheckAndDeriveCollationFromExprs(v.GetCtx(), v.FuncName.L, v.RetType.EvalType(), v.GetArgs()...)
-		if err != nil {
-			logutil.BgLogger().Error("Unexpected error happened during ColumnSubstitution", zap.Stack("stack"))
-			return false, false, v
-		}
-		var tmpArgForCollCheck []Expression
-		if collate.NewCollationEnabled() {
-			tmpArgForCollCheck = make([]Expression, len(v.GetArgs()))
-		}
+		_, coll := DeriveCollationFromExprs(v.GetCtx(), v.GetArgs()...)
 		for idx, arg := range v.GetArgs() {
-			changed, failed, newFuncExpr := ColumnSubstituteImpl(arg, schema, newExprs, fail1Return)
-			if fail1Return && failed {
-				return changed, failed, v
+			changed, hasFail, newFuncExpr := ColumnSubstituteImpl(arg, schema, newExprs, fail1Return)
+			if fail1Return && hasFail {
+				return changed, hasFail, v
 			}
 			oldChanged := changed
-			if collate.NewCollationEnabled() && changed {
+			if collate.NewCollationEnabled() {
 				// Make sure the collation used by the ScalarFunction isn't changed and its result collation is not weaker than the collation used by the ScalarFunction.
-				changed = false
-				copy(tmpArgForCollCheck, refExprArr.Result())
-				tmpArgForCollCheck[idx] = newFuncExpr
-				newCollEt, err := CheckAndDeriveCollationFromExprs(v.GetCtx(), v.FuncName.L, v.RetType.EvalType(), tmpArgForCollCheck...)
-				if err != nil {
-					logutil.BgLogger().Error("Unexpected error happened during ColumnSubstitution", zap.Stack("stack"))
-					return false, failed, v
-				}
-				if oldCollEt.Collation == newCollEt.Collation {
-					if newFuncExpr.GetType().GetCollate() == arg.GetType().GetCollate() && newFuncExpr.Coercibility() == arg.Coercibility() {
-						// It's safe to use the new expression, otherwise some cases in projection push-down will be wrong.
-						changed = true
-					} else {
-						changed = checkCollationStrictness(oldCollEt.Collation, newFuncExpr.GetType().GetCollate())
+				if changed {
+					changed = false
+					tmpArgs := make([]Expression, 0, len(v.GetArgs()))
+					_ = append(append(append(tmpArgs, refExprArr.Result()[0:idx]...), refExprArr.Result()[idx+1:]...), newFuncExpr)
+					_, newColl := DeriveCollationFromExprs(v.GetCtx(), append(v.GetArgs(), newFuncExpr)...)
+					if coll == newColl {
+						changed = checkCollationStrictness(coll, newFuncExpr.GetType().GetCollate())
 					}
 				}
 			}
-			hasFail = hasFail || failed || oldChanged != changed
 			if fail1Return && oldChanged != changed {
 				// Only when the oldChanged is true and changed is false, we will get here.
 				// And this means there some dependency in this arg can be substituted with
@@ -486,7 +470,7 @@ func ColumnSubstituteImpl(expr Expression, schema *Schema, newExprs []Expression
 			}
 		}
 		if substituted {
-			return true, hasFail, NewFunctionInternal(v.GetCtx(), v.FuncName.L, v.RetType, refExprArr.Result()...)
+			return true, false, NewFunctionInternal(v.GetCtx(), v.FuncName.L, v.RetType, refExprArr.Result()...)
 		}
 	}
 	return false, false, expr
@@ -1157,33 +1141,6 @@ func IsMutableEffectsExpr(expr Expression) bool {
 	return false
 }
 
-// IsInmutableExpr checks whether this expression only consists of foldable functions and inmutable constants.
-// This expression can be evaluated by using `expr.Eval(chunk.Row{})` directly if it's inmutable.
-func IsInmutableExpr(expr Expression) bool {
-	switch x := expr.(type) {
-	case *ScalarFunction:
-		if _, ok := unFoldableFunctions[x.FuncName.L]; ok {
-			return false
-		}
-		if _, ok := mutableEffectsFunctions[x.FuncName.L]; ok {
-			return false
-		}
-		for _, arg := range x.GetArgs() {
-			if !IsInmutableExpr(arg) {
-				return false
-			}
-		}
-		return true
-	case *Constant:
-		if x.DeferredExpr != nil || x.ParamMarker != nil {
-			return false
-		}
-		return true
-	default:
-		return false
-	}
-}
-
 // RemoveDupExprs removes identical exprs. Not that if expr contains functions which
 // are mutable or have side effects, we cannot remove it even if it has duplicates;
 // if the plan is going to be cached, we cannot remove expressions containing `?` neither.
@@ -1280,7 +1237,7 @@ func ContainCorrelatedColumn(exprs []Expression) bool {
 // TODO: Do more careful check here.
 func MaybeOverOptimized4PlanCache(ctx sessionctx.Context, exprs []Expression) bool {
 	// If we do not enable plan cache, all the optimization can work correctly.
-	if !ctx.GetSessionVars().StmtCtx.UseCache {
+	if !ctx.GetSessionVars().StmtCtx.UseCache || ctx.GetSessionVars().StmtCtx.SkipPlanCache {
 		return false
 	}
 	return containMutableConst(ctx, exprs)

@@ -55,8 +55,7 @@ restart_services
 # mock incompatible manually
 run_sql "alter table mysql.user add column xx int;"
 run_br restore full --with-sys-table --log-file $br_log_file -s "local://$backup_dir" > $res_file 2>&1 || true
-run_sql "select count(*) from mysql.user"
-check_contains "count(*): 6"
+check_contains "the target cluster is not compatible with the backup data"
 
 echo "--> incompatible system table: less column on target cluster"
 restart_services

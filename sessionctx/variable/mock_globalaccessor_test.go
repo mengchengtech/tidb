@@ -15,16 +15,13 @@
 package variable
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.opencensus.io/stats/view"
 )
 
 func TestMockAPI(t *testing.T) {
-	defer view.Stop()
-	vars := NewSessionVars(nil)
+	vars := NewSessionVars()
 	mock := NewMockGlobalAccessor4Tests()
 	mock.SessionVars = vars
 	vars.GlobalVarsAccessor = mock
@@ -34,19 +31,19 @@ func TestMockAPI(t *testing.T) {
 	require.Error(t, err)
 
 	// invalid option name
-	err = mock.SetGlobalSysVar(context.Background(), "illegalopt", "val")
+	err = mock.SetGlobalSysVar("illegalopt", "val")
 	require.Error(t, err)
-	err = mock.SetGlobalSysVarOnly(context.Background(), "illegalopt", "val", true)
+	err = mock.SetGlobalSysVarOnly("illegalopt", "val")
 	require.Error(t, err)
 
 	// valid option, invalid value
-	err = mock.SetGlobalSysVar(context.Background(), DefaultAuthPlugin, "invalidvalue")
+	err = mock.SetGlobalSysVar(DefaultAuthPlugin, "invalidvalue")
 	require.Error(t, err)
 
 	// valid option, valid value
-	err = mock.SetGlobalSysVar(context.Background(), DefaultAuthPlugin, "mysql_native_password")
+	err = mock.SetGlobalSysVar(DefaultAuthPlugin, "mysql_native_password")
 	require.NoError(t, err)
-	err = mock.SetGlobalSysVarOnly(context.Background(), DefaultAuthPlugin, "mysql_native_password", true)
+	err = mock.SetGlobalSysVarOnly(DefaultAuthPlugin, "mysql_native_password")
 	require.NoError(t, err)
 
 	// Test GetTiDBTableValue

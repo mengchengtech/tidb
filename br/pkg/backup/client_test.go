@@ -32,7 +32,6 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/txnkv/txnlock"
 	pd "github.com/tikv/pd/client"
-	"go.opencensus.io/stats/view"
 )
 
 type testBackup struct {
@@ -57,7 +56,8 @@ func createBackupSuite(t *testing.T) *testBackup {
 	mockMgr := &conn.Mgr{PdController: &pdutil.PdController{}}
 	mockMgr.SetPDClient(s.mockPDClient)
 	mockMgr.SetHTTP([]string{"test"}, nil)
-	s.backupClient = backup.NewBackupClient(s.ctx, mockMgr)
+	s.backupClient, err = backup.NewBackupClient(s.ctx, mockMgr)
+	require.NoError(t, err)
 
 	s.cluster, err = mock.NewCluster()
 	require.NoError(t, err)
@@ -71,7 +71,6 @@ func createBackupSuite(t *testing.T) *testBackup {
 		s.cluster.Stop()
 		tikvClient.Close()
 		pdClient.Close()
-		view.Stop()
 	})
 	return s
 }

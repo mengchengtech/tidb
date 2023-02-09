@@ -189,7 +189,8 @@ func distinctUpdateMemDeltaGens(srcChk *chunk.Chunk, dataType *types.FieldType) 
 		case mysql.TypeJSON:
 			jsonVal := row.GetJSON(0)
 			bytes := make([]byte, 0)
-			bytes = jsonVal.HashValue(bytes)
+			bytes = append(bytes, jsonVal.TypeCode)
+			bytes = append(bytes, jsonVal.Value...)
 			val = string(bytes)
 			memDelta = int64(len(val))
 		default:

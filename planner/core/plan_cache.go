@@ -42,7 +42,8 @@ import (
 	"go.uber.org/zap"
 )
 
-func planCachePreprocess(ctx context.Context, sctx sessionctx.Context, isNonPrepared bool, is infoschema.InfoSchema, stmt *PlanCacheStmt, params []expression.Expression) error {
+func planCachePreprocess(sctx sessionctx.Context, isGeneralPlanCache bool, is infoschema.InfoSchema,
+	stmt *PlanCacheStmt, params []expression.Expression) error {
 	vars := sctx.GetSessionVars()
 	stmtAst := stmt.PreparedAst
 	vars.StmtCtx.StmtType = stmtAst.StmtType
@@ -87,7 +88,7 @@ func planCachePreprocess(ctx context.Context, sctx sessionctx.Context, isNonPrep
 		// We should reset the tableRefs in the prepared update statements, otherwise, the ast nodes still hold the old
 		// tableRefs columnInfo which will cause chaos in logic of trying point get plan. (should ban non-public column)
 		ret := &PreprocessorReturn{InfoSchema: is}
-		err := Preprocess(ctx, sctx, stmtAst.Stmt, InPrepare, WithPreprocessorReturn(ret))
+		err := Preprocess(sctx, stmtAst.Stmt, InPrepare, WithPreprocessorReturn(ret))
 		if err != nil {
 			return ErrSchemaChanged.GenWithStack("Schema change caused error: %s", err.Error())
 		}
@@ -100,8 +101,8 @@ func planCachePreprocess(ctx context.Context, sctx sessionctx.Context, isNonPrep
 	// So we need to clear the current session's plan cache.
 	// And update lastUpdateTime to the newest one.
 	expiredTimeStamp4PC := domain.GetDomain(sctx).ExpiredTimeStamp4PC()
-	if stmt.StmtCacheable && expiredTimeStamp4PC.Compare(vars.LastUpdateTime4PC) > 0 {
-		sctx.GetPlanCache(isNonPrepared).DeleteAll()
+	if stmtAst.UseCache && expiredTimeStamp4PC.Compare(vars.LastUpdateTime4PC) > 0 {
+		sctx.GetPlanCache(isGeneralPlanCache).DeleteAll()
 		stmtAst.CachedPlan = nil
 		vars.LastUpdateTime4PC = expiredTimeStamp4PC
 	}
@@ -111,15 +112,11 @@ func planCachePreprocess(ctx context.Context, sctx sessionctx.Context, isNonPrep
 // GetPlanFromSessionPlanCache is the entry point of Plan Cache.
 // It tries to get a valid cached plan from this session's plan cache.
 // If there is no such a plan, it'll call the optimizer to generate a new one.
-// isNonPrepared indicates whether to use the non-prepared plan cache or the prepared plan cache.
+// isGeneralPlanCache indicates whether to use the general plan cache or the prepared plan cache.
 func GetPlanFromSessionPlanCache(ctx context.Context, sctx sessionctx.Context,
-	isNonPrepared bool, is infoschema.InfoSchema, stmt *PlanCacheStmt,
+	isGeneralPlanCache bool, is infoschema.InfoSchema, stmt *PlanCacheStmt,
 	params []expression.Expression) (plan Plan, names []*types.FieldName, err error) {
-	if v := ctx.Value("____GetPlanFromSessionPlanCacheErr"); v != nil { // for testing
-		return nil, nil, errors.New("____GetPlanFromSessionPlanCacheErr")
-	}
-
-	if err := planCachePreprocess(ctx, sctx, isNonPrepared, is, stmt, params); err != nil {
+	if err := planCachePreprocess(sctx, isGeneralPlanCache, is, stmt, params); err != nil {
 		return nil, nil, err
 	}
 
@@ -127,25 +124,17 @@ func GetPlanFromSessionPlanCache(ctx context.Context, sctx sessionctx.Context,
 	sessVars := sctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	stmtAst := stmt.PreparedAst
-	stmtCtx.UseCache = stmt.StmtCacheable
-	if !stmt.StmtCacheable {
-		stmtCtx.SetSkipPlanCache(errors.Errorf("skip plan-cache: %s", stmt.UncacheableReason))
-	}
+	stmtCtx.UseCache = stmtAst.UseCache
 
 	var bindSQL string
-	if stmtCtx.UseCache {
-		var ignoreByBinding bool
-		bindSQL, ignoreByBinding = GetBindSQL4PlanCache(sctx, stmt)
-		if ignoreByBinding {
-			stmtCtx.SetSkipPlanCache(errors.Errorf("skip plan-cache: ignore plan cache by binding"))
-		}
-	}
+	var ignorePlanCache = false
 
 	// In rc or for update read, we need the latest schema version to decide whether we need to
 	// rebuild the plan. So we set this value in rc or for update read. In other cases, let it be 0.
 	var latestSchemaVersion int64
 
-	if stmtCtx.UseCache {
+	if stmtAst.UseCache {
+		bindSQL, ignorePlanCache = GetBindSQL4PlanCache(sctx, stmt)
 		if sctx.GetSessionVars().IsIsolation(ast.ReadCommitted) || stmt.ForUpdateRead {
 			// In Rc or ForUpdateRead, we should check if the information schema has been changed since
 			// last time. If it changed, we should rebuild the plan. Here, we use a different and more
@@ -158,29 +147,28 @@ func GetPlanFromSessionPlanCache(ctx context.Context, sctx sessionctx.Context,
 		}
 	}
 
-	paramTypes := parseParamTypes(sctx, params)
+	paramNum, paramTypes := parseParamTypes(sctx, params)
 
-	if stmtCtx.UseCache && stmtAst.CachedPlan != nil { // for point query plan
-		if plan, names, ok, err := getCachedPointPlan(stmtAst, sessVars, stmtCtx); ok {
-			return plan, names, err
-		}
-	}
-	limitCountAndOffset, paramErr := ExtractLimitFromAst(stmt.PreparedAst.Stmt, sctx)
-	if paramErr != nil {
-		return nil, nil, paramErr
-	}
-	if stmtCtx.UseCache { // for non-point plans
-		if plan, names, ok, err := getCachedPlan(sctx, isNonPrepared, cacheKey, bindSQL, is, stmt,
-			paramTypes, limitCountAndOffset); err != nil || ok {
+	if stmtAst.UseCache && stmtAst.CachedPlan != nil && !ignorePlanCache { // for point query plan
+		if plan, names, ok, err := getPointQueryPlan(stmtAst, sessVars, stmtCtx); ok {
 			return plan, names, err
 		}
 	}
 
-	return generateNewPlan(ctx, sctx, isNonPrepared, is, stmt, cacheKey, latestSchemaVersion, paramTypes, bindSQL, limitCountAndOffset)
+	if stmtAst.UseCache && !ignorePlanCache { // for general plans
+		if plan, names, ok, err := getGeneralPlan(sctx, isGeneralPlanCache, cacheKey, bindSQL, is, stmt,
+			paramTypes); err != nil || ok {
+			return plan, names, err
+		}
+	}
+
+	return generateNewPlan(ctx, sctx, isGeneralPlanCache, is, stmt, ignorePlanCache, cacheKey,
+		latestSchemaVersion, paramNum, paramTypes, bindSQL)
 }
 
 // parseParamTypes get parameters' types in PREPARE statement
-func parseParamTypes(sctx sessionctx.Context, params []expression.Expression) (paramTypes []*types.FieldType) {
+func parseParamTypes(sctx sessionctx.Context, params []expression.Expression) (paramNum int, paramTypes []*types.FieldType) {
+	paramNum = len(params)
 	for _, param := range params {
 		if c, ok := param.(*expression.Constant); ok { // from binary protocol
 			paramTypes = append(paramTypes, c.GetType())
@@ -198,7 +186,7 @@ func parseParamTypes(sctx sessionctx.Context, params []expression.Expression) (p
 	return
 }
 
-func getCachedPointPlan(stmt *ast.Prepared, sessVars *variable.SessionVars, stmtCtx *stmtctx.StatementContext) (Plan,
+func getPointQueryPlan(stmt *ast.Prepared, sessVars *variable.SessionVars, stmtCtx *stmtctx.StatementContext) (Plan,
 	[]*types.FieldName, bool, error) {
 	// short path for point-get plans
 	// Rewriting the expression in the select.where condition  will convert its
@@ -222,13 +210,13 @@ func getCachedPointPlan(stmt *ast.Prepared, sessVars *variable.SessionVars, stmt
 	return plan, names, true, nil
 }
 
-func getCachedPlan(sctx sessionctx.Context, isNonPrepared bool, cacheKey kvcache.Key, bindSQL string,
-	is infoschema.InfoSchema, stmt *PlanCacheStmt, paramTypes []*types.FieldType, limitParams []uint64) (Plan,
+func getGeneralPlan(sctx sessionctx.Context, isGeneralPlanCache bool, cacheKey kvcache.Key, bindSQL string,
+	is infoschema.InfoSchema, stmt *PlanCacheStmt, paramTypes []*types.FieldType) (Plan,
 	[]*types.FieldName, bool, error) {
 	sessVars := sctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 
-	candidate, exist := sctx.GetPlanCache(isNonPrepared).Get(cacheKey, paramTypes, limitParams)
+	candidate, exist := sctx.GetPlanCache(isGeneralPlanCache).Get(cacheKey, paramTypes)
 	if !exist {
 		return nil, nil, false, nil
 	}
@@ -240,7 +228,7 @@ func getCachedPlan(sctx sessionctx.Context, isNonPrepared bool, cacheKey kvcache
 		if !unionScan && tableHasDirtyContent(sctx, tblInfo) {
 			// TODO we can inject UnionScan into cached plan to avoid invalidating it, though
 			// rebuilding the filters in UnionScan is pretty trivial.
-			sctx.GetPlanCache(isNonPrepared).Delete(cacheKey)
+			sctx.GetPlanCache(isGeneralPlanCache).Delete(cacheKey)
 			return nil, nil, false, nil
 		}
 	}
@@ -266,9 +254,9 @@ func getCachedPlan(sctx sessionctx.Context, isNonPrepared bool, cacheKey kvcache
 
 // generateNewPlan call the optimizer to generate a new plan for current statement
 // and try to add it to cache
-func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared bool, is infoschema.InfoSchema,
-	stmt *PlanCacheStmt, cacheKey kvcache.Key, latestSchemaVersion int64, paramTypes []*types.FieldType,
-	bindSQL string, limitParams []uint64) (Plan, []*types.FieldName, error) {
+func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isGeneralPlanCache bool, is infoschema.InfoSchema, stmt *PlanCacheStmt,
+	ignorePlanCache bool, cacheKey kvcache.Key, latestSchemaVersion int64, paramNum int,
+	paramTypes []*types.FieldType, bindSQL string) (Plan, []*types.FieldName, error) {
 	stmtAst := stmt.PreparedAst
 	sessVars := sctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
@@ -285,13 +273,11 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 		return nil, nil, err
 	}
 
-	// check whether this plan is cacheable.
-	if stmtCtx.UseCache {
-		checkPlanCacheability(sctx, p, len(paramTypes), len(limitParams))
+	// We only cache the tableDual plan when the number of parameters are zero.
+	if containTableDual(p) && paramNum > 0 {
+		stmtCtx.SkipPlanCache = true
 	}
-
-	// put this plan into the plan cache.
-	if stmtCtx.UseCache {
+	if stmtAst.UseCache && !stmtCtx.SkipPlanCache && !ignorePlanCache {
 		// rebuild key to exclude kv.TiFlash when stmt is not read only
 		if _, isolationReadContainTiFlash := sessVars.IsolationReadEngines[kv.TiFlash]; isolationReadContainTiFlash && !IsReadOnly(stmtAst.Stmt, sessVars) {
 			delete(sessVars.IsolationReadEngines, kv.TiFlash)
@@ -301,57 +287,14 @@ func generateNewPlan(ctx context.Context, sctx sessionctx.Context, isNonPrepared
 			}
 			sessVars.IsolationReadEngines[kv.TiFlash] = struct{}{}
 		}
-		cached := NewPlanCacheValue(p, names, stmtCtx.TblInfo2UnionScan, paramTypes, limitParams)
+		cached := NewPlanCacheValue(p, names, stmtCtx.TblInfo2UnionScan, paramTypes)
 		stmt.NormalizedPlan, stmt.PlanDigest = NormalizePlan(p)
 		stmtCtx.SetPlan(p)
 		stmtCtx.SetPlanDigest(stmt.NormalizedPlan, stmt.PlanDigest)
-		sctx.GetPlanCache(isNonPrepared).Put(cacheKey, cached, paramTypes, limitParams)
+		sctx.GetPlanCache(isGeneralPlanCache).Put(cacheKey, cached, paramTypes)
 	}
 	sessVars.FoundInPlanCache = false
 	return p, names, err
-}
-
-// checkPlanCacheability checks whether this plan is cacheable and set to skip plan cache if it's uncacheable.
-func checkPlanCacheability(sctx sessionctx.Context, p Plan, paramNum int, limitParamNum int) {
-	stmtCtx := sctx.GetSessionVars().StmtCtx
-	var pp PhysicalPlan
-	switch x := p.(type) {
-	case *Insert:
-		pp = x.SelectPlan
-	case *Update:
-		pp = x.SelectPlan
-	case *Delete:
-		pp = x.SelectPlan
-	case PhysicalPlan:
-		pp = x
-	default:
-		stmtCtx.SetSkipPlanCache(errors.Errorf("skip plan-cache: unexpected un-cacheable plan %v", p.ExplainID().String()))
-		return
-	}
-	if pp == nil { // simple DML statements
-		return
-	}
-
-	if useTiFlash(pp) {
-		stmtCtx.SetSkipPlanCache(errors.Errorf("skip plan-cache: TiFlash plan is un-cacheable"))
-		return
-	}
-
-	// We only cache the tableDual plan when the number of parameters are zero.
-	if containTableDual(pp) && paramNum > 0 {
-		stmtCtx.SetSkipPlanCache(errors.New("skip plan-cache: get a TableDual plan"))
-		return
-	}
-
-	if accessMVIndexWithIndexMerge(pp) {
-		stmtCtx.SetSkipPlanCache(errors.New("skip plan-cache: the plan with IndexMerge accessing Multi-Valued Index is un-cacheable"))
-		return
-	}
-
-	// before cache the param limit plan, check switch
-	if limitParamNum != 0 && !sctx.GetSessionVars().EnablePlanCacheForParamLimit {
-		stmtCtx.SetSkipPlanCache(errors.New("skip plan-cache: the switch 'tidb_enable_plan_cache_for_param_limit' is off"))
-	}
 }
 
 // RebuildPlan4CachedPlan will rebuild this plan under current user parameters.
@@ -360,23 +303,6 @@ func RebuildPlan4CachedPlan(p Plan) error {
 	sc.InPreparedPlanBuilding = true
 	defer func() { sc.InPreparedPlanBuilding = false }()
 	return rebuildRange(p)
-}
-
-func updateRange(p PhysicalPlan, ranges ranger.Ranges, rangeInfo string) {
-	switch x := p.(type) {
-	case *PhysicalTableScan:
-		x.Ranges = ranges
-		x.rangeInfo = rangeInfo
-	case *PhysicalIndexScan:
-		x.Ranges = ranges
-		x.rangeInfo = rangeInfo
-	case *PhysicalTableReader:
-		updateRange(x.TablePlans[0], ranges, rangeInfo)
-	case *PhysicalIndexReader:
-		updateRange(x.IndexPlans[0], ranges, rangeInfo)
-	case *PhysicalIndexLookUpReader:
-		updateRange(x.IndexPlans[0], ranges, rangeInfo)
-	}
 }
 
 // rebuildRange doesn't set mem limit for building ranges. There are two reasons why we don't restrict range mem usage here.
@@ -400,12 +326,6 @@ func rebuildRange(p Plan) error {
 	case *PhysicalIndexJoin:
 		if err := x.Ranges.Rebuild(); err != nil {
 			return err
-		}
-		if mutableRange, ok := x.Ranges.(*mutableIndexJoinRange); ok {
-			helper := mutableRange.buildHelper
-			rangeInfo := helper.buildRangeDecidedByInformation(helper.chosenPath.IdxCols, mutableRange.outerJoinKeys)
-			innerPlan := x.Children()[x.InnerChildIdx]
-			updateRange(innerPlan, x.Ranges.Range(), rangeInfo)
 		}
 		for _, child := range x.Children() {
 			err = rebuildRange(child)
@@ -442,7 +362,7 @@ func rebuildRange(p Plan) error {
 		// if access condition is not nil, which means it's a point get generated by cbo.
 		if x.AccessConditions != nil {
 			if x.IndexInfo != nil {
-				ranges, err := ranger.DetachCondAndBuildRangeForIndex(x.ctx, x.AccessConditions, x.IdxCols, x.IdxColLens, 0)
+				ranges, err := ranger.DetachCondAndBuildRangeForIndex(x.ctx, x.AccessConditions, x.IdxCols, x.IdxColLens)
 				if err != nil {
 					return err
 				}
@@ -503,7 +423,7 @@ func rebuildRange(p Plan) error {
 		// if access condition is not nil, which means it's a point get generated by cbo.
 		if x.AccessConditions != nil {
 			if x.IndexInfo != nil {
-				ranges, err := ranger.DetachCondAndBuildRangeForIndex(x.ctx, x.AccessConditions, x.IdxCols, x.IdxColLens, 0)
+				ranges, err := ranger.DetachCondAndBuildRangeForIndex(x.ctx, x.AccessConditions, x.IdxCols, x.IdxColLens)
 				if err != nil {
 					return err
 				}
@@ -632,7 +552,7 @@ func buildRangeForTableScan(sctx sessionctx.Context, ts *PhysicalTableScan) (err
 			}
 		}
 		if len(pkCols) > 0 {
-			res, err := ranger.DetachCondAndBuildRangeForIndex(sctx, ts.AccessCondition, pkCols, pkColsLen, 0)
+			res, err := ranger.DetachCondAndBuildRangeForIndex(sctx, ts.AccessCondition, pkCols, pkColsLen)
 			if err != nil {
 				return err
 			}
@@ -667,7 +587,7 @@ func buildRangeForIndexScan(sctx sessionctx.Context, is *PhysicalIndexScan) (err
 		is.Ranges = ranger.FullRange()
 		return
 	}
-	res, err := ranger.DetachCondAndBuildRangeForIndex(sctx, is.AccessCondition, is.IdxCols, is.IdxColLens, 0)
+	res, err := ranger.DetachCondAndBuildRangeForIndex(sctx, is.AccessCondition, is.IdxCols, is.IdxColLens)
 	if err != nil {
 		return err
 	}
@@ -694,7 +614,7 @@ func CheckPreparedPriv(sctx sessionctx.Context, stmt *PlanCacheStmt, is infosche
 // short paths for these executions, currently "point select" and "point update"
 func tryCachePointPlan(_ context.Context, sctx sessionctx.Context,
 	stmt *PlanCacheStmt, _ infoschema.InfoSchema, p Plan) error {
-	if !sctx.GetSessionVars().StmtCtx.UseCache {
+	if !sctx.GetSessionVars().StmtCtx.UseCache || sctx.GetSessionVars().StmtCtx.SkipPlanCache {
 		return nil
 	}
 	var (
@@ -723,51 +643,20 @@ func tryCachePointPlan(_ context.Context, sctx sessionctx.Context,
 	return err
 }
 
-func containTableDual(p PhysicalPlan) bool {
+func containTableDual(p Plan) bool {
 	_, isTableDual := p.(*PhysicalTableDual)
 	if isTableDual {
 		return true
 	}
+	physicalPlan, ok := p.(PhysicalPlan)
+	if !ok {
+		return false
+	}
 	childContainTableDual := false
-	for _, child := range p.Children() {
+	for _, child := range physicalPlan.Children() {
 		childContainTableDual = childContainTableDual || containTableDual(child)
 	}
 	return childContainTableDual
-}
-
-func accessMVIndexWithIndexMerge(p PhysicalPlan) bool {
-	if idxMerge, ok := p.(*PhysicalIndexMergeReader); ok {
-		if idxMerge.AccessMVIndex {
-			return true
-		}
-	}
-
-	for _, c := range p.Children() {
-		if accessMVIndexWithIndexMerge(c) {
-			return true
-		}
-	}
-	return false
-}
-
-// useTiFlash used to check whether the plan use the TiFlash engine.
-func useTiFlash(p PhysicalPlan) bool {
-	switch x := p.(type) {
-	case *PhysicalTableReader:
-		switch x.StoreType {
-		case kv.TiFlash:
-			return true
-		default:
-			return false
-		}
-	default:
-		if len(p.Children()) > 0 {
-			for _, plan := range p.Children() {
-				return useTiFlash(plan)
-			}
-		}
-	}
-	return false
 }
 
 // GetBindSQL4PlanCache used to get the bindSQL for plan cache to build the plan cache key.

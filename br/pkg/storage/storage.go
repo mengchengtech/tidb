@@ -140,10 +140,6 @@ type ExternalStorageOptions struct {
 	// S3Retryer is the retryer for create s3 storage, if it is nil,
 	// defaultS3Retryer() will be used.
 	S3Retryer request.Retryer
-
-	// CheckObjectLockOptions check the s3 bucket has enabled the ObjectLock.
-	// if enabled. it will send the options to tikv.
-	CheckS3ObjectLockOptions bool
 }
 
 // Create creates ExternalStorage.
@@ -158,9 +154,6 @@ func Create(ctx context.Context, backend *backuppb.StorageBackend, sendCreds boo
 
 // New creates an ExternalStorage with options.
 func New(ctx context.Context, backend *backuppb.StorageBackend, opts *ExternalStorageOptions) (ExternalStorage, error) {
-	if opts == nil {
-		opts = &ExternalStorageOptions{}
-	}
 	switch backend := backend.Backend.(type) {
 	case *backuppb.StorageBackend_Local:
 		if backend.Local == nil {
@@ -176,14 +169,14 @@ func New(ctx context.Context, backend *backuppb.StorageBackend, opts *ExternalSt
 		if backend.S3 == nil {
 			return nil, errors.Annotate(berrors.ErrStorageInvalidConfig, "s3 config not found")
 		}
-		return NewS3Storage(backend.S3, opts)
+		return newS3Storage(backend.S3, opts)
 	case *backuppb.StorageBackend_Noop:
 		return newNoopStorage(), nil
 	case *backuppb.StorageBackend_Gcs:
 		if backend.Gcs == nil {
 			return nil, errors.Annotate(berrors.ErrStorageInvalidConfig, "GCS config not found")
 		}
-		return NewGCSStorage(ctx, backend.Gcs, opts)
+		return newGCSStorage(ctx, backend.Gcs, opts)
 	case *backuppb.StorageBackend_AzureBlobStorage:
 		return newAzureBlobStorage(ctx, backend.AzureBlobStorage, opts)
 	default:

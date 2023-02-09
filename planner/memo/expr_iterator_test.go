@@ -20,11 +20,9 @@ import (
 	"github.com/pingcap/tidb/expression"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/stretchr/testify/require"
-	"go.opencensus.io/stats/view"
 )
 
 func TestNewExprIterFromGroupElem(t *testing.T) {
-	defer view.Stop()
 	ctx := plannercore.MockContext()
 	schema := expression.NewSchema()
 
@@ -67,7 +65,6 @@ func TestNewExprIterFromGroupElem(t *testing.T) {
 }
 
 func TestExprIterNext(t *testing.T) {
-	defer view.Stop()
 	ctx := plannercore.MockContext()
 	schema := expression.NewSchema()
 
@@ -115,7 +112,6 @@ func TestExprIterNext(t *testing.T) {
 }
 
 func TestExprIterReset(t *testing.T) {
-	defer view.Stop()
 	ctx := plannercore.MockContext()
 	schema := expression.NewSchema()
 
@@ -188,7 +184,6 @@ func TestExprIterReset(t *testing.T) {
 }
 
 func TestExprIterWithEngineType(t *testing.T) {
-	defer view.Stop()
 	ctx := plannercore.MockContext()
 	schema := expression.NewSchema()
 

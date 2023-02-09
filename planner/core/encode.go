@@ -41,7 +41,7 @@ func EncodeFlatPlan(flat *FlatPhysicalPlan) string {
 		return ""
 	}
 	failpoint.Inject("mockPlanRowCount", func(val failpoint.Value) {
-		selectPlan, _ := flat.Main.GetSelectPlan()
+		selectPlan := flat.Main.GetSelectPlan()
 		for _, op := range selectPlan {
 			op.Origin.statsInfo().RowCount = float64(val.(int))
 		}
@@ -69,9 +69,7 @@ func EncodeFlatPlan(flat *FlatPhysicalPlan) string {
 		p := op.Origin
 		actRows, analyzeInfo, memoryInfo, diskInfo := getRuntimeInfoStr(p.SCtx(), p, nil)
 		var estRows float64
-		if op.IsPhysicalPlan {
-			estRows = op.Origin.(PhysicalPlan).getEstRowCountForDisplay()
-		} else if statsInfo := p.statsInfo(); statsInfo != nil {
+		if statsInfo := p.statsInfo(); statsInfo != nil {
 			estRows = statsInfo.RowCount
 		}
 		plancodec.EncodePlanNode(
@@ -100,9 +98,7 @@ func encodeFlatPlanTree(flatTree FlatPlanTree, offset int, buf *bytes.Buffer) {
 		p := op.Origin
 		actRows, analyzeInfo, memoryInfo, diskInfo := getRuntimeInfoStr(p.SCtx(), p, nil)
 		var estRows float64
-		if op.IsPhysicalPlan {
-			estRows = op.Origin.(PhysicalPlan).getEstRowCountForDisplay()
-		} else if statsInfo := p.statsInfo(); statsInfo != nil {
+		if statsInfo := p.statsInfo(); statsInfo != nil {
 			estRows = statsInfo.RowCount
 		}
 		plancodec.EncodePlanNode(
@@ -203,10 +199,8 @@ func (pn *planEncoder) encodePlan(p Plan, isRoot bool, store kv.StoreType, depth
 	taskTypeInfo := plancodec.EncodeTaskType(isRoot, store)
 	actRows, analyzeInfo, memoryInfo, diskInfo := getRuntimeInfoStr(p.SCtx(), p, nil)
 	rowCount := 0.0
-	if pp, ok := p.(PhysicalPlan); ok {
-		rowCount = pp.getEstRowCountForDisplay()
-	} else if statsInfo := p.statsInfo(); statsInfo != nil {
-		rowCount = statsInfo.RowCount
+	if statsInfo := p.statsInfo(); statsInfo != nil {
+		rowCount = p.statsInfo().RowCount
 	}
 	plancodec.EncodePlanNode(depth, strconv.Itoa(p.ID()), p.TP(), rowCount, taskTypeInfo, p.ExplainInfo(), actRows, analyzeInfo, memoryInfo, diskInfo, &pn.buf)
 	pn.encodedPlans[p.ID()] = true
@@ -262,10 +256,7 @@ type planDigester struct {
 
 // NormalizeFlatPlan normalizes a FlatPhysicalPlan and generates plan digest.
 func NormalizeFlatPlan(flat *FlatPhysicalPlan) (normalized string, digest *parser.Digest) {
-	if flat == nil {
-		return "", parser.NewDigest(nil)
-	}
-	selectPlan, selectPlanOffset := flat.Main.GetSelectPlan()
+	selectPlan := flat.Main.GetSelectPlan()
 	if len(selectPlan) == 0 || !selectPlan[0].IsPhysicalPlan {
 		return "", parser.NewDigest(nil)
 	}
@@ -277,11 +268,12 @@ func NormalizeFlatPlan(flat *FlatPhysicalPlan) (normalized string, digest *parse
 	}()
 	// assume an operator costs around 30 bytes, preallocate space for them
 	d.buf.Grow(30 * len(selectPlan))
+	depthOffset := len(flat.Main) - len(selectPlan)
 	for _, op := range selectPlan {
 		taskTypeInfo := plancodec.EncodeTaskTypeForNormalize(op.IsRoot, op.StoreType)
 		p := op.Origin.(PhysicalPlan)
 		plancodec.NormalizePlanNode(
-			int(op.Depth-uint32(selectPlanOffset)),
+			int(op.Depth-uint32(depthOffset)),
 			op.Origin.TP(),
 			taskTypeInfo,
 			p.ExplainNormalizedInfo(),
@@ -289,9 +281,6 @@ func NormalizeFlatPlan(flat *FlatPhysicalPlan) (normalized string, digest *parse
 		)
 	}
 	normalized = d.buf.String()
-	if len(normalized) == 0 {
-		return "", parser.NewDigest(nil)
-	}
 	_, err := d.hasher.Write(d.buf.Bytes())
 	if err != nil {
 		panic(err)

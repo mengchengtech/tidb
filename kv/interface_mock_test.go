@@ -52,13 +52,6 @@ func (t *mockTxn) LockKeys(_ context.Context, _ *LockCtx, _ ...Key) error {
 	return nil
 }
 
-func (t *mockTxn) LockKeysFunc(_ context.Context, _ *LockCtx, fn func(), _ ...Key) error {
-	if fn != nil {
-		fn()
-	}
-	return nil
-}
-
 func (t *mockTxn) SetOption(opt int, val interface{}) {
 	t.opts[opt] = val
 }
@@ -168,20 +161,6 @@ func (t *mockTxn) UpdateMemBufferFlags(_ []byte, _ ...FlagsOp) {
 
 }
 
-func (t *mockTxn) SetMemoryFootprintChangeHook(func(uint64)) {
-
-}
-
-func (t *mockTxn) Mem() uint64 {
-	return 0
-}
-
-func (t *mockTxn) StartAggressiveLocking() error                   { return nil }
-func (t *mockTxn) RetryAggressiveLocking(_ context.Context) error  { return nil }
-func (t *mockTxn) CancelAggressiveLocking(_ context.Context) error { return nil }
-func (t *mockTxn) DoneAggressiveLocking(_ context.Context) error   { return nil }
-func (t *mockTxn) IsInAggressiveLockingMode() bool                 { return false }
-
 // newMockTxn new a mockTxn.
 func newMockTxn() Transaction {
 	return &mockTxn{
@@ -192,10 +171,6 @@ func newMockTxn() Transaction {
 
 // mockStorage is used to start a must commit-failed txn.
 type mockStorage struct{}
-
-func (s *mockStorage) GetCodec() tikv.Codec {
-	return nil
-}
 
 func (s *mockStorage) Begin(opts ...tikv.TxnOption) (Transaction, error) {
 	return newMockTxn(), nil

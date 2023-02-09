@@ -351,12 +351,6 @@ func (pp *ParquetParser) SetPos(pos int64, rowID int64) error {
 	return nil
 }
 
-// RealPos implements the Parser interface.
-// For parquet it's equal to Pos().
-func (pp *ParquetParser) RealPos() (int64, error) {
-	return pp.curStart + int64(pp.curIndex), nil
-}
-
 // Close closes the parquet file of the parser.
 // It implements the Parser interface.
 func (pp *ParquetParser) Close() error {
@@ -464,7 +458,7 @@ func setDatumByString(d *types.Datum, v string, meta *parquet.SchemaElement) {
 		ts = ts.UTC()
 		v = ts.Format(utcTimeLayout)
 	}
-	d.SetString(v, "utf8mb4_bin")
+	d.SetString(v, "")
 }
 
 func binaryToDecimalStr(rawBytes []byte, scale int) string {
@@ -521,20 +515,20 @@ func setDatumByInt(d *types.Datum, v int64, meta *parquet.SchemaElement) error {
 		}
 		val := fmt.Sprintf("%0*d", minLen, v)
 		dotIndex := len(val) - int(*meta.Scale)
-		d.SetString(val[:dotIndex]+"."+val[dotIndex:], "utf8mb4_bin")
+		d.SetString(val[:dotIndex]+"."+val[dotIndex:], "")
 	case logicalType.DATE != nil:
 		dateStr := time.Unix(v*86400, 0).Format("2006-01-02")
-		d.SetString(dateStr, "utf8mb4_bin")
+		d.SetString(dateStr, "")
 	case logicalType.TIMESTAMP != nil:
 		// convert all timestamp types (datetime/timestamp) to string
 		timeStr := formatTime(v, logicalType.TIMESTAMP.Unit, timeLayout,
 			utcTimeLayout, logicalType.TIMESTAMP.IsAdjustedToUTC)
-		d.SetString(timeStr, "utf8mb4_bin")
+		d.SetString(timeStr, "")
 	case logicalType.TIME != nil:
 		// convert all timestamp types (datetime/timestamp) to string
 		timeStr := formatTime(v, logicalType.TIME.Unit, "15:04:05.999999", "15:04:05.999999Z",
 			logicalType.TIME.IsAdjustedToUTC)
-		d.SetString(timeStr, "utf8mb4_bin")
+		d.SetString(timeStr, "")
 	default:
 		d.SetInt64(v)
 	}
@@ -583,12 +577,6 @@ func (*ParquetParser) SetColumns(_ []string) {
 // It implements the Parser interface.
 func (pp *ParquetParser) SetLogger(l log.Logger) {
 	pp.logger = l
-}
-
-// SetRowID sets the rowID in a parquet file when we start a compressed file.
-// It implements the Parser interface.
-func (pp *ParquetParser) SetRowID(rowID int64) {
-	pp.lastRow.RowID = rowID
 }
 
 func jdToTime(jd int32, nsec int64) time.Time {

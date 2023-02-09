@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	mysql2 "github.com/go-sql-driver/mysql"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/parser/mysql"
@@ -318,18 +318,13 @@ func execSQL(db *sql.DB, sql string) error {
 }
 
 func createDB(cfg DBConfig) (*sql.DB, error) {
-	driverCfg := mysql2.NewConfig()
-	driverCfg.User = cfg.User
-	driverCfg.Passwd = cfg.Password
-	driverCfg.Net = "tcp"
-	driverCfg.Addr = cfg.Host + ":" + strconv.Itoa(cfg.Port)
-	driverCfg.DBName = cfg.Name
-
-	c, err := mysql2.NewConnector(driverCfg)
+	dbDSN := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name)
+	db, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return sql.OpenDB(c), nil
+
+	return db, nil
 }
 
 func closeDB(db *sql.DB) error {

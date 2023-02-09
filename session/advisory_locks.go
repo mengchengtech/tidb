@@ -50,7 +50,7 @@ func (a *advisoryLock) DecrReferences() {
 	a.referenceCount--
 }
 
-// ReferenceCount returns the current reference count for the advisory lock.
+// References returns the current reference count for the advisory lock.
 func (a *advisoryLock) ReferenceCount() int {
 	return a.referenceCount
 }

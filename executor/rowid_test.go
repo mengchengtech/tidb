@@ -19,6 +19,7 @@ import (
 
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/testkit"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExportRowID(t *testing.T) {
@@ -50,16 +51,20 @@ func TestExportRowID(t *testing.T) {
 	// If PK is handle, _tidb_rowid is unknown column.
 	tk.MustExec("create table s (a int primary key)")
 	tk.MustExec("insert s values (1)")
-	tk.MustExecToErr("insert s (a, _tidb_rowid) values (1, 2)")
-	tk.MustExecToErr("select _tidb_rowid from s")
-	tk.MustExecToErr("update s set a = 2 where _tidb_rowid = 1")
-	tk.MustExecToErr("delete from s where _tidb_rowid = 1")
+	_, err := tk.Exec("insert s (a, _tidb_rowid) values (1, 2)")
+	require.Error(t, err)
+	err = tk.ExecToErr("select _tidb_rowid from s")
+	require.Error(t, err)
+	_, err = tk.Exec("update s set a = 2 where _tidb_rowid = 1")
+	require.Error(t, err)
+	_, err = tk.Exec("delete from s where _tidb_rowid = 1")
+	require.Error(t, err)
 
 	// Make sure "AllowWriteRowID" is a session variable.
 	tk1 := testkit.NewTestKit(t, store)
 	tk1.MustExec("use test")
-	tk1.MustGetErrMsg("insert into t (a, _tidb_rowid) values(10, 1);",
-		"insert, update and replace statements for _tidb_rowid are not supported")
+	_, err = tk1.Exec("insert into t (a, _tidb_rowid) values(10, 1);")
+	require.EqualError(t, err, "insert, update and replace statements for _tidb_rowid are not supported")
 }
 
 func TestNotAllowWriteRowID(t *testing.T) {
@@ -73,11 +78,14 @@ func TestNotAllowWriteRowID(t *testing.T) {
 	tk.MustQuery("select *, _tidb_rowid from tt").
 		Check(testkit.Rows("1\x00\x00\x00\x00\x00\x00\x00\x00\x00 10 1"))
 	// insert statement
-	tk.MustGetErrMsg("insert into tt (id, c, _tidb_rowid) values(30000,10,1);", "insert, update and replace statements for _tidb_rowid are not supported")
+	_, err := tk.Exec("insert into tt (id, c, _tidb_rowid) values(30000,10,1);")
+	require.EqualError(t, err, "insert, update and replace statements for _tidb_rowid are not supported")
 	// replace statement
-	tk.MustGetErrMsg("replace into tt (id, c, _tidb_rowid) values(30000,10,1);", "insert, update and replace statements for _tidb_rowid are not supported")
+	_, err = tk.Exec("replace into tt (id, c, _tidb_rowid) values(30000,10,1);")
+	require.EqualError(t, err, "insert, update and replace statements for _tidb_rowid are not supported")
 	// update statement
-	tk.MustGetErrMsg("update tt set id = 2, _tidb_rowid = 1 where _tidb_rowid = 1", "insert, update and replace statements for _tidb_rowid are not supported")
+	_, err = tk.Exec("update tt set id = 2, _tidb_rowid = 1 where _tidb_rowid = 1")
+	require.EqualError(t, err, "insert, update and replace statements for _tidb_rowid are not supported")
 	tk.MustExec("update tt set id = 2 where _tidb_rowid = 1")
 	tk.MustExec("admin check table tt;")
 	tk.MustExec("drop table tt")

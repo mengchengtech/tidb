@@ -18,12 +18,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
-	"github.com/pingcap/tidb/statistics"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/mathutil"
 	"go.uber.org/zap"
@@ -31,7 +32,7 @@ import (
 
 type collectPredicateColumnsPoint struct{}
 
-func (collectPredicateColumnsPoint) optimize(_ context.Context, plan LogicalPlan, _ *logicalOptimizeOp) (LogicalPlan, error) {
+func (c collectPredicateColumnsPoint) optimize(_ context.Context, plan LogicalPlan, _ *logicalOptimizeOp) (LogicalPlan, error) {
 	if plan.SCtx().GetSessionVars().InRestrictedSQL {
 		return plan, nil
 	}
@@ -54,24 +55,21 @@ func (collectPredicateColumnsPoint) optimize(_ context.Context, plan LogicalPlan
 	return plan, nil
 }
 
-func (collectPredicateColumnsPoint) name() string {
+func (c collectPredicateColumnsPoint) name() string {
 	return "collect_predicate_columns_point"
 }
 
 type syncWaitStatsLoadPoint struct{}
 
-func (syncWaitStatsLoadPoint) optimize(_ context.Context, plan LogicalPlan, _ *logicalOptimizeOp) (LogicalPlan, error) {
+func (s syncWaitStatsLoadPoint) optimize(_ context.Context, plan LogicalPlan, _ *logicalOptimizeOp) (LogicalPlan, error) {
 	if plan.SCtx().GetSessionVars().InRestrictedSQL {
 		return plan, nil
 	}
-	if plan.SCtx().GetSessionVars().StmtCtx.IsSyncStatsFailed {
-		return plan, nil
-	}
-	err := SyncWaitStatsLoad(plan)
+	_, err := SyncWaitStatsLoad(plan)
 	return plan, err
 }
 
-func (syncWaitStatsLoadPoint) name() string {
+func (s syncWaitStatsLoadPoint) name() string {
 	return "sync_wait_stats_load_point"
 }
 
@@ -92,36 +90,37 @@ func RequestLoadStats(ctx sessionctx.Context, neededHistItems []model.TableItemI
 	var timeout = time.Duration(waitTime)
 	err := domain.GetDomain(ctx).StatsHandle().SendLoadRequests(stmtCtx, neededHistItems, timeout)
 	if err != nil {
+		logutil.BgLogger().Warn("SendLoadRequests failed", zap.Error(err))
 		stmtCtx.IsSyncStatsFailed = true
-		if variable.StatsLoadPseudoTimeout.Load() {
-			logutil.BgLogger().Warn("RequestLoadStats failed", zap.Error(err))
-			stmtCtx.AppendWarning(err)
-			return nil
-		}
-		logutil.BgLogger().Error("RequestLoadStats failed", zap.Error(err))
-		return err
+		return handleTimeout(stmtCtx)
 	}
 	return nil
 }
 
 // SyncWaitStatsLoad sync-wait for stats load until timeout
-func SyncWaitStatsLoad(plan LogicalPlan) error {
+func SyncWaitStatsLoad(plan LogicalPlan) (bool, error) {
 	stmtCtx := plan.SCtx().GetSessionVars().StmtCtx
-	if len(stmtCtx.StatsLoad.NeededItems) <= 0 {
+	if stmtCtx.StatsLoad.Fallback {
+		return false, nil
+	}
+	success := domain.GetDomain(plan.SCtx()).StatsHandle().SyncWaitStatsLoad(stmtCtx)
+	if success {
+		return true, nil
+	}
+	logutil.BgLogger().Warn("SyncWaitStatsLoad failed")
+	stmtCtx.IsSyncStatsFailed = true
+	err := handleTimeout(stmtCtx)
+	return false, err
+}
+
+func handleTimeout(stmtCtx *stmtctx.StatementContext) error {
+	err := errors.New("Timeout when sync-load full stats for needed columns")
+	if variable.StatsLoadPseudoTimeout.Load() {
+		stmtCtx.AppendWarning(err)
+		stmtCtx.StatsLoad.Fallback = true
 		return nil
 	}
-	err := domain.GetDomain(plan.SCtx()).StatsHandle().SyncWaitStatsLoad(stmtCtx)
-	if err != nil {
-		stmtCtx.IsSyncStatsFailed = true
-		if variable.StatsLoadPseudoTimeout.Load() {
-			logutil.BgLogger().Warn("SyncWaitStatsLoad failed", zap.Error(err))
-			stmtCtx.AppendWarning(err)
-			return nil
-		}
-		logutil.BgLogger().Error("SyncWaitStatsLoad failed", zap.Error(err))
-		return err
-	}
-	return nil
+	return err
 }
 
 // collectSyncIndices will collect the indices which includes following conditions:
@@ -155,7 +154,7 @@ func collectSyncIndices(ctx sessionctx.Context, histNeededColumns []model.TableI
 					continue
 				}
 				idxStats, ok := tblStats.Indices[idx.Meta().ID]
-				if ok && idxStats.IsStatsInitialized() && !idxStats.IsFullLoad() {
+				if !ok || idxStats == nil || !idxStats.IsFullLoad() {
 					histNeededIndices[model.TableItemID{TableID: column.TableID, ID: idxID, IsIndex: true}] = struct{}{}
 				}
 			}
@@ -170,35 +169,4 @@ func collectHistNeededItems(histNeededColumns []model.TableItemID, histNeededInd
 	}
 	histNeededItems = append(histNeededItems, histNeededColumns...)
 	return
-}
-
-func recordTableRuntimeStats(sctx sessionctx.Context, tbls map[int64]struct{}) {
-	tblStats := sctx.GetSessionVars().StmtCtx.TableStats
-	if tblStats == nil {
-		tblStats = map[int64]interface{}{}
-	}
-	for tblID := range tbls {
-		tblJSONStats, err := recordSingleTableRuntimeStats(sctx, tblID)
-		if err != nil {
-			logutil.BgLogger().Warn("record table json stats failed", zap.Int64("tblID", tblID), zap.Error(err))
-		}
-		if tblJSONStats == nil {
-			logutil.BgLogger().Warn("record table json stats failed due to empty", zap.Int64("tblID", tblID))
-		}
-		tblStats[tblID] = tblJSONStats
-	}
-	sctx.GetSessionVars().StmtCtx.TableStats = tblStats
-}
-
-func recordSingleTableRuntimeStats(sctx sessionctx.Context, tblID int64) (*statistics.Table, error) {
-	dom := domain.GetDomain(sctx)
-	is := dom.InfoSchema()
-	statsHandle := dom.StatsHandle()
-	tbl, ok := is.TableByID(tblID)
-	if !ok {
-		return nil, nil
-	}
-	tableInfo := tbl.Meta()
-	stats := statsHandle.GetTableStats(tableInfo)
-	return stats, nil
 }

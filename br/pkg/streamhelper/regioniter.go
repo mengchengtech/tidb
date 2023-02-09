@@ -28,22 +28,14 @@ type RegionWithLeader struct {
 	Leader *metapb.Peer
 }
 
-type TiKVClusterMeta interface {
+type RegionScanner interface {
 	// RegionScan gets a list of regions, starts from the region that contains key.
 	// Limit limits the maximum number of regions returned.
 	RegionScan(ctx context.Context, key, endKey []byte, limit int) ([]RegionWithLeader, error)
-
-	// Stores returns the store metadata from the cluster.
-	Stores(ctx context.Context) ([]Store, error)
-}
-
-type Store struct {
-	ID     uint64
-	BootAt uint64
 }
 
 type RegionIter struct {
-	cli              TiKVClusterMeta
+	cli              RegionScanner
 	startKey, endKey []byte
 	currentStartKey  []byte
 	// When the endKey become "", we cannot check whether the scan is done by
@@ -65,7 +57,7 @@ func (r *RegionIter) String() string {
 }
 
 // IterateRegion creates an iterater over the region range.
-func IterateRegion(cli TiKVClusterMeta, startKey, endKey []byte) *RegionIter {
+func IterateRegion(cli RegionScanner, startKey, endKey []byte) *RegionIter {
 	return &RegionIter{
 		cli:             cli,
 		startKey:        startKey,

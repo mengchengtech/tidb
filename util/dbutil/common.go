@@ -19,7 +19,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -107,31 +107,26 @@ func GetDBConfigFromEnv(schema string) DBConfig {
 
 // OpenDB opens a mysql connection FD
 func OpenDB(cfg DBConfig, vars map[string]string) (*sql.DB, error) {
-	driverCfg := mysql.NewConfig()
-	driverCfg.Params = make(map[string]string)
-	driverCfg.User = cfg.User
-	driverCfg.Passwd = cfg.Password
-	driverCfg.Net = "tcp"
-	driverCfg.Addr = net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
-	driverCfg.Params["charset"] = "utf8mb4"
-
+	var dbDSN string
 	if len(cfg.Snapshot) != 0 {
 		log.Info("create connection with snapshot", zap.String("snapshot", cfg.Snapshot))
-		driverCfg.Params["tidb_snapshot"] = cfg.Snapshot
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4&tidb_snapshot=%s", cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Snapshot)
+	} else {
+		dbDSN = fmt.Sprintf("%s:%s@tcp(%s:%d)/?charset=utf8mb4", cfg.User, cfg.Password, cfg.Host, cfg.Port)
 	}
 
 	for key, val := range vars {
 		// key='val'. add single quote for better compatibility.
-		driverCfg.Params[key] = fmt.Sprintf("'%s'", val)
+		dbDSN += fmt.Sprintf("&%s=%%27%s%%27", key, url.QueryEscape(val))
 	}
 
-	c, err := mysql.NewConnector(driverCfg)
+	dbConn, err := sql.Open("mysql", dbDSN)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	db := sql.OpenDB(c)
-	err = db.Ping()
-	return db, errors.Trace(err)
+
+	err = dbConn.Ping()
+	return dbConn, errors.Trace(err)
 }
 
 // CloseDB closes the mysql fd
@@ -551,7 +546,7 @@ func AnalyzeValuesFromBuckets(valueString string, cols []*model.ColumnInfo) ([]s
 		if IsTimeTypeAndNeedDecode(col.GetType()) {
 			// check if values[i] is already a time string
 			sc := &stmtctx.StatementContext{TimeZone: time.UTC}
-			_, err := types.ParseTime(sc, values[i], col.GetType(), types.MinFsp, nil)
+			_, err := types.ParseTime(sc, values[i], col.GetType(), types.MinFsp)
 			if err == nil {
 				continue
 			}

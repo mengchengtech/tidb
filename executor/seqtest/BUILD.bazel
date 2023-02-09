@@ -2,14 +2,13 @@ load("@io_bazel_rules_go//go:def.bzl", "go_test")
 
 go_test(
     name = "seqtest_test",
-    timeout = "short",
+    timeout = "moderate",
     srcs = [
         "main_test.go",
         "prepared_test.go",
         "seq_executor_test.go",
     ],
     flaky = True,
-    race = "on",
     shard_count = 39,
     deps = [
         "//config",
@@ -24,6 +23,7 @@ go_test(
         "//parser/ast",
         "//parser/model",
         "//parser/mysql",
+        "//parser/terror",
         "//planner/core",
         "//server",
         "//session",

@@ -35,7 +35,6 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/types"
-	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/hack"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/timeutil"
@@ -323,7 +322,6 @@ func CastValue(ctx sessionctx.Context, val types.Datum, col *model.ColumnInfo, r
 	}
 
 	err = sc.HandleTruncate(err)
-	err = sc.HandleOverflow(err, err)
 
 	if forceIgnoreTruncate {
 		err = nil
@@ -538,9 +536,7 @@ func getColDefaultValue(ctx sessionctx.Context, col *model.ColumnInfo, defaultVa
 		return getColDefaultValueFromNil(ctx, col)
 	}
 
-	switch col.GetType() {
-	case mysql.TypeTimestamp, mysql.TypeDate, mysql.TypeDatetime:
-	default:
+	if col.GetType() != mysql.TypeTimestamp && col.GetType() != mysql.TypeDatetime {
 		value, err := CastValue(ctx, types.NewDatum(defaultVal), col, false, false)
 		if err != nil {
 			return types.Datum{}, err
@@ -549,27 +545,29 @@ func getColDefaultValue(ctx sessionctx.Context, col *model.ColumnInfo, defaultVa
 	}
 
 	// Check and get timestamp/datetime default value.
+	sc := ctx.GetSessionVars().StmtCtx
 	var needChangeTimeZone bool
-	var explicitTz *time.Location
 	// If the column's default value is not ZeroDatetimeStr nor CurrentTimestamp, should use the time zone of the default value itself.
 	if col.GetType() == mysql.TypeTimestamp {
 		if vv, ok := defaultVal.(string); ok && vv != types.ZeroDatetimeStr && !strings.EqualFold(vv, ast.CurrentTimestamp) {
 			needChangeTimeZone = true
+			originalTZ := sc.TimeZone
 			// For col.Version = 0, the timezone information of default value is already lost, so use the system timezone as the default value timezone.
-			explicitTz = timeutil.SystemLocation()
+			sc.TimeZone = timeutil.SystemLocation()
 			if col.Version >= model.ColumnInfoVersion1 {
-				explicitTz = time.UTC
+				sc.TimeZone = time.UTC
 			}
+			defer func() { sc.TimeZone = originalTZ }()
 		}
 	}
-	value, err := expression.GetTimeValue(ctx, defaultVal, col.GetType(), col.GetDecimal(), explicitTz)
+	value, err := expression.GetTimeValue(ctx, defaultVal, col.GetType(), col.GetDecimal())
 	if err != nil {
 		return types.Datum{}, errGetDefaultFailed.GenWithStackByArgs(col.Name)
 	}
 	// If the column's default value is not ZeroDatetimeStr or CurrentTimestamp, convert the default value to the current session time zone.
 	if needChangeTimeZone {
 		t := value.GetMysqlTime()
-		err = t.ConvertTimeZone(explicitTz, ctx.GetSessionVars().Location())
+		err = t.ConvertTimeZone(sc.TimeZone, ctx.GetSessionVars().Location())
 		if err != nil {
 			return value, err
 		}
@@ -671,37 +669,4 @@ func OptionalFsp(fieldType *types.FieldType) string {
 		return ""
 	}
 	return "(" + strconv.Itoa(fsp) + ")"
-}
-
-// FillVirtualColumnValue will calculate the virtual column value by evaluating generated
-// expression using rows from a chunk, and then fill this value into the chunk.
-func FillVirtualColumnValue(virtualRetTypes []*types.FieldType, virtualColumnIndex []int,
-	expCols []*expression.Column, colInfos []*model.ColumnInfo, sctx sessionctx.Context, req *chunk.Chunk) error {
-	if len(virtualColumnIndex) == 0 {
-		return nil
-	}
-
-	virCols := chunk.NewChunkWithCapacity(virtualRetTypes, req.Capacity())
-	iter := chunk.NewIterator4Chunk(req)
-	for i, idx := range virtualColumnIndex {
-		for row := iter.Begin(); row != iter.End(); row = iter.Next() {
-			datum, err := expCols[idx].EvalVirtualColumn(row)
-			if err != nil {
-				return err
-			}
-			// Because the expression might return different type from
-			// the generated column, we should wrap a CAST on the result.
-			castDatum, err := CastValue(sctx, datum, colInfos[idx], false, true)
-			if err != nil {
-				return err
-			}
-			// Handle the bad null error.
-			if (mysql.HasNotNullFlag(colInfos[idx].GetFlag()) || mysql.HasPreventNullInsertFlag(colInfos[idx].GetFlag())) && castDatum.IsNull() {
-				castDatum = GetZeroValue(colInfos[idx])
-			}
-			virCols.AppendDatum(i, &castDatum)
-		}
-		req.SetCol(idx, virCols.Column(i))
-	}
-	return nil
 }

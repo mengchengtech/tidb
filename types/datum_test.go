@@ -93,7 +93,7 @@ func TestToBool(t *testing.T) {
 	testDatumToBool(t, CreateBinaryJSON(true), 1)
 	testDatumToBool(t, CreateBinaryJSON(false), 1)
 	testDatumToBool(t, CreateBinaryJSON(""), 1)
-	t1, err := ParseTime(&stmtctx.StatementContext{TimeZone: time.UTC}, "2011-11-10 11:11:11.999999", mysql.TypeTimestamp, 6, nil)
+	t1, err := ParseTime(&stmtctx.StatementContext{TimeZone: time.UTC}, "2011-11-10 11:11:11.999999", mysql.TypeTimestamp, 6)
 	require.NoError(t, err)
 	testDatumToBool(t, t1, 1)
 
@@ -136,7 +136,7 @@ func TestToInt64(t *testing.T) {
 
 	t1, err := ParseTime(&stmtctx.StatementContext{
 		TimeZone: time.UTC,
-	}, "2011-11-10 11:11:11.999999", mysql.TypeTimestamp, 0, nil)
+	}, "2011-11-10 11:11:11.999999", mysql.TypeTimestamp, 0)
 	require.NoError(t, err)
 	testDatumToInt64(t, t1, int64(20111110111112))
 
@@ -226,7 +226,7 @@ func TestConvertToFloat(t *testing.T) {
 }
 
 func mustParseTime(s string, tp byte, fsp int) Time {
-	t, err := ParseTime(&stmtctx.StatementContext{TimeZone: time.UTC}, s, tp, fsp, nil)
+	t, err := ParseTime(&stmtctx.StatementContext{TimeZone: time.UTC}, s, tp, fsp)
 	if err != nil {
 		panic("ParseTime fail")
 	}
@@ -674,33 +674,5 @@ func TestProduceDecWithSpecifiedTp(t *testing.T) {
 				assert.FailNow(t, "Warn is not nil", "warn: %v before: %v after: %v", warn, tt.dec, dec)
 			}
 		}
-	}
-}
-
-func TestNULLNotEqualWithOthers(t *testing.T) {
-	datums := []Datum{
-		NewIntDatum(0),
-		NewUintDatum(0),
-		NewFloat32Datum(0),
-		NewFloat64Datum(0),
-		NewDatum(math.Inf(0)),
-		NewDecimalDatum(NewDecFromStringForTest("0")),
-		NewStringDatum(""),
-		NewCollationStringDatum("", charset.CollationBin),
-		NewDurationDatum(Duration{Duration: time.Duration(0)}),
-		NewTimeDatum(ZeroTime),
-		NewBytesDatum([]byte("")),
-		NewBinaryLiteralDatum([]byte{}),
-		NewMysqlBitDatum(NewBinaryLiteralFromUint(0, 4)),
-		NewJSONDatum(CreateBinaryJSON(nil)),
-		MinNotNullDatum(),
-		MaxValueDatum(),
-	}
-	nullDatum := NewDatum(nil)
-	sc := new(stmtctx.StatementContext)
-	for _, d := range datums {
-		result, err := d.Compare(sc, &nullDatum, collate.GetBinaryCollator())
-		require.NoError(t, err)
-		require.NotEqual(t, 0, result)
 	}
 }

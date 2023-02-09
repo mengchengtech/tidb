@@ -94,15 +94,6 @@ func NewExtendedStatsColl() *ExtendedStatsColl {
 	return &ExtendedStatsColl{Stats: make(map[string]*ExtendedStatsItem)}
 }
 
-const (
-	// ExtendedStatsInited is the status for extended stats which are just registered but have not been analyzed yet.
-	ExtendedStatsInited uint8 = iota
-	// ExtendedStatsAnalyzed is the status for extended stats which have been collected in analyze.
-	ExtendedStatsAnalyzed
-	// ExtendedStatsDeleted is the status for extended stats which were dropped. These "deleted" records would be removed from storage by GCStats().
-	ExtendedStatsDeleted
-)
-
 // HistColl is a collection of histogram. It collects enough information for plan to calculate the selectivity.
 type HistColl struct {
 	PhysicalID int64
@@ -110,10 +101,10 @@ type HistColl struct {
 	Indices    map[int64]*Index
 	// Idx2ColumnIDs maps the index id to its column ids. It's used to calculate the selectivity in planner.
 	Idx2ColumnIDs map[int64][]int64
-	// ColID2IdxIDs maps the column id to a list index ids whose first column is it. It's used to calculate the selectivity in planner.
-	ColID2IdxIDs map[int64][]int64
-	Count        int64
-	ModifyCount  int64 // Total modify count in a table.
+	// ColID2IdxID maps the column id to index id whose first column is it. It's used to calculate the selectivity in planner.
+	ColID2IdxID map[int64]int64
+	Count       int64
+	ModifyCount int64 // Total modify count in a table.
 
 	// HavePhysicalID is true means this HistColl is from single table and have its ID's information.
 	// The physical id is used when try to load column stats from storage.
@@ -386,19 +377,19 @@ func (t *Table) ColumnByName(colName string) *Column {
 }
 
 // GetStatsInfo returns their statistics according to the ID of the column or index, including histogram, CMSketch, TopN and FMSketch.
-func (t *Table) GetStatsInfo(ID int64, isIndex bool) (int64, *Histogram, *CMSketch, *TopN, *FMSketch, bool) {
+func (t *Table) GetStatsInfo(ID int64, isIndex bool) (int64, *Histogram, *CMSketch, *TopN, *FMSketch) {
 	if isIndex {
 		if idxStatsInfo, ok := t.Indices[ID]; ok {
-			return int64(idxStatsInfo.TotalRowCount()), idxStatsInfo.Histogram.Copy(), idxStatsInfo.CMSketch.Copy(), idxStatsInfo.TopN.Copy(), idxStatsInfo.FMSketch.Copy(), true
+			return int64(idxStatsInfo.TotalRowCount()), idxStatsInfo.Histogram.Copy(), idxStatsInfo.CMSketch.Copy(), idxStatsInfo.TopN.Copy(), idxStatsInfo.FMSketch.Copy()
 		}
 		// newly added index which is not analyzed yet
-		return 0, nil, nil, nil, nil, false
+		return 0, nil, nil, nil, nil
 	}
 	if colStatsInfo, ok := t.Columns[ID]; ok {
-		return int64(colStatsInfo.TotalRowCount()), colStatsInfo.Histogram.Copy(), colStatsInfo.CMSketch.Copy(), colStatsInfo.TopN.Copy(), colStatsInfo.FMSketch.Copy(), true
+		return int64(colStatsInfo.TotalRowCount()), colStatsInfo.Histogram.Copy(), colStatsInfo.CMSketch.Copy(), colStatsInfo.TopN.Copy(), colStatsInfo.FMSketch.Copy()
 	}
 	// newly added column which is not analyzed yet
-	return 0, nil, nil, nil, nil, false
+	return 0, nil, nil, nil, nil
 }
 
 // GetColRowCount tries to get the row count of the a column if possible.
@@ -427,12 +418,8 @@ func (t *Table) GetStatsHealthy() (int64, bool) {
 		return 0, false
 	}
 	var healthy int64
-	count := float64(t.Count)
-	if histCount := t.GetColRowCount(); histCount > 0 {
-		count = histCount
-	}
-	if float64(t.ModifyCount) < count {
-		healthy = int64((1.0 - float64(t.ModifyCount)/count) * 100.0)
+	if t.ModifyCount < t.Count {
+		healthy = int64((1.0 - float64(t.ModifyCount)/float64(t.Count)) * 100.0)
 	} else if t.ModifyCount == 0 {
 		healthy = 100
 	}
@@ -579,7 +566,7 @@ func (coll *HistColl) GetRowCountByIntColumnRanges(sctx sessionctx.Context, colI
 		}
 		return result, nil
 	}
-	result, err = c.GetColumnRowCount(sctx, intRanges, coll.Count, coll.ModifyCount, true)
+	result, err = c.GetColumnRowCount(sctx, intRanges, coll.Count, true)
 	if sc.EnableOptimizerCETrace {
 		CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, intRanges, "Column Stats", uint64(result))
 	}
@@ -600,7 +587,7 @@ func (coll *HistColl) GetRowCountByColumnRanges(sctx sessionctx.Context, colID i
 		}
 		return result, err
 	}
-	result, err := c.GetColumnRowCount(sctx, colRanges, coll.Count, coll.ModifyCount, false)
+	result, err := c.GetColumnRowCount(sctx, colRanges, coll.Count, false)
 	if sc.EnableOptimizerCETrace {
 		CETraceRange(sctx, coll.PhysicalID, []string{c.Info.Name.O}, colRanges, "Column Stats", uint64(result))
 	}
@@ -636,7 +623,7 @@ func (coll *HistColl) GetRowCountByIndexRanges(sctx sessionctx.Context, idxID in
 	if idx.CMSketch != nil && idx.StatsVer == Version1 {
 		result, err = coll.getIndexRowCount(sctx, idxID, indexRanges)
 	} else {
-		result, err = idx.GetRowCount(sctx, coll, indexRanges, coll.Count, coll.ModifyCount)
+		result, err = idx.GetRowCount(sctx, coll, indexRanges, coll.Count)
 	}
 	if sc.EnableOptimizerCETrace {
 		CETraceRange(sctx, coll.PhysicalID, colNames, indexRanges, "Index Stats", uint64(result))
@@ -859,7 +846,7 @@ func (coll *HistColl) ID2UniqueID(columns []*expression.Column) *HistColl {
 	return newColl
 }
 
-// GenerateHistCollFromColumnInfo generates a new HistColl whose ColID2IdxIDs and IdxID2ColIDs is built from the given parameter.
+// GenerateHistCollFromColumnInfo generates a new HistColl whose ColID2IdxID and IdxID2ColIDs is built from the given parameter.
 func (coll *HistColl) GenerateHistCollFromColumnInfo(infos []*model.ColumnInfo, columns []*expression.Column) *HistColl {
 	newColHistMap := make(map[int64]*Column)
 	colInfoID2UniqueID := make(map[int64]int64, len(columns))
@@ -882,7 +869,7 @@ func (coll *HistColl) GenerateHistCollFromColumnInfo(infos []*model.ColumnInfo, 
 	}
 	newIdxHistMap := make(map[int64]*Index)
 	idx2Columns := make(map[int64][]int64)
-	colID2IdxIDs := make(map[int64][]int64)
+	colID2IdxID := make(map[int64]int64)
 	for _, idxHist := range coll.Indices {
 		ids := make([]int64, 0, len(idxHist.Info.Columns))
 		for _, idxCol := range idxHist.Info.Columns {
@@ -896,12 +883,9 @@ func (coll *HistColl) GenerateHistCollFromColumnInfo(infos []*model.ColumnInfo, 
 		if len(ids) == 0 {
 			continue
 		}
-		colID2IdxIDs[ids[0]] = append(colID2IdxIDs[ids[0]], idxHist.ID)
+		colID2IdxID[ids[0]] = idxHist.ID
 		newIdxHistMap[idxHist.ID] = idxHist
 		idx2Columns[idxHist.ID] = ids
-	}
-	for _, idxIDs := range colID2IdxIDs {
-		slices.Sort(idxIDs)
 	}
 	newColl := &HistColl{
 		PhysicalID:     coll.PhysicalID,
@@ -911,7 +895,7 @@ func (coll *HistColl) GenerateHistCollFromColumnInfo(infos []*model.ColumnInfo, 
 		ModifyCount:    coll.ModifyCount,
 		Columns:        newColHistMap,
 		Indices:        newIdxHistMap,
-		ColID2IdxIDs:   colID2IdxIDs,
+		ColID2IdxID:    colID2IdxID,
 		Idx2ColumnIDs:  idx2Columns,
 	}
 	return newColl
@@ -972,7 +956,7 @@ func (coll *HistColl) crossValidationSelectivity(sctx sessionctx.Context, idx *I
 				Collators:   []collate.Collator{idxPointRange.Collators[i]},
 			}
 
-			rowCount, err := col.GetColumnRowCount(sctx, []*ranger.Range{&rang}, coll.Count, coll.ModifyCount, col.IsHandle)
+			rowCount, err := col.GetColumnRowCount(sctx, []*ranger.Range{&rang}, coll.Count, col.IsHandle)
 			if err != nil {
 				return 0, 0, err
 			}
@@ -1044,7 +1028,7 @@ func (coll *HistColl) getIndexRowCount(sctx sessionctx.Context, idxID int64, ind
 		// on single-column index, use previous way as well, because CMSketch does not contain null
 		// values in this case.
 		if rangePosition == 0 || isSingleColIdxNullRange(idx, ran) {
-			count, err := idx.GetRowCount(sctx, nil, []*ranger.Range{ran}, coll.Count, coll.ModifyCount)
+			count, err := idx.GetRowCount(sctx, nil, []*ranger.Range{ran}, coll.Count)
 			if err != nil {
 				return 0, errors.Trace(err)
 			}
@@ -1100,9 +1084,8 @@ func (coll *HistColl) getIndexRowCount(sctx sessionctx.Context, idxID int64, ind
 				colID = colIDs[rangePosition]
 			}
 			// prefer index stats over column stats
-			if idxIDs, ok := coll.ColID2IdxIDs[colID]; ok && len(idxIDs) > 0 {
-				idxID := idxIDs[0]
-				count, err = coll.GetRowCountByIndexRanges(sctx, idxID, []*ranger.Range{&rang})
+			if idx, ok := coll.ColID2IdxID[colID]; ok {
+				count, err = coll.GetRowCountByIndexRanges(sctx, idx, []*ranger.Range{&rang})
 			} else {
 				count, err = coll.GetRowCountByColumnRanges(sctx, colID, []*ranger.Range{&rang})
 			}

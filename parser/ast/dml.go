@@ -31,7 +31,7 @@ var (
 	_ DMLNode = &ShowStmt{}
 	_ DMLNode = &LoadDataStmt{}
 	_ DMLNode = &SplitRegionStmt{}
-	_ DMLNode = &NonTransactionalDMLStmt{}
+	_ DMLNode = &NonTransactionalDeleteStmt{}
 
 	_ Node = &Assignment{}
 	_ Node = &ByItem{}
@@ -288,20 +288,16 @@ func (*TableName) resultSet() {}
 
 // Restore implements Node interface.
 func (n *TableName) restoreName(ctx *format.RestoreCtx) {
-	if !ctx.Flags.HasWithoutSchemaNameFlag() {
-		// restore db name
-		if n.Schema.String() != "" {
-			ctx.WriteName(n.Schema.String())
+	if n.Schema.String() != "" {
+		ctx.WriteName(n.Schema.String())
+		ctx.WritePlain(".")
+	} else if ctx.DefaultDB != "" {
+		// Try CTE, for a CTE table name, we shouldn't write the database name.
+		if !ctx.IsCTETableName(n.Name.L) {
+			ctx.WriteName(ctx.DefaultDB)
 			ctx.WritePlain(".")
-		} else if ctx.DefaultDB != "" {
-			// Try CTE, for a CTE table name, we shouldn't write the database name.
-			if !ctx.IsCTETableName(n.Name.L) {
-				ctx.WriteName(ctx.DefaultDB)
-				ctx.WritePlain(".")
-			}
 		}
 	}
-	// restore table name
 	ctx.WriteName(n.Name.String())
 }
 
@@ -358,8 +354,6 @@ const (
 	HintUse IndexHintType = iota + 1
 	HintIgnore
 	HintForce
-	HintOrderIndex
-	HintNoOrderIndex
 )
 
 // IndexHintScope is the type for index hint for join, order by or group by.
@@ -390,10 +384,6 @@ func (n *IndexHint) Restore(ctx *format.RestoreCtx) error {
 		indexHintType = "IGNORE INDEX"
 	case HintForce:
 		indexHintType = "FORCE INDEX"
-	case HintOrderIndex:
-		indexHintType = "ORDER INDEX"
-	case HintNoOrderIndex:
-		indexHintType = "NO ORDER INDEX"
 	default: // Prevent accidents
 		return errors.New("IndexHintType has an error while matching")
 	}
@@ -1057,9 +1047,6 @@ type CommonTableExpression struct {
 	Query       *SubqueryExpr
 	ColNameList []model.CIStr
 	IsRecursive bool
-
-	// Record how many consumers the current cte has
-	ConsumerCount int
 }
 
 // Restore implements Node interface
@@ -1650,7 +1637,7 @@ func (n *SetOprStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.With != nil {
 		defer ctx.RestoreCTEFunc()() //nolint: all_revive
 		if err := n.With.Restore(ctx); err != nil {
-			return errors.Annotate(err, "An error occurred while restore SetOprStmt.With")
+			return errors.Annotate(err, "An error occurred while restore UnionStmt.With")
 		}
 	}
 	if n.IsInBraces {
@@ -1801,24 +1788,12 @@ func (n *ColumnNameOrUserVar) Accept(v Visitor) (node Node, ok bool) {
 	return v.Leave(n)
 }
 
-type FileLocRefTp int
-
-const (
-	// FileLocServerOrRemote is used when there's no keywords in SQL, which means the data file should be located on the
-	// tidb-server or on remote storage (S3 for example).
-	FileLocServerOrRemote FileLocRefTp = iota
-	// FileLocClient is used when there's LOCAL keyword in SQL, which means the data file should be located on the MySQL
-	// client.
-	FileLocClient
-)
-
 // LoadDataStmt is a statement to load data from a specified file, then insert this rows into an existing table.
 // See https://dev.mysql.com/doc/refman/5.7/en/load-data.html
-// in TiDB we extend the syntax to use LOAD DATA as a more general way to import data.
 type LoadDataStmt struct {
 	dmlNode
 
-	FileLocRef        FileLocRefTp
+	IsLocal           bool
 	Path              string
 	OnDuplicate       OnDuplicateKeyHandlingType
 	Table             *TableName
@@ -1834,9 +1809,7 @@ type LoadDataStmt struct {
 // Restore implements Node interface.
 func (n *LoadDataStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("LOAD DATA ")
-	switch n.FileLocRef {
-	case FileLocServerOrRemote:
-	case FileLocClient:
+	if n.IsLocal {
 		ctx.WriteKeyWord("LOCAL ")
 	}
 	ctx.WriteKeyWord("INFILE ")
@@ -2219,42 +2192,6 @@ func (n *InsertStmt) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
-// WhereExpr implements ShardableDMLStmt interface.
-func (n *InsertStmt) WhereExpr() ExprNode {
-	if n.Select == nil {
-		return nil
-	}
-	s, ok := n.Select.(*SelectStmt)
-	if !ok {
-		return nil
-	}
-	return s.Where
-}
-
-// SetWhereExpr implements ShardableDMLStmt interface.
-func (n *InsertStmt) SetWhereExpr(e ExprNode) {
-	if n.Select == nil {
-		return
-	}
-	s, ok := n.Select.(*SelectStmt)
-	if !ok {
-		return
-	}
-	s.Where = e
-}
-
-// TableRefsJoin implements ShardableDMLStmt interface.
-func (n *InsertStmt) TableRefsJoin() (*Join, bool) {
-	if n.Select == nil {
-		return nil, false
-	}
-	s, ok := n.Select.(*SelectStmt)
-	if !ok {
-		return nil, false
-	}
-	return s.From.TableRefs, true
-}
-
 // DeleteStmt is a statement to delete rows from table.
 // See https://dev.mysql.com/doc/refman/5.7/en/delete.html
 type DeleteStmt struct {
@@ -2421,50 +2358,23 @@ func (n *DeleteStmt) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
-// WhereExpr implements ShardableDMLStmt interface.
-func (n *DeleteStmt) WhereExpr() ExprNode {
-	return n.Where
-}
-
-// SetWhereExpr implements ShardableDMLStmt interface.
-func (n *DeleteStmt) SetWhereExpr(e ExprNode) {
-	n.Where = e
-}
-
-// TableRefsJoin implements ShardableDMLStmt interface.
-func (n *DeleteStmt) TableRefsJoin() (*Join, bool) {
-	return n.TableRefs.TableRefs, true
-}
-
 const (
 	NoDryRun = iota
 	DryRunQuery
 	DryRunSplitDml
 )
 
-type ShardableDMLStmt = interface {
-	StmtNode
-	WhereExpr() ExprNode
-	SetWhereExpr(ExprNode)
-	// TableRefsJoin returns the table refs in the statement.
-	TableRefsJoin() (refs *Join, ok bool)
-}
-
-var _ ShardableDMLStmt = &DeleteStmt{}
-var _ ShardableDMLStmt = &UpdateStmt{}
-var _ ShardableDMLStmt = &InsertStmt{}
-
-type NonTransactionalDMLStmt struct {
+type NonTransactionalDeleteStmt struct {
 	dmlNode
 
 	DryRun      int         // 0: no dry run, 1: dry run the query, 2: dry run split DMLs
 	ShardColumn *ColumnName // if it's nil, the handle column is automatically chosen for it
 	Limit       uint64
-	DMLStmt     ShardableDMLStmt
+	DeleteStmt  *DeleteStmt
 }
 
 // Restore implements Node interface.
-func (n *NonTransactionalDMLStmt) Restore(ctx *format.RestoreCtx) error {
+func (n *NonTransactionalDeleteStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("BATCH ")
 	if n.ShardColumn != nil {
 		ctx.WriteKeyWord("ON ")
@@ -2481,20 +2391,20 @@ func (n *NonTransactionalDMLStmt) Restore(ctx *format.RestoreCtx) error {
 	if n.DryRun == DryRunQuery {
 		ctx.WriteKeyWord("DRY RUN QUERY ")
 	}
-	if err := n.DMLStmt.Restore(ctx); err != nil {
+	if err := n.DeleteStmt.Restore(ctx); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
 // Accept implements Node Accept interface.
-func (n *NonTransactionalDMLStmt) Accept(v Visitor) (Node, bool) {
+func (n *NonTransactionalDeleteStmt) Accept(v Visitor) (Node, bool) {
 	newNode, skipChildren := v.Enter(n)
 	if skipChildren {
 		return v.Leave(newNode)
 	}
 
-	n = newNode.(*NonTransactionalDMLStmt)
+	n = newNode.(*NonTransactionalDeleteStmt)
 	if n.ShardColumn != nil {
 		node, ok := n.ShardColumn.Accept(v)
 		if !ok {
@@ -2502,12 +2412,12 @@ func (n *NonTransactionalDMLStmt) Accept(v Visitor) (Node, bool) {
 		}
 		n.ShardColumn = node.(*ColumnName)
 	}
-	if n.DMLStmt != nil {
-		node, ok := n.DMLStmt.Accept(v)
+	if n.DeleteStmt != nil {
+		node, ok := n.DeleteStmt.Accept(v)
 		if !ok {
 			return n, false
 		}
-		n.DMLStmt = node.(ShardableDMLStmt)
+		n.DeleteStmt = node.(*DeleteStmt)
 	}
 	return v.Leave(n)
 }
@@ -2659,21 +2569,6 @@ func (n *UpdateStmt) Accept(v Visitor) (Node, bool) {
 	return v.Leave(n)
 }
 
-// WhereExpr implements ShardableDMLStmt interface.
-func (n *UpdateStmt) WhereExpr() ExprNode {
-	return n.Where
-}
-
-// SetWhereExpr implements ShardableDMLStmt interface.
-func (n *UpdateStmt) SetWhereExpr(e ExprNode) {
-	n.Where = e
-}
-
-// TableRefsJoin implements ShardableDMLStmt interface.
-func (n *UpdateStmt) TableRefsJoin() (*Join, bool) {
-	return n.TableRefs.TableRefs, true
-}
-
 // Limit is the limit clause.
 type Limit struct {
 	node
@@ -2757,7 +2652,6 @@ const (
 	ShowStatsTopN
 	ShowStatsBuckets
 	ShowStatsHealthy
-	ShowStatsLocked
 	ShowHistogramsInFlight
 	ShowColumnStatsUsage
 	ShowPlugins
@@ -2785,7 +2679,6 @@ const (
 	ShowPlacementForPartition
 	ShowPlacementLabels
 	ShowSessionStates
-	ShowCreateResourceGroup
 )
 
 const (
@@ -2806,20 +2699,18 @@ const (
 type ShowStmt struct {
 	dmlNode
 
-	Tp                ShowStmtType // Databases/Tables/Columns/....
-	DBName            string
-	Table             *TableName  // Used for showing columns.
-	Partition         model.CIStr // Used for showing partition.
-	Column            *ColumnName // Used for `desc table column`.
-	IndexName         model.CIStr
-	ResourceGroupName string // used for showing resource group
-	Flag              int    // Some flag parsed from sql, such as FULL.
-	Full              bool
-	User              *auth.UserIdentity   // Used for show grants/create user.
-	Roles             []*auth.RoleIdentity // Used for show grants .. using
-	IfNotExists       bool                 // Used for `show create database if not exists`
-	Extended          bool                 // Used for `show extended columns from ...`
-	Limit             *Limit               // Used for partial Show STMTs to limit Result Set row numbers.
+	Tp          ShowStmtType // Databases/Tables/Columns/....
+	DBName      string
+	Table       *TableName  // Used for showing columns.
+	Partition   model.CIStr // Used for showing partition.
+	Column      *ColumnName // Used for `desc table column`.
+	IndexName   model.CIStr
+	Flag        int // Some flag parsed from sql, such as FULL.
+	Full        bool
+	User        *auth.UserIdentity   // Used for show grants/create user.
+	Roles       []*auth.RoleIdentity // Used for show grants .. using
+	IfNotExists bool                 // Used for `show create database if not exists`
+	Extended    bool                 // Used for `show extended columns from ...`
 
 	CountWarningsOrErrors bool // Used for showing count(*) warnings | errors
 
@@ -2895,9 +2786,6 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 	case ShowCreatePlacementPolicy:
 		ctx.WriteKeyWord("CREATE PLACEMENT POLICY ")
 		ctx.WriteName(n.DBName)
-	case ShowCreateResourceGroup:
-		ctx.WriteKeyWord("CREATE RESOURCE GROUP ")
-		ctx.WriteName(n.ResourceGroupName)
 	case ShowCreateUser:
 		ctx.WriteKeyWord("CREATE USER ")
 		if err := n.User.Restore(ctx); err != nil {
@@ -2934,11 +2822,6 @@ func (n *ShowStmt) Restore(ctx *format.RestoreCtx) error {
 		}
 	case ShowStatsMeta:
 		ctx.WriteKeyWord("STATS_META")
-		if err := restoreShowLikeOrWhereOpt(); err != nil {
-			return err
-		}
-	case ShowStatsLocked:
-		ctx.WriteKeyWord("STATS_LOCKED")
 		if err := restoreShowLikeOrWhereOpt(); err != nil {
 			return err
 		}
@@ -3193,46 +3076,7 @@ func (n *ShowStmt) Accept(v Visitor) (Node, bool) {
 		}
 		n.Where = node.(ExprNode)
 	}
-	if n.Limit != nil {
-		node, ok := n.Limit.Accept(v)
-		if !ok {
-			return n, false
-		}
-		n.Limit = node.(*Limit)
-	}
 	return v.Leave(n)
-}
-
-// Allow limit result set for partial SHOW cmd
-func (n *ShowStmt) NeedLimitRSRow() bool {
-	switch n.Tp {
-	// Show statements need to have consistence behavior with MySQL Does
-	case ShowEngines, ShowDatabases, ShowTables, ShowColumns, ShowTableStatus, ShowWarnings,
-		ShowCharset, ShowVariables, ShowStatus, ShowCollation, ShowIndex, ShowPlugins:
-		return true
-	default:
-		// There are five classes of Show STMT.
-		// 1) The STMT Only return one row:
-		//    ShowCreateTable, ShowCreateView, ShowCreateUser, ShowCreateDatabase, ShowMasterStatus,
-		//
-		// 2) The STMT is a MySQL syntax extend, so just keep it behavior as before:
-		//    ShowCreateSequence, ShowCreatePlacementPolicy, ShowConfig, ShowStatsExtended,
-		//    ShowStatsMeta, ShowStatsHistograms, ShowStatsTopN, ShowStatsBuckets, ShowStatsHealthy
-		//    ShowHistogramsInFlight, ShowColumnStatsUsage, ShowBindings, ShowBindingCacheStatus,
-		//    ShowPumpStatus, ShowDrainerStatus, ShowAnalyzeStatus, ShowRegions, ShowBuiltins,
-		//    ShowTableNextRowId, ShowBackups, ShowRestores, ShowImports, ShowCreateImport, ShowPlacement
-		//    ShowPlacementForDatabase, ShowPlacementForTable, ShowPlacementForPartition, ShowPlacementLabels
-		//
-		// 3) There is corelated statements in MySQL, but no limit result set return number also.
-		//    ShowGrants, ShowProcessList, ShowPrivileges, ShowBuiltins, ShowTableNextRowId
-		//
-		// 4) There is corelated statements in MySQL, but it seems not recommand to use them and likely deprecte in the future.
-		//    ShowProfile, ShowProfiles
-		//
-		// 5) Below STMTs do not implement fetch logic.
-		//    ShowTriggers, ShowProcedureStatus, ShowEvents, ShowErrors, ShowOpenTables.
-		return false
-	}
 }
 
 // WindowSpec is the specification of a window.

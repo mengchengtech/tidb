@@ -175,8 +175,9 @@ func TestAddStatement(t *testing.T) {
 			MaxWaitTime:       2500,
 		},
 		ExecDetail: &execdetails.ExecDetails{
-			BackoffTime:  180,
-			RequestCount: 20,
+			CalleeAddress: "202",
+			BackoffTime:   180,
+			RequestCount:  20,
 			CommitDetail: &util.CommitDetails{
 				GetCommitTsTime: 500,
 				PrewriteTime:    50000,
@@ -213,11 +214,9 @@ func TestAddStatement(t *testing.T) {
 				RocksdbBlockReadCount:     10,
 				RocksdbBlockReadByte:      1000,
 			},
-			DetailsNeedP90: execdetails.DetailsNeedP90{
-				TimeDetail: util.TimeDetail{
-					ProcessTime: 1500,
-					WaitTime:    150,
-				}, CalleeAddress: "202",
+			TimeDetail: util.TimeDetail{
+				ProcessTime: 1500,
+				WaitTime:    150,
 			},
 		},
 		StmtCtx: &stmtctx.StatementContext{
@@ -314,8 +313,9 @@ func TestAddStatement(t *testing.T) {
 			MaxWaitTime:       250,
 		},
 		ExecDetail: &execdetails.ExecDetails{
-			BackoffTime:  18,
-			RequestCount: 2,
+			CalleeAddress: "302",
+			BackoffTime:   18,
+			RequestCount:  2,
 			CommitDetail: &util.CommitDetails{
 				GetCommitTsTime: 50,
 				PrewriteTime:    5000,
@@ -352,12 +352,9 @@ func TestAddStatement(t *testing.T) {
 				RocksdbBlockReadCount:     10,
 				RocksdbBlockReadByte:      1000,
 			},
-			DetailsNeedP90: execdetails.DetailsNeedP90{
-				TimeDetail: util.TimeDetail{
-					ProcessTime: 150,
-					WaitTime:    15,
-				},
-				CalleeAddress: "302",
+			TimeDetail: util.TimeDetail{
+				ProcessTime: 150,
+				WaitTime:    15,
 			},
 		},
 		StmtCtx: &stmtctx.StatementContext{
@@ -608,8 +605,9 @@ func generateAnyExecInfo() *StmtExecInfo {
 			MaxWaitTime:       1500,
 		},
 		ExecDetail: &execdetails.ExecDetails{
-			BackoffTime:  80,
-			RequestCount: 10,
+			CalleeAddress: "129",
+			BackoffTime:   80,
+			RequestCount:  10,
 			CommitDetail: &util.CommitDetails{
 				GetCommitTsTime: 100,
 				PrewriteTime:    10000,
@@ -646,12 +644,9 @@ func generateAnyExecInfo() *StmtExecInfo {
 				RocksdbBlockReadCount:     10,
 				RocksdbBlockReadByte:      1000,
 			},
-			DetailsNeedP90: execdetails.DetailsNeedP90{
-				TimeDetail: util.TimeDetail{
-					ProcessTime: 500,
-					WaitTime:    50,
-				},
-				CalleeAddress: "129",
+			TimeDetail: util.TimeDetail{
+				ProcessTime: 500,
+				WaitTime:    50,
 			},
 		},
 		StmtCtx: &stmtctx.StatementContext{

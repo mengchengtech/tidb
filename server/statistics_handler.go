@@ -15,9 +15,7 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -25,8 +23,8 @@ import (
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/session"
-	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/types"
+	"github.com/pingcap/tidb/util/gcutil"
 	"github.com/tikv/client-go/v2/oracle"
 )
 
@@ -55,21 +53,11 @@ func (sh StatsHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	is := sh.do.InfoSchema()
 	h := sh.do.StatsHandle()
-	var err error
-	dumpPartitionStats := true
-	dumpParams := req.URL.Query()[pDumpPartitionStats]
-	if len(dumpParams) > 0 && len(dumpParams[0]) > 0 {
-		dumpPartitionStats, err = strconv.ParseBool(dumpParams[0])
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-	}
 	tbl, err := is.TableByName(model.NewCIStr(params[pDBName]), model.NewCIStr(params[pTableName]))
 	if err != nil {
 		writeError(w, err)
 	} else {
-		js, err := h.DumpStatsToJSON(params[pDBName], tbl.Meta(), nil, dumpPartitionStats)
+		js, err := h.DumpStatsToJSON(params[pDBName], tbl.Meta(), nil)
 		if err != nil {
 			writeError(w, err)
 		} else {
@@ -106,18 +94,9 @@ func (sh StatsHistoryHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 		return
 	}
 	defer se.Close()
-	enabeld, err := sh.do.StatsHandle().CheckHistoricalStatsEnable()
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	if !enabeld {
-		writeError(w, fmt.Errorf("%v should be enabled", variable.TiDBEnableHistoricalStats))
-		return
-	}
 
 	se.GetSessionVars().StmtCtx.TimeZone = time.Local
-	t, err := types.ParseTime(se.GetSessionVars().StmtCtx, params[pSnapshot], mysql.TypeTimestamp, 6, nil)
+	t, err := types.ParseTime(se.GetSessionVars().StmtCtx, params[pSnapshot], mysql.TypeTimestamp, 6)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -128,6 +107,12 @@ func (sh StatsHistoryHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 		return
 	}
 	snapshot := oracle.GoTimeToTS(t1)
+	err = gcutil.ValidateSnapshot(se, snapshot)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	is, err := sh.do.GetSnapshotInfoSchema(snapshot)
 	if err != nil {
 		writeError(w, err)
@@ -139,7 +124,7 @@ func (sh StatsHistoryHandler) ServeHTTP(w http.ResponseWriter, req *http.Request
 		writeError(w, err)
 		return
 	}
-	js, err := h.DumpHistoricalStatsBySnapshot(params[pDBName], tbl.Meta(), snapshot)
+	js, err := h.DumpStatsToJSONBySnapshot(params[pDBName], tbl.Meta(), snapshot)
 	if err != nil {
 		writeError(w, err)
 	} else {

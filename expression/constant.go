@@ -422,11 +422,6 @@ func (c *Constant) resolveIndicesByVirtualExpr(_ *Schema) bool {
 	return true
 }
 
-// RemapColumn remaps columns with provided mapping and returns new expression
-func (c *Constant) RemapColumn(_ map[int64]*Column) (Expression, error) {
-	return c, nil
-}
-
 // Vectorized returns if this expression supports vectorized evaluation.
 func (c *Constant) Vectorized() bool {
 	if c.DeferredExpr != nil {
@@ -464,9 +459,6 @@ func (c *Constant) MemoryUsage() (sum int64) {
 		return
 	}
 
-	sum = emptyConstantSize + c.Value.MemUsage() + int64(cap(c.hashcode))
-	if c.RetType != nil {
-		sum += c.RetType.MemoryUsage()
-	}
+	sum = emptyConstantSize + c.RetType.MemoryUsage() + c.Value.MemUsage() + int64(cap(c.hashcode))
 	return
 }

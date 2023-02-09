@@ -94,7 +94,7 @@ func (e *ProjectionExec) Open(ctx context.Context) error {
 	return e.open(ctx)
 }
 
-func (e *ProjectionExec) open(_ context.Context) error {
+func (e *ProjectionExec) open(ctx context.Context) error {
 	e.prepared = false
 	e.parentReqRows = int64(e.maxChunkSize)
 
@@ -109,7 +109,7 @@ func (e *ProjectionExec) open(_ context.Context) error {
 	}
 
 	if e.isUnparallelExec() {
-		e.childResult = tryNewCacheChunk(e.children[0])
+		e.childResult = newFirstChunk(e.children[0])
 		e.memTracker.Consume(e.childResult.MemoryUsage())
 	}
 
@@ -190,7 +190,6 @@ func (e *ProjectionExec) unParallelExecute(ctx context.Context, chk *chunk.Chunk
 	e.childResult.SetRequiredRows(chk.RequiredRows(), e.maxChunkSize)
 	mSize := e.childResult.MemoryUsage()
 	err := Next(ctx, e.children[0], e.childResult)
-	failpoint.Inject("ConsumeRandomPanic", nil)
 	e.memTracker.Consume(e.childResult.MemoryUsage() - mSize)
 	if err != nil {
 		return err
@@ -220,7 +219,6 @@ func (e *ProjectionExec) parallelExecute(ctx context.Context, chk *chunk.Chunk) 
 	}
 	mSize := output.chk.MemoryUsage()
 	chk.SwapColumns(output.chk)
-	failpoint.Inject("ConsumeRandomPanic", nil)
 	e.memTracker.Consume(output.chk.MemoryUsage() - mSize)
 	e.fetcher.outputCh <- output
 	return nil
@@ -254,7 +252,6 @@ func (e *ProjectionExec) prepare(ctx context.Context) {
 		})
 
 		inputChk := newFirstChunk(e.children[0])
-		failpoint.Inject("ConsumeRandomPanic", nil)
 		e.memTracker.Consume(inputChk.MemoryUsage())
 		e.fetcher.inputCh <- &projectionInput{
 			chk:          inputChk,
@@ -364,14 +361,14 @@ func (f *projectionInputFetcher) run(ctx context.Context) {
 	}()
 
 	for {
-		input, isNil := readProjection[*projectionInput](f.inputCh, f.globalFinishCh)
-		if isNil {
+		input := readProjectionInput(f.inputCh, f.globalFinishCh)
+		if input == nil {
 			return
 		}
 		targetWorker := input.targetWorker
 
-		output, isNil = readProjection[*projectionOutput](f.outputCh, f.globalFinishCh)
-		if isNil {
+		output = readProjectionOutput(f.outputCh, f.globalFinishCh)
+		if output == nil {
 			f.proj.memTracker.Consume(-input.chk.MemoryUsage())
 			return
 		}
@@ -382,7 +379,6 @@ func (f *projectionInputFetcher) run(ctx context.Context) {
 		input.chk.SetRequiredRows(int(requiredRows), f.proj.maxChunkSize)
 		mSize := input.chk.MemoryUsage()
 		err := Next(ctx, f.child, input.chk)
-		failpoint.Inject("ConsumeRandomPanic", nil)
 		f.proj.memTracker.Consume(input.chk.MemoryUsage() - mSize)
 		if err != nil || input.chk.NumRows() == 0 {
 			output.done <- err
@@ -431,19 +427,18 @@ func (w *projectionWorker) run(ctx context.Context) {
 		w.proj.wg.Done()
 	}()
 	for {
-		input, isNil := readProjection[*projectionInput](w.inputCh, w.globalFinishCh)
-		if isNil {
+		input := readProjectionInput(w.inputCh, w.globalFinishCh)
+		if input == nil {
 			return
 		}
 
-		output, isNil = readProjection[*projectionOutput](w.outputCh, w.globalFinishCh)
-		if isNil {
+		output = readProjectionOutput(w.outputCh, w.globalFinishCh)
+		if output == nil {
 			return
 		}
 
 		mSize := output.chk.MemoryUsage() + input.chk.MemoryUsage()
 		err := w.evaluatorSuit.Run(w.sctx, input.chk, output.chk)
-		failpoint.Inject("ConsumeRandomPanic", nil)
 		w.proj.memTracker.Consume(output.chk.MemoryUsage() + input.chk.MemoryUsage() - mSize)
 		output.done <- err
 
@@ -462,14 +457,26 @@ func recoveryProjection(output *projectionOutput, r interface{}) {
 	logutil.BgLogger().Error("projection executor panicked", zap.String("error", fmt.Sprintf("%v", r)), zap.Stack("stack"))
 }
 
-func readProjection[T any](ch <-chan T, finishCh <-chan struct{}) (t T, isNil bool) {
+func readProjectionInput(inputCh <-chan *projectionInput, finishCh <-chan struct{}) *projectionInput {
 	select {
 	case <-finishCh:
-		return t, true
-	case t, ok := <-ch:
+		return nil
+	case input, ok := <-inputCh:
 		if !ok {
-			return t, true
+			return nil
 		}
-		return t, false
+		return input
+	}
+}
+
+func readProjectionOutput(outputCh <-chan *projectionOutput, finishCh <-chan struct{}) *projectionOutput {
+	select {
+	case <-finishCh:
+		return nil
+	case output, ok := <-outputCh:
+		if !ok {
+			return nil
+		}
+		return output
 	}
 }

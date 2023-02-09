@@ -22,17 +22,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/kvproto/pkg/diagnosticspb"
 	"github.com/pingcap/kvproto/pkg/metapb"
-	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl/placement"
-	"github.com/pingcap/tidb/ddl/resourcegroup"
 	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta/autoid"
@@ -52,14 +47,9 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/pdapi"
 	"github.com/pingcap/tidb/util/sem"
-	"github.com/pingcap/tidb/util/set"
 	"github.com/pingcap/tidb/util/stmtsummary"
 	"github.com/tikv/client-go/v2/tikv"
 	"go.uber.org/zap"
-	"golang.org/x/exp/slices"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -194,14 +184,6 @@ const (
 	TableTrxSummary = "TRX_SUMMARY"
 	// TableVariablesInfo is the string constant of variables_info table.
 	TableVariablesInfo = "VARIABLES_INFO"
-	// TableUserAttributes is the string constant of user_attributes view.
-	TableUserAttributes = "USER_ATTRIBUTES"
-	// TableMemoryUsage is the memory usage status of tidb instance.
-	TableMemoryUsage = "MEMORY_USAGE"
-	// TableMemoryUsageOpsHistory is the memory control operators history.
-	TableMemoryUsageOpsHistory = "MEMORY_USAGE_OPS_HISTORY"
-	// TableResourceGroups is the metadata of resource groups.
-	TableResourceGroups = "RESOURCE_GROUPS"
 )
 
 const (
@@ -303,12 +285,6 @@ var tableIDMap = map[string]int64{
 	TableTrxSummary:                      autoid.InformationSchemaDBID + 80,
 	ClusterTableTrxSummary:               autoid.InformationSchemaDBID + 81,
 	TableVariablesInfo:                   autoid.InformationSchemaDBID + 82,
-	TableUserAttributes:                  autoid.InformationSchemaDBID + 83,
-	TableMemoryUsage:                     autoid.InformationSchemaDBID + 84,
-	TableMemoryUsageOpsHistory:           autoid.InformationSchemaDBID + 85,
-	ClusterTableMemoryUsage:              autoid.InformationSchemaDBID + 86,
-	ClusterTableMemoryUsageOpsHistory:    autoid.InformationSchemaDBID + 87,
-	TableResourceGroups:                  autoid.InformationSchemaDBID + 88,
 }
 
 // columnInfo represents the basic column information of all kinds of INFORMATION_SCHEMA tables
@@ -825,7 +801,6 @@ var tableProcesslistCols = []columnInfo{
 	{name: "MEM", tp: mysql.TypeLonglong, size: 21, flag: mysql.UnsignedFlag},
 	{name: "DISK", tp: mysql.TypeLonglong, size: 21, flag: mysql.UnsignedFlag},
 	{name: "TxnStart", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag, deflt: ""},
-	{name: "RESOURCE_GROUP", tp: mysql.TypeVarchar, size: resourcegroup.MaxGroupNameLength, flag: mysql.NotNullFlag, deflt: ""},
 }
 
 var tableTiDBIndexesCols = []columnInfo{
@@ -904,7 +879,6 @@ var slowQueryCols = []columnInfo{
 	{name: variable.SlowLogBackoffTotal, tp: mysql.TypeDouble, size: 22},
 	{name: variable.SlowLogWriteSQLRespTotal, tp: mysql.TypeDouble, size: 22},
 	{name: variable.SlowLogResultRows, tp: mysql.TypeLonglong, size: 22},
-	{name: variable.SlowLogWarnings, tp: mysql.TypeLongBlob, size: types.UnspecifiedLength},
 	{name: variable.SlowLogBackoffDetail, tp: mysql.TypeVarchar, size: 4096},
 	{name: variable.SlowLogPrepared, tp: mysql.TypeTiny, size: 1},
 	{name: variable.SlowLogSucc, tp: mysql.TypeTiny, size: 1},
@@ -1338,9 +1312,6 @@ var tableStatementsSummaryCols = []columnInfo{
 	{name: stmtsummary.PlanDigestStr, tp: mysql.TypeVarchar, size: 64, comment: "Digest of its execution plan"},
 	{name: stmtsummary.PlanStr, tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "Sampled execution plan"},
 	{name: stmtsummary.BinaryPlan, tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "Sampled binary plan"},
-	{name: stmtsummary.Charset, tp: mysql.TypeVarchar, size: 64, comment: "Sampled charset"},
-	{name: stmtsummary.Collation, tp: mysql.TypeVarchar, size: 64, comment: "Sampled collation"},
-	{name: stmtsummary.PlanHint, tp: mysql.TypeVarchar, size: 64, comment: "Sampled plan hint"},
 }
 
 var tableStorageStatsCols = []columnInfo{
@@ -1387,7 +1358,6 @@ var tableTableTiFlashTablesCols = []columnInfo{
 	{name: "AVG_STABLE_ROWS", tp: mysql.TypeDouble, size: 64},
 	{name: "AVG_STABLE_SIZE", tp: mysql.TypeDouble, size: 64},
 	{name: "TOTAL_PACK_COUNT_IN_DELTA", tp: mysql.TypeLonglong, size: 64},
-	{name: "MAX_PACK_COUNT_IN_DELTA", tp: mysql.TypeLonglong, size: 64},
 	{name: "AVG_PACK_COUNT_IN_DELTA", tp: mysql.TypeDouble, size: 64},
 	{name: "AVG_PACK_ROWS_IN_DELTA", tp: mysql.TypeDouble, size: 64},
 	{name: "AVG_PACK_SIZE_IN_DELTA", tp: mysql.TypeDouble, size: 64},
@@ -1398,15 +1368,21 @@ var tableTableTiFlashTablesCols = []columnInfo{
 	{name: "STORAGE_STABLE_NUM_SNAPSHOTS", tp: mysql.TypeLonglong, size: 64},
 	{name: "STORAGE_STABLE_OLDEST_SNAPSHOT_LIFETIME", tp: mysql.TypeDouble, size: 64},
 	{name: "STORAGE_STABLE_OLDEST_SNAPSHOT_THREAD_ID", tp: mysql.TypeLonglong, size: 64},
-	{name: "STORAGE_STABLE_OLDEST_SNAPSHOT_TRACING_ID", tp: mysql.TypeVarchar, size: 128},
+	{name: "STORAGE_STABLE_NUM_PAGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STORAGE_STABLE_NUM_NORMAL_PAGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STORAGE_STABLE_MAX_PAGE_ID", tp: mysql.TypeLonglong, size: 64},
 	{name: "STORAGE_DELTA_NUM_SNAPSHOTS", tp: mysql.TypeLonglong, size: 64},
 	{name: "STORAGE_DELTA_OLDEST_SNAPSHOT_LIFETIME", tp: mysql.TypeDouble, size: 64},
 	{name: "STORAGE_DELTA_OLDEST_SNAPSHOT_THREAD_ID", tp: mysql.TypeLonglong, size: 64},
-	{name: "STORAGE_DELTA_OLDEST_SNAPSHOT_TRACING_ID", tp: mysql.TypeVarchar, size: 128},
+	{name: "STORAGE_DELTA_NUM_PAGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STORAGE_DELTA_NUM_NORMAL_PAGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STORAGE_DELTA_MAX_PAGE_ID", tp: mysql.TypeLonglong, size: 64},
 	{name: "STORAGE_META_NUM_SNAPSHOTS", tp: mysql.TypeLonglong, size: 64},
 	{name: "STORAGE_META_OLDEST_SNAPSHOT_LIFETIME", tp: mysql.TypeDouble, size: 64},
 	{name: "STORAGE_META_OLDEST_SNAPSHOT_THREAD_ID", tp: mysql.TypeLonglong, size: 64},
-	{name: "STORAGE_META_OLDEST_SNAPSHOT_TRACING_ID", tp: mysql.TypeVarchar, size: 128},
+	{name: "STORAGE_META_NUM_PAGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STORAGE_META_NUM_NORMAL_PAGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STORAGE_META_MAX_PAGE_ID", tp: mysql.TypeLonglong, size: 64},
 	{name: "BACKGROUND_TASKS_LENGTH", tp: mysql.TypeLonglong, size: 64},
 	{name: "TIFLASH_INSTANCE", tp: mysql.TypeVarchar, size: 64},
 }
@@ -1420,30 +1396,17 @@ var tableTableTiFlashSegmentsCols = []columnInfo{
 	{name: "IS_TOMBSTONE", tp: mysql.TypeLonglong, size: 64},
 	{name: "SEGMENT_ID", tp: mysql.TypeLonglong, size: 64},
 	{name: "RANGE", tp: mysql.TypeVarchar, size: 64},
-	{name: "EPOCH", tp: mysql.TypeLonglong, size: 64},
 	{name: "ROWS", tp: mysql.TypeLonglong, size: 64},
 	{name: "SIZE", tp: mysql.TypeLonglong, size: 64},
+	{name: "DELETE_RANGES", tp: mysql.TypeLonglong, size: 64},
+	{name: "STABLE_SIZE_ON_DISK", tp: mysql.TypeLonglong, size: 64},
+	{name: "DELTA_PACK_COUNT", tp: mysql.TypeLonglong, size: 64},
+	{name: "STABLE_PACK_COUNT", tp: mysql.TypeLonglong, size: 64},
+	{name: "AVG_DELTA_PACK_ROWS", tp: mysql.TypeDouble, size: 64},
+	{name: "AVG_STABLE_PACK_ROWS", tp: mysql.TypeDouble, size: 64},
 	{name: "DELTA_RATE", tp: mysql.TypeDouble, size: 64},
-	{name: "DELTA_MEMTABLE_ROWS", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_MEMTABLE_SIZE", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_MEMTABLE_COLUMN_FILES", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_MEMTABLE_DELETE_RANGES", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_PERSISTED_PAGE_ID", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_PERSISTED_ROWS", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_PERSISTED_SIZE", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_PERSISTED_COLUMN_FILES", tp: mysql.TypeLonglong, size: 64},
-	{name: "DELTA_PERSISTED_DELETE_RANGES", tp: mysql.TypeLonglong, size: 64},
 	{name: "DELTA_CACHE_SIZE", tp: mysql.TypeLonglong, size: 64},
 	{name: "DELTA_INDEX_SIZE", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_PAGE_ID", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_ROWS", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_SIZE", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_DMFILES", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_DMFILES_ID_0", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_DMFILES_ROWS", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_DMFILES_SIZE", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_DMFILES_SIZE_ON_DISK", tp: mysql.TypeLonglong, size: 64},
-	{name: "STABLE_DMFILES_PACKS", tp: mysql.TypeLonglong, size: 64},
 	{name: "TIFLASH_INSTANCE", tp: mysql.TypeVarchar, size: 64},
 }
 
@@ -1489,7 +1452,6 @@ var tableTiDBTrxCols = []columnInfo{
 	{name: txninfo.UserStr, tp: mysql.TypeVarchar, size: 16, comment: "The user who open this session"},
 	{name: txninfo.DBStr, tp: mysql.TypeVarchar, size: 64, comment: "The schema this transaction works on"},
 	{name: txninfo.AllSQLDigestsStr, tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "A list of the digests of SQL statements that the transaction has executed"},
-	{name: txninfo.RelatedTableIDsStr, tp: mysql.TypeBlob, size: types.UnspecifiedLength, comment: "A list of the table IDs that the transaction has accessed"},
 }
 
 var tableDeadlocksCols = []columnInfo{
@@ -1555,47 +1517,6 @@ var tableVariablesInfoCols = []columnInfo{
 	{name: "MAX_VALUE", tp: mysql.TypeLonglong, size: 64, flag: mysql.UnsignedFlag},
 	{name: "POSSIBLE_VALUES", tp: mysql.TypeVarchar, size: 256},
 	{name: "IS_NOOP", tp: mysql.TypeVarchar, size: 64, flag: mysql.NotNullFlag},
-}
-
-var tableUserAttributesCols = []columnInfo{
-	{name: "USER", tp: mysql.TypeVarchar, size: 32, flag: mysql.NotNullFlag},
-	{name: "HOST", tp: mysql.TypeVarchar, size: 255, flag: mysql.NotNullFlag},
-	{name: "ATTRIBUTE", tp: mysql.TypeLongBlob, size: types.UnspecifiedLength},
-}
-
-var tableMemoryUsageCols = []columnInfo{
-	{name: "MEMORY_TOTAL", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "MEMORY_LIMIT", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "MEMORY_CURRENT", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "MEMORY_MAX_USED", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "CURRENT_OPS", tp: mysql.TypeVarchar, size: 50},
-	{name: "SESSION_KILL_LAST", tp: mysql.TypeDatetime},
-	{name: "SESSION_KILL_TOTAL", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "GC_LAST", tp: mysql.TypeDatetime},
-	{name: "GC_TOTAL", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "DISK_USAGE", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "QUERY_FORCE_DISK", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-}
-
-var tableMemoryUsageOpsHistoryCols = []columnInfo{
-	{name: "TIME", tp: mysql.TypeDatetime, size: 64, flag: mysql.NotNullFlag},
-	{name: "OPS", tp: mysql.TypeVarchar, size: 20, flag: mysql.NotNullFlag},
-	{name: "MEMORY_LIMIT", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "MEMORY_CURRENT", tp: mysql.TypeLonglong, size: 21, flag: mysql.NotNullFlag},
-	{name: "PROCESSID", tp: mysql.TypeLonglong, size: 21, flag: mysql.UnsignedFlag},
-	{name: "MEM", tp: mysql.TypeLonglong, size: 21, flag: mysql.UnsignedFlag},
-	{name: "DISK", tp: mysql.TypeLonglong, size: 21, flag: mysql.UnsignedFlag},
-	{name: "CLIENT", tp: mysql.TypeVarchar, size: 64},
-	{name: "DB", tp: mysql.TypeVarchar, size: 64},
-	{name: "USER", tp: mysql.TypeVarchar, size: 16},
-	{name: "SQL_DIGEST", tp: mysql.TypeVarchar, size: 64},
-	{name: "SQL_TEXT", tp: mysql.TypeVarchar, size: 256},
-}
-
-var tableResourceGroupsCols = []columnInfo{
-	{name: "NAME", tp: mysql.TypeVarchar, size: resourcegroup.MaxGroupNameLength, flag: mysql.NotNullFlag},
-	{name: "RU_PER_SEC", tp: mysql.TypeLonglong, size: 21},
-	{name: "BURSTABLE", tp: mysql.TypeVarchar, size: 3},
 }
 
 // GetShardingInfo returns a nil or description string for the sharding information of given TableInfo.
@@ -1753,8 +1674,8 @@ func FormatTiDBVersion(TiDBVersion string, isDefaultVersion bool) string {
 
 	// The user hasn't set the config 'ServerVersion'.
 	if isDefaultVersion {
-		nodeVersion = TiDBVersion[strings.Index(TiDBVersion, "TiDB-")+len("TiDB-"):]
-		if len(nodeVersion) > 0 && nodeVersion[0] == 'v' {
+		nodeVersion = TiDBVersion[strings.LastIndex(TiDBVersion, "TiDB-")+len("TiDB-"):]
+		if nodeVersion[0] == 'v' {
 			nodeVersion = nodeVersion[1:]
 		}
 		nodeVersions := strings.Split(nodeVersion, "-")
@@ -1852,24 +1773,6 @@ func GetPDServerInfo(ctx sessionctx.Context) ([]ServerInfo, error) {
 
 // GetStoreServerInfo returns all store nodes(TiKV or TiFlash) cluster information
 func GetStoreServerInfo(ctx sessionctx.Context) ([]ServerInfo, error) {
-	failpoint.Inject("mockStoreServerInfo", func(val failpoint.Value) {
-		if s := val.(string); len(s) > 0 {
-			var servers []ServerInfo
-			for _, server := range strings.Split(s, ";") {
-				parts := strings.Split(server, ",")
-				servers = append(servers, ServerInfo{
-					ServerType:     parts[0],
-					Address:        parts[1],
-					StatusAddr:     parts[2],
-					Version:        parts[3],
-					GitHash:        parts[4],
-					StartTimestamp: 0,
-				})
-			}
-			failpoint.Return(servers, nil)
-		}
-	})
-
 	isTiFlashStore := func(store *metapb.Store) bool {
 		isTiFlash := false
 		for _, label := range store.Labels {
@@ -1965,16 +1868,16 @@ func SysVarHiddenForSem(ctx sessionctx.Context, sysVarNameInLower string) bool {
 }
 
 // GetDataFromSessionVariables return the [name, value] of all session variables
-func GetDataFromSessionVariables(ctx context.Context, sctx sessionctx.Context) ([][]types.Datum, error) {
-	sessionVars := sctx.GetSessionVars()
+func GetDataFromSessionVariables(ctx sessionctx.Context) ([][]types.Datum, error) {
+	sessionVars := ctx.GetSessionVars()
 	sysVars := variable.GetSysVars()
 	rows := make([][]types.Datum, 0, len(sysVars))
 	for _, v := range sysVars {
-		if SysVarHiddenForSem(sctx, v.Name) {
+		if SysVarHiddenForSem(ctx, v.Name) {
 			continue
 		}
 		var value string
-		value, err := sessionVars.GetSessionOrGlobalSystemVar(ctx, v.Name)
+		value, err := sessionVars.GetSessionOrGlobalSystemVar(v.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -2057,10 +1960,6 @@ var tableNameToColumns = map[string][]columnInfo{
 	TablePlacementPolicies:                  tablePlacementPoliciesCols,
 	TableTrxSummary:                         tableTrxSummaryCols,
 	TableVariablesInfo:                      tableVariablesInfoCols,
-	TableUserAttributes:                     tableUserAttributesCols,
-	TableMemoryUsage:                        tableMemoryUsageCols,
-	TableMemoryUsageOpsHistory:              tableMemoryUsageOpsHistoryCols,
-	TableResourceGroups:                     tableResourceGroupsCols,
 }
 
 func createInfoSchemaTable(_ autoid.Allocators, meta *model.TableInfo) (table.Table, error) {
@@ -2082,7 +1981,8 @@ type infoschemaTable struct {
 }
 
 // IterRecords implements table.Table IterRecords interface.
-func (*infoschemaTable) IterRecords(ctx context.Context, sctx sessionctx.Context, cols []*table.Column, fn table.RecordIterFunc) error {
+func (*infoschemaTable) IterRecords(_ sessionctx.Context, _ []*table.Column,
+	_ table.RecordIterFunc) error {
 	return nil
 }
 
@@ -2148,7 +2048,7 @@ func (it *infoschemaTable) UpdateRecord(gctx context.Context, ctx sessionctx.Con
 
 // Allocators implements table.Table Allocators interface.
 func (it *infoschemaTable) Allocators(_ sessionctx.Context) autoid.Allocators {
-	return autoid.Allocators{}
+	return nil
 }
 
 // Meta implements table.Table Meta interface.
@@ -2231,7 +2131,7 @@ func (vt *VirtualTable) UpdateRecord(ctx context.Context, sctx sessionctx.Contex
 
 // Allocators implements table.Table Allocators interface.
 func (vt *VirtualTable) Allocators(_ sessionctx.Context) autoid.Allocators {
-	return autoid.Allocators{}
+	return nil
 }
 
 // Meta implements table.Table Meta interface.
@@ -2247,143 +2147,4 @@ func (vt *VirtualTable) GetPhysicalID() int64 {
 // Type implements table.Table Type interface.
 func (vt *VirtualTable) Type() table.Type {
 	return table.VirtualTable
-}
-
-// GetTiFlashServerInfo returns all TiFlash server infos
-func GetTiFlashServerInfo(sctx sessionctx.Context) ([]ServerInfo, error) {
-	if config.GetGlobalConfig().DisaggregatedTiFlash {
-		return nil, table.ErrUnsupportedOp
-	}
-	serversInfo, err := GetStoreServerInfo(sctx)
-	if err != nil {
-		return nil, err
-	}
-	serversInfo = FilterClusterServerInfo(serversInfo, set.NewStringSet(kv.TiFlash.Name()), set.NewStringSet())
-	return serversInfo, nil
-}
-
-// FetchClusterServerInfoWithoutPrivilegeCheck fetches cluster server information
-func FetchClusterServerInfoWithoutPrivilegeCheck(ctx context.Context, sctx sessionctx.Context, serversInfo []ServerInfo, serverInfoType diagnosticspb.ServerInfoType, recordWarningInStmtCtx bool) ([][]types.Datum, error) {
-	type result struct {
-		idx  int
-		rows [][]types.Datum
-		err  error
-	}
-	wg := sync.WaitGroup{}
-	ch := make(chan result, len(serversInfo))
-	infoTp := serverInfoType
-	finalRows := make([][]types.Datum, 0, len(serversInfo)*10)
-	for i, srv := range serversInfo {
-		address := srv.Address
-		remote := address
-		if srv.ServerType == "tidb" {
-			remote = srv.StatusAddr
-		}
-		wg.Add(1)
-		go func(index int, remote, address, serverTP string) {
-			util.WithRecovery(func() {
-				defer wg.Done()
-				items, err := getServerInfoByGRPC(ctx, remote, infoTp)
-				if err != nil {
-					ch <- result{idx: index, err: err}
-					return
-				}
-				partRows := serverInfoItemToRows(items, serverTP, address)
-				ch <- result{idx: index, rows: partRows}
-			}, nil)
-		}(i, remote, address, srv.ServerType)
-	}
-	wg.Wait()
-	close(ch)
-	// Keep the original order to make the result more stable
-	var results []result //nolint: prealloc
-	for result := range ch {
-		if result.err != nil {
-			if recordWarningInStmtCtx {
-				sctx.GetSessionVars().StmtCtx.AppendWarning(result.err)
-			} else {
-				log.Warn(result.err.Error())
-			}
-			continue
-		}
-		results = append(results, result)
-	}
-	slices.SortFunc(results, func(i, j result) bool { return i.idx < j.idx })
-	for _, result := range results {
-		finalRows = append(finalRows, result.rows...)
-	}
-	return finalRows, nil
-}
-
-func serverInfoItemToRows(items []*diagnosticspb.ServerInfoItem, tp, addr string) [][]types.Datum {
-	rows := make([][]types.Datum, 0, len(items))
-	for _, v := range items {
-		for _, item := range v.Pairs {
-			row := types.MakeDatums(
-				tp,
-				addr,
-				v.Tp,
-				v.Name,
-				item.Key,
-				item.Value,
-			)
-			rows = append(rows, row)
-		}
-	}
-	return rows
-}
-
-func getServerInfoByGRPC(ctx context.Context, address string, tp diagnosticspb.ServerInfoType) ([]*diagnosticspb.ServerInfoItem, error) {
-	opt := grpc.WithTransportCredentials(insecure.NewCredentials())
-	security := config.GetGlobalConfig().Security
-	if len(security.ClusterSSLCA) != 0 {
-		clusterSecurity := security.ClusterSecurity()
-		tlsConfig, err := clusterSecurity.ToTLSConfig()
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		opt = grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig))
-	}
-	conn, err := grpc.Dial(address, opt)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		err := conn.Close()
-		if err != nil {
-			log.Error("close grpc connection error", zap.Error(err))
-		}
-	}()
-
-	cli := diagnosticspb.NewDiagnosticsClient(conn)
-	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-	defer cancel()
-	r, err := cli.ServerInfo(ctx, &diagnosticspb.ServerInfoRequest{Tp: tp})
-	if err != nil {
-		return nil, err
-	}
-	return r.Items, nil
-}
-
-// FilterClusterServerInfo filters serversInfo by nodeTypes and addresses
-func FilterClusterServerInfo(serversInfo []ServerInfo, nodeTypes, addresses set.StringSet) []ServerInfo {
-	if len(nodeTypes) == 0 && len(addresses) == 0 {
-		return serversInfo
-	}
-
-	filterServers := make([]ServerInfo, 0, len(serversInfo))
-	for _, srv := range serversInfo {
-		// Skip some node type which has been filtered in WHERE clause
-		// e.g: SELECT * FROM cluster_config WHERE type='tikv'
-		if len(nodeTypes) > 0 && !nodeTypes.Exist(srv.ServerType) {
-			continue
-		}
-		// Skip some node address which has been filtered in WHERE clause
-		// e.g: SELECT * FROM cluster_config WHERE address='192.16.8.12:2379'
-		if len(addresses) > 0 && !addresses.Exist(srv.Address) {
-			continue
-		}
-		filterServers = append(filterServers, srv)
-	}
-	return filterServers
 }

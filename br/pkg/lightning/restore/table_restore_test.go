@@ -129,7 +129,6 @@ func (s *tableRestoreSuiteBase) setupSuite(t *testing.T) {
 				Type:     mydump.SourceTypeSQL,
 				SortKey:  strconv.Itoa(i),
 				FileSize: 37,
-				RealSize: 37,
 			},
 		})
 	}
@@ -145,7 +144,6 @@ func (s *tableRestoreSuiteBase) setupSuite(t *testing.T) {
 			Type:     mydump.SourceTypeCSV,
 			SortKey:  "99",
 			FileSize: 14,
-			RealSize: 14,
 		},
 	})
 
@@ -306,7 +304,6 @@ func (s *tableRestoreSuite) TestPopulateChunks() {
 
 	// set csv header to true, this will cause check columns fail
 	s.cfg.Mydumper.CSV.Header = true
-	s.cfg.Mydumper.CSV.HeaderSchemaMatch = true
 	s.cfg.Mydumper.StrictFormat = true
 	regionSize := s.cfg.Mydumper.MaxRegionSize
 	s.cfg.Mydumper.MaxRegionSize = 5
@@ -430,7 +427,7 @@ func (s *tableRestoreSuite) TestPopulateChunksCSVHeader() {
 		require.NoError(s.T(), err)
 		fakeDataFiles = append(fakeDataFiles, mydump.FileInfo{
 			TableName: filter.Table{Schema: "db", Name: "table"},
-			FileMeta:  mydump.SourceFileMeta{Path: csvName, Type: mydump.SourceTypeCSV, SortKey: fmt.Sprintf("%02d", i), FileSize: int64(len(str)), RealSize: int64(len(str))},
+			FileMeta:  mydump.SourceFileMeta{Path: csvName, Type: mydump.SourceTypeCSV, SortKey: fmt.Sprintf("%02d", i), FileSize: int64(len(str))},
 		})
 		total += len(str)
 	}
@@ -456,7 +453,6 @@ func (s *tableRestoreSuite) TestPopulateChunksCSVHeader() {
 	cfg.Mydumper.MaxRegionSize = 40
 
 	cfg.Mydumper.CSV.Header = true
-	cfg.Mydumper.CSV.HeaderSchemaMatch = true
 	cfg.Mydumper.StrictFormat = true
 	rc := &Controller{cfg: cfg, ioWorkers: worker.NewPool(context.Background(), 1, "io"), store: store}
 
@@ -1083,8 +1079,8 @@ func (s *tableRestoreSuite) TestCheckClusterResource() {
 				"max-replicas": 1
 			}`),
 			"(.*)Cluster doesn't have enough space(.*)",
-			true,
-			0,
+			false,
+			1,
 		},
 	}
 
@@ -1218,8 +1214,8 @@ func (s *tableRestoreSuite) TestCheckClusterRegion() {
 				".*TiKV stores \\(1\\) contains more than 500 empty regions respectively.*",
 				".*Region distribution is unbalanced.*but we expect it should not be less than 0.75.*",
 			},
-			expectResult:   true,
-			expectErrorCnt: 0,
+			expectResult:   false,
+			expectErrorCnt: 1,
 		},
 		{
 			stores: pdtypes.StoresInfo{Stores: []*pdtypes.StoreInfo{
@@ -1353,7 +1349,6 @@ func (s *tableRestoreSuite) TestCheckHasLargeCSV() {
 								{
 									FileMeta: mydump.SourceFileMeta{
 										FileSize: 1 * units.TiB,
-										RealSize: 1 * units.TiB,
 										Path:     "/testPath",
 									},
 								},
@@ -1472,10 +1467,6 @@ func (s *tableRestoreSuite) TestSchemaIsValid() {
 
 	case2File := "db1.table2.csv"
 	err = mockStore.WriteFile(ctx, case2File, []byte("\"colA\",\"colB\"\n\"a\",\"b\""))
-	require.NoError(s.T(), err)
-
-	case3File := "db1.table3.csv"
-	err = mockStore.WriteFile(ctx, case3File, []byte("\"a\",\"b\""))
 	require.NoError(s.T(), err)
 
 	cases := []struct {
@@ -1839,312 +1830,20 @@ func (s *tableRestoreSuite) TestSchemaIsValid() {
 				},
 			},
 		},
-		// Case 5:
-		// table has two datafiles for table.
-		// ignore column and extended column are overlapped,
-		// we expect the check failed.
-		{
-			[]*config.IgnoreColumns{
-				{
-					DB:      "db",
-					Table:   "table",
-					Columns: []string{"colA"},
-				},
-			},
-			"extend column colA is also assigned in ignore-column(.*)",
-			1,
-			true,
-			map[string]*checkpoints.TidbDBInfo{
-				"db": {
-					Name: "db",
-					Tables: map[string]*checkpoints.TidbTableInfo{
-						"table": {
-							ID:   1,
-							DB:   "db1",
-							Name: "table2",
-							Core: &model.TableInfo{
-								Columns: []*model.ColumnInfo{
-									{
-										Name: model.NewCIStr("colA"),
-									},
-									{
-										Name: model.NewCIStr("colB"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			&mydump.MDTableMeta{
-				DB:   "db",
-				Name: "table",
-				DataFiles: []mydump.FileInfo{
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colA"},
-								Values:  []string{"a"},
-							},
-						},
-					},
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{},
-								Values:  []string{},
-							},
-						},
-					},
-				},
-			},
-		},
-		// Case 6：
-		// table has one datafile for table.
-		// we expect the check failed because csv header contains extend column.
-		{
-			nil,
-			"extend column colA is contained in table(.*)",
-			1,
-			true,
-			map[string]*checkpoints.TidbDBInfo{
-				"db": {
-					Name: "db",
-					Tables: map[string]*checkpoints.TidbTableInfo{
-						"table": {
-							ID:   1,
-							DB:   "db1",
-							Name: "table2",
-							Core: &model.TableInfo{
-								Columns: []*model.ColumnInfo{
-									{
-										Name: model.NewCIStr("colA"),
-									},
-									{
-										Name: model.NewCIStr("colB"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			&mydump.MDTableMeta{
-				DB:   "db",
-				Name: "table",
-				DataFiles: []mydump.FileInfo{
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colA"},
-								Values:  []string{"a"},
-							},
-						},
-					},
-				},
-			},
-		},
-		// Case 7：
-		// table has one datafile for table.
-		// we expect the check failed because csv data columns plus extend columns is greater than target schema's columns.
-		{
-			nil,
-			"row count 2 adding with extend column length 1 is larger than columnCount 2 plus ignore column count 0 for(.*)",
-			1,
-			false,
-			map[string]*checkpoints.TidbDBInfo{
-				"db": {
-					Name: "db",
-					Tables: map[string]*checkpoints.TidbTableInfo{
-						"table": {
-							ID:   1,
-							DB:   "db1",
-							Name: "table2",
-							Core: &model.TableInfo{
-								Columns: []*model.ColumnInfo{
-									{
-										Name: model.NewCIStr("colA"),
-									},
-									{
-										Name: model.NewCIStr("colB"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			&mydump.MDTableMeta{
-				DB:   "db",
-				Name: "table",
-				DataFiles: []mydump.FileInfo{
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case3File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colA"},
-								Values:  []string{"a"},
-							},
-						},
-					},
-				},
-			},
-		},
-		// Case 8：
-		// table has two datafiles for table.
-		// we expect the check failed because target schema doesn't contain extend column.
-		{
-			nil,
-			"extend column \\[colC\\] don't exist in target table(.*)",
-			1,
-			true,
-			map[string]*checkpoints.TidbDBInfo{
-				"db": {
-					Name: "db",
-					Tables: map[string]*checkpoints.TidbTableInfo{
-						"table": {
-							ID:   1,
-							DB:   "db1",
-							Name: "table2",
-							Core: &model.TableInfo{
-								Columns: []*model.ColumnInfo{
-									{
-										Name: model.NewCIStr("colA"),
-									},
-									{
-										Name: model.NewCIStr("colB"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			&mydump.MDTableMeta{
-				DB:   "db",
-				Name: "table",
-				DataFiles: []mydump.FileInfo{
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colC"},
-								Values:  []string{"a"},
-							},
-						},
-					},
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colC"},
-								Values:  []string{"b"},
-							},
-						},
-					},
-				},
-			},
-		},
-		// Case 9：
-		// table has two datafiles and extend data for table.
-		// we expect the check succeed.
-		{
-			[]*config.IgnoreColumns{
-				{
-					DB:      "db",
-					Table:   "table",
-					Columns: []string{"colb"},
-				},
-			},
-			"",
-			0,
-			true,
-			map[string]*checkpoints.TidbDBInfo{
-				"db": {
-					Name: "db",
-					Tables: map[string]*checkpoints.TidbTableInfo{
-						"table": {
-							ID:   1,
-							DB:   "db1",
-							Name: "table2",
-							Core: &model.TableInfo{
-								Columns: []*model.ColumnInfo{
-									{
-										Name: model.NewCIStr("colA"),
-									},
-									{
-										Name:          model.NewCIStr("colB"),
-										DefaultIsExpr: true,
-									},
-									{
-										Name: model.NewCIStr("colC"),
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			&mydump.MDTableMeta{
-				DB:   "db",
-				Name: "table",
-				DataFiles: []mydump.FileInfo{
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colC"},
-								Values:  []string{"a"},
-							},
-						},
-					},
-					{
-						FileMeta: mydump.SourceFileMeta{
-							FileSize: 1 * units.TiB,
-							Path:     case2File,
-							Type:     mydump.SourceTypeCSV,
-							ExtendData: mydump.ExtendColumnData{
-								Columns: []string{"colC"},
-								Values:  []string{"b"},
-							},
-						},
-					},
-				},
-			},
-		},
 	}
 
-	for i, ca := range cases {
-		s.T().Logf("running testCase: #%d", i+1)
+	for _, ca := range cases {
 		cfg := &config.Config{
 			Mydumper: config.MydumperRuntime{
 				ReadBlockSize: config.ReadBlockSize,
 				CSV: config.CSVConfig{
-					Separator:         ",",
-					Delimiter:         `"`,
-					Header:            ca.hasHeader,
-					HeaderSchemaMatch: true,
-					NotNull:           false,
-					Null:              `\N`,
-					BackslashEscape:   true,
-					TrimLastSep:       false,
+					Separator:       ",",
+					Delimiter:       `"`,
+					Header:          ca.hasHeader,
+					NotNull:         false,
+					Null:            `\N`,
+					BackslashEscape: true,
+					TrimLastSep:     false,
 				},
 				IgnoreColumns: ca.ignoreColumns,
 			},
@@ -2173,14 +1872,13 @@ func (s *tableRestoreSuite) TestGBKEncodedSchemaIsValid() {
 			DataCharacterSet:       "gb18030",
 			DataInvalidCharReplace: string(utf8.RuneError),
 			CSV: config.CSVConfig{
-				Separator:         "，",
-				Delimiter:         `"`,
-				Header:            true,
-				HeaderSchemaMatch: true,
-				NotNull:           false,
-				Null:              `\N`,
-				BackslashEscape:   true,
-				TrimLastSep:       false,
+				Separator:       "，",
+				Delimiter:       `"`,
+				Header:          true,
+				NotNull:         false,
+				Null:            `\N`,
+				BackslashEscape: true,
+				TrimLastSep:     false,
 			},
 			IgnoreColumns: nil,
 		},

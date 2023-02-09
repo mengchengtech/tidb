@@ -193,30 +193,6 @@ func (s *Scanner) getNextToken() int {
 	return tok
 }
 
-func (s *Scanner) getNextTwoTokens() (tok1 int, tok2 int) {
-	r := s.r
-	tok1, pos, lit := s.scan()
-	if tok1 == identifier {
-		tok1 = s.handleIdent(&yySymType{})
-	}
-	if tok1 == identifier {
-		if tmpToken := s.isTokenIdentifier(lit, pos.Offset); tmpToken != 0 {
-			tok1 = tmpToken
-		}
-	}
-	tok2, pos, lit = s.scan()
-	if tok2 == identifier {
-		tok2 = s.handleIdent(&yySymType{})
-	}
-	if tok2 == identifier {
-		if tmpToken := s.isTokenIdentifier(lit, pos.Offset); tmpToken != 0 {
-			tok2 = tmpToken
-		}
-	}
-	s.r = r
-	return tok1, tok2
-}
-
 // Lex returns a token and store the token value in v.
 // Scanner satisfies yyLexer interface.
 // 0 and invalid are special token id this function would return:
@@ -252,28 +228,13 @@ func (s *Scanner) Lex(v *yySymType) int {
 	if tok == not && s.sqlMode.HasHighNotPrecedenceMode() {
 		return not2
 	}
-	if (tok == as || tok == member) && s.getNextToken() == of {
+	if tok == as && s.getNextToken() == of {
 		_, pos, lit = s.scan()
 		v.ident = fmt.Sprintf("%s %s", v.ident, lit)
+		s.lastKeyword = asof
 		s.lastScanOffset = pos.Offset
 		v.offset = pos.Offset
-		if tok == as {
-			s.lastKeyword = asof
-			return asof
-		}
-		s.lastKeyword = memberof
-		return memberof
-	}
-	if tok == to {
-		tok1, tok2 := s.getNextTwoTokens()
-		if tok1 == timestampType && tok2 == stringLit {
-			_, pos, lit = s.scan()
-			v.ident = fmt.Sprintf("%s %s", v.ident, lit)
-			s.lastKeyword = toTimestamp
-			s.lastScanOffset = pos.Offset
-			v.offset = pos.Offset
-			return toTimestamp
-		}
+		return asof
 	}
 
 	switch tok {

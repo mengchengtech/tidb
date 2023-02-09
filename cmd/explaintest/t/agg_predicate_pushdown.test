@@ -1,4 +1,3 @@
-set tidb_cost_model_version=1;
 drop database if exists agg_predicate_pushdown;
 create database agg_predicate_pushdown;
 

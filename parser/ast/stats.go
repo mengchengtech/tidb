@@ -189,11 +189,10 @@ func (n *AnalyzeTableStmt) Accept(v Visitor) (Node, bool) {
 }
 
 // DropStatsStmt is used to drop table statistics.
-// if the PartitionNames is not empty, or IsGlobalStats is true, it will contain exactly one table
 type DropStatsStmt struct {
 	stmtNode
 
-	Tables         []*TableName
+	Table          *TableName
 	PartitionNames []model.CIStr
 	IsGlobalStats  bool
 }
@@ -201,14 +200,8 @@ type DropStatsStmt struct {
 // Restore implements Node interface.
 func (n *DropStatsStmt) Restore(ctx *format.RestoreCtx) error {
 	ctx.WriteKeyWord("DROP STATS ")
-
-	for index, table := range n.Tables {
-		if index != 0 {
-			ctx.WritePlain(", ")
-		}
-		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore DropStatsStmt.Tables[%d]", index)
-		}
+	if err := n.Table.Restore(ctx); err != nil {
+		return errors.Annotate(err, "An error occurred while add table")
 	}
 
 	if n.IsGlobalStats {
@@ -235,13 +228,11 @@ func (n *DropStatsStmt) Accept(v Visitor) (Node, bool) {
 		return v.Leave(newNode)
 	}
 	n = newNode.(*DropStatsStmt)
-	for i, val := range n.Tables {
-		node, ok := val.Accept(v)
-		if !ok {
-			return n, false
-		}
-		n.Tables[i] = node.(*TableName)
+	node, ok := n.Table.Accept(v)
+	if !ok {
+		return n, false
 	}
+	n.Table = node.(*TableName)
 	return v.Leave(n)
 }
 
@@ -266,81 +257,5 @@ func (n *LoadStatsStmt) Accept(v Visitor) (Node, bool) {
 		return v.Leave(newNode)
 	}
 	n = newNode.(*LoadStatsStmt)
-	return v.Leave(n)
-}
-
-// LockStatsStmt is the statement node for lock table statistic
-type LockStatsStmt struct {
-	stmtNode
-
-	Tables []*TableName
-}
-
-// Restore implements Node interface.
-func (n *LockStatsStmt) Restore(ctx *format.RestoreCtx) error {
-	ctx.WriteKeyWord("LOCK STATS ")
-	for index, table := range n.Tables {
-		if index != 0 {
-			ctx.WritePlain(", ")
-		}
-		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore LockStatsStmt.Tables[%d]", index)
-		}
-	}
-	return nil
-}
-
-// Accept implements Node Accept interface.
-func (n *LockStatsStmt) Accept(v Visitor) (Node, bool) {
-	newNode, skipChildren := v.Enter(n)
-	if skipChildren {
-		return v.Leave(newNode)
-	}
-	n = newNode.(*LockStatsStmt)
-	for i, val := range n.Tables {
-		node, ok := val.Accept(v)
-		if !ok {
-			return n, false
-		}
-		n.Tables[i] = node.(*TableName)
-	}
-	return v.Leave(n)
-}
-
-// UnlockStatsStmt is the statement node for unlock table statistic
-type UnlockStatsStmt struct {
-	stmtNode
-
-	Tables []*TableName
-}
-
-// Restore implements Node interface.
-func (n *UnlockStatsStmt) Restore(ctx *format.RestoreCtx) error {
-	ctx.WriteKeyWord("UNLOCK STATS ")
-	for index, table := range n.Tables {
-		if index != 0 {
-			ctx.WritePlain(", ")
-		}
-		if err := table.Restore(ctx); err != nil {
-			return errors.Annotatef(err, "An error occurred while restore UnlockStatsStmt.Tables[%d]", index)
-		}
-	}
-	return nil
-}
-
-// Accept implements Node Accept interface.
-func (n *UnlockStatsStmt) Accept(v Visitor) (Node, bool) {
-	newNode, skipChildren := v.Enter(n)
-	if skipChildren {
-		return v.Leave(newNode)
-	}
-	n = newNode.(*UnlockStatsStmt)
-	for i, val := range n.Tables {
-		node, ok := val.Accept(v)
-		if !ok {
-			return n, false
-		}
-		n.Tables[i] = node.(*TableName)
-	}
 	return v.Leave(n)
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/pingcap/tidb/util/promutil"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
-	"go.uber.org/atomic"
 )
 
 type metrics struct {
@@ -20,10 +19,6 @@ type metrics struct {
 	receiveWriteChunkTimeHistogram *prometheus.HistogramVec
 	errorCount                     *prometheus.CounterVec
 	taskChannelCapacity            *prometheus.GaugeVec
-	// todo: add these to metrics
-	totalChunks     atomic.Int64
-	completedChunks atomic.Int64
-	progressReady   atomic.Bool
 }
 
 func newMetrics(f promutil.Factory, constLabels prometheus.Labels) *metrics {

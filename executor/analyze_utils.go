@@ -15,9 +15,7 @@
 package executor
 
 import (
-	"context"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/pingcap/errors"
@@ -25,13 +23,12 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/statistics"
-	"github.com/pingcap/tidb/util/memory"
 	"go.uber.org/atomic"
 )
 
 func getBuildStatsConcurrency(ctx sessionctx.Context) (int, error) {
 	sessionVars := ctx.GetSessionVars()
-	concurrency, err := sessionVars.GetSessionOrGlobalSystemVar(context.Background(), variable.TiDBBuildStatsConcurrency)
+	concurrency, err := sessionVars.GetSessionOrGlobalSystemVar(variable.TiDBBuildStatsConcurrency)
 	if err != nil {
 		return 0, err
 	}
@@ -47,13 +44,8 @@ func isAnalyzeWorkerPanic(err error) bool {
 }
 
 func getAnalyzePanicErr(r interface{}) error {
-	if msg, ok := r.(string); ok {
-		if msg == globalPanicAnalyzeMemoryExceed {
-			return errAnalyzeOOM
-		}
-		if strings.Contains(msg, memory.PanicMemoryExceed) {
-			return errors.Errorf(msg, errAnalyzeOOM)
-		}
+	if msg, ok := r.(string); ok && msg == globalPanicAnalyzeMemoryExceed {
+		return errAnalyzeOOM
 	}
 	if err, ok := r.(error); ok {
 		if err.Error() == globalPanicAnalyzeMemoryExceed {

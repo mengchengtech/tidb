@@ -122,7 +122,7 @@ func (m *memRootImpl) ConsumeWithTag(tag string, size int64) {
 	m.structSize[tag] = size
 }
 
-// CheckConsume implements MemRoot.
+// TestConsume implements MemRoot.
 func (m *memRootImpl) CheckConsume(size int64) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

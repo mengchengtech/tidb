@@ -25,11 +25,9 @@ import (
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/util/profile"
 	"github.com/stretchr/testify/require"
-	"go.opencensus.io/stats/view"
 )
 
 func TestProfiles(t *testing.T) {
-	defer view.Stop()
 	var err error
 	var store kv.Storage
 	var dom *domain.Domain

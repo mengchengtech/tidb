@@ -244,7 +244,7 @@ func (bj BinaryJSON) Extract(pathExprList []JSONPathExpression) (ret BinaryJSON,
 		found = true
 		ret = buf[0]
 		// Fix https://github.com/pingcap/tidb/issues/30352
-		if pathExprList[0].CouldMatchMultipleValues() {
+		if pathExprList[0].ContainsAnyAsterisk() {
 			ret = buildBinaryJSONArray(buf)
 		}
 	} else {
@@ -270,32 +270,20 @@ func (bj BinaryJSON) extractTo(buf []BinaryJSON, pathExpr JSONPathExpression, du
 		return append(buf, bj)
 	}
 	currentLeg, subPathExpr := pathExpr.popOneLeg()
-	if currentLeg.typ == jsonPathLegArraySelection {
+	if currentLeg.typ == jsonPathLegIndex {
 		if bj.TypeCode != JSONTypeCodeArray {
-			// If the current object is not an array, still append them if the selection includes
-			// 0. But for asterisk, it still returns NULL.
-			//
-			// don't call `getIndexRange` or `getIndexFromStart`, they will panic if the argument
-			// is not array.
-			switch selection := currentLeg.arraySelection.(type) {
-			case jsonPathArraySelectionIndex:
-				if selection.index == 0 {
-					buf = bj.extractTo(buf, subPathExpr, dup, one)
-				}
-			case jsonPathArraySelectionRange:
-				// for [0 to Non-negative Number] and [0 to last], it extracts itself
-				if selection.start == 0 && selection.end >= -1 {
-					buf = bj.extractTo(buf, subPathExpr, dup, one)
-				}
+			if currentLeg.arrayIndex <= 0 && currentLeg.arrayIndex != arrayIndexAsterisk {
+				buf = bj.extractTo(buf, subPathExpr, dup, one)
 			}
 			return buf
 		}
-
-		start, end := currentLeg.arraySelection.getIndexRange(bj)
-		if start >= 0 && start <= end {
-			for i := start; i <= end; i++ {
-				buf = bj.ArrayGetElem(i).extractTo(buf, subPathExpr, dup, one)
+		elemCount := bj.GetElemCount()
+		if currentLeg.arrayIndex == arrayIndexAsterisk {
+			for i := 0; i < elemCount && !jsonFinished(buf, one); i++ {
+				buf = bj.arrayGetElem(i).extractTo(buf, subPathExpr, dup, one)
 			}
+		} else if currentLeg.arrayIndex < elemCount {
+			buf = bj.arrayGetElem(currentLeg.arrayIndex).extractTo(buf, subPathExpr, dup, one)
 		}
 	} else if currentLeg.typ == jsonPathLegKey && bj.TypeCode == JSONTypeCodeObject {
 		elemCount := bj.GetElemCount()
@@ -314,7 +302,7 @@ func (bj BinaryJSON) extractTo(buf []BinaryJSON, pathExpr JSONPathExpression, du
 		if bj.TypeCode == JSONTypeCodeArray {
 			elemCount := bj.GetElemCount()
 			for i := 0; i < elemCount && !jsonFinished(buf, one); i++ {
-				buf = bj.ArrayGetElem(i).extractTo(buf, pathExpr, dup, one)
+				buf = bj.arrayGetElem(i).extractTo(buf, pathExpr, dup, one)
 			}
 		} else if bj.TypeCode == JSONTypeCodeObject {
 			elemCount := bj.GetElemCount()
@@ -401,7 +389,7 @@ func (bj BinaryJSON) Modify(pathExprList []JSONPathExpression, values []BinaryJS
 		return retj, errors.New("Incorrect parameter count")
 	}
 	for _, pathExpr := range pathExprList {
-		if pathExpr.flags.containsAnyAsterisk() || pathExpr.flags.containsAnyRange() {
+		if pathExpr.flags.containsAnyAsterisk() {
 			// TODO: should return 3149(42000)
 			return retj, errors.New("Invalid path expression")
 		}
@@ -436,7 +424,7 @@ func (bj BinaryJSON) ArrayInsert(pathExpr JSONPathExpression, value BinaryJSON) 
 		return bj, ErrInvalidJSONPathArrayCell
 	}
 	parentPath, lastLeg := pathExpr.popOneLastLeg()
-	if lastLeg.typ != jsonPathLegArraySelection {
+	if lastLeg.typ != jsonPathLegIndex {
 		return bj, ErrInvalidJSONPathArrayCell
 	}
 	// Find the target array
@@ -445,13 +433,7 @@ func (bj BinaryJSON) ArrayInsert(pathExpr JSONPathExpression, value BinaryJSON) 
 		return bj, nil
 	}
 
-	idx := 0
-	switch selection := lastLeg.arraySelection.(type) {
-	case jsonPathArraySelectionIndex:
-		idx = selection.index.getIndexFromStart(obj)
-	default:
-		return bj, ErrInvalidJSONPathArrayCell
-	}
+	idx := lastLeg.arrayIndex
 	count := obj.GetElemCount()
 	if idx >= count {
 		idx = count
@@ -459,12 +441,12 @@ func (bj BinaryJSON) ArrayInsert(pathExpr JSONPathExpression, value BinaryJSON) 
 	// Insert into the array
 	newArray := make([]BinaryJSON, 0, count+1)
 	for i := 0; i < idx; i++ {
-		elem := obj.ArrayGetElem(i)
+		elem := obj.arrayGetElem(i)
 		newArray = append(newArray, elem)
 	}
 	newArray = append(newArray, value)
 	for i := idx; i < count; i++ {
-		elem := obj.ArrayGetElem(i)
+		elem := obj.arrayGetElem(i)
 		newArray = append(newArray, elem)
 	}
 	obj = buildBinaryJSONArray(newArray)
@@ -483,7 +465,7 @@ func (bj BinaryJSON) Remove(pathExprList []JSONPathExpression) (BinaryJSON, erro
 			// TODO: should return 3153(42000)
 			return bj, errors.New("Invalid path expression")
 		}
-		if pathExpr.flags.containsAnyAsterisk() || pathExpr.flags.containsAnyRange() {
+		if pathExpr.flags.containsAnyAsterisk() {
 			// TODO: should return 3149(42000)
 			return bj, errors.New("Invalid path expression")
 		}
@@ -547,7 +529,7 @@ func (bm *binaryModifier) doInsert(path JSONPathExpression, newBj BinaryJSON) {
 		return
 	}
 	parentBj := result[0]
-	if lastLeg.typ == jsonPathLegArraySelection {
+	if lastLeg.typ == jsonPathLegIndex {
 		bm.modifyPtr = &parentBj.Value[0]
 		if parentBj.TypeCode != JSONTypeCodeArray {
 			bm.modifyValue = buildBinaryJSONArray([]BinaryJSON{parentBj, newBj})
@@ -556,7 +538,7 @@ func (bm *binaryModifier) doInsert(path JSONPathExpression, newBj BinaryJSON) {
 		elemCount := parentBj.GetElemCount()
 		elems := make([]BinaryJSON, 0, elemCount+1)
 		for i := 0; i < elemCount; i++ {
-			elems = append(elems, parentBj.ArrayGetElem(i))
+			elems = append(elems, parentBj.arrayGetElem(i))
 		}
 		elems = append(elems, newBj)
 		bm.modifyValue = buildBinaryJSONArray(elems)
@@ -607,22 +589,16 @@ func (bm *binaryModifier) doRemove(path JSONPathExpression) {
 		return
 	}
 	parentBj := result[0]
-	if lastLeg.typ == jsonPathLegArraySelection {
+	if lastLeg.typ == jsonPathLegIndex {
 		if parentBj.TypeCode != JSONTypeCodeArray {
 			return
 		}
-		selectionIndex, ok := lastLeg.arraySelection.(jsonPathArraySelectionIndex)
-		if !ok {
-			return
-		}
-		idx := selectionIndex.index.getIndexFromStart(parentBj)
-
 		bm.modifyPtr = &parentBj.Value[0]
 		elemCount := parentBj.GetElemCount()
 		elems := make([]BinaryJSON, 0, elemCount-1)
 		for i := 0; i < elemCount; i++ {
-			if i != idx {
-				elems = append(elems, parentBj.ArrayGetElem(i))
+			if i != lastLeg.arrayIndex {
+				elems = append(elems, parentBj.arrayGetElem(i))
 			}
 		}
 		bm.modifyValue = buildBinaryJSONArray(elems)
@@ -809,8 +785,8 @@ func CompareBinaryJSON(left, right BinaryJSON) int {
 			leftCount := left.GetElemCount()
 			rightCount := right.GetElemCount()
 			for i := 0; i < leftCount && i < rightCount; i++ {
-				elem1 := left.ArrayGetElem(i)
-				elem2 := right.ArrayGetElem(i)
+				elem1 := left.arrayGetElem(i)
+				elem2 := right.arrayGetElem(i)
 				cmp = CompareBinaryJSON(elem1, elem2)
 				if cmp != 0 {
 					return cmp
@@ -993,7 +969,7 @@ func mergeBinaryArray(elems []BinaryJSON) BinaryJSON {
 		} else {
 			childCount := elem.GetElemCount()
 			for j := 0; j < childCount; j++ {
-				buf = append(buf, elem.ArrayGetElem(j))
+				buf = append(buf, elem.arrayGetElem(j))
 			}
 		}
 	}
@@ -1088,7 +1064,7 @@ func ContainsBinaryJSON(obj, target BinaryJSON) bool {
 		if target.TypeCode == JSONTypeCodeArray {
 			elemCount := target.GetElemCount()
 			for i := 0; i < elemCount; i++ {
-				if !ContainsBinaryJSON(obj, target.ArrayGetElem(i)) {
+				if !ContainsBinaryJSON(obj, target.arrayGetElem(i)) {
 					return false
 				}
 			}
@@ -1096,49 +1072,7 @@ func ContainsBinaryJSON(obj, target BinaryJSON) bool {
 		}
 		elemCount := obj.GetElemCount()
 		for i := 0; i < elemCount; i++ {
-			if ContainsBinaryJSON(obj.ArrayGetElem(i), target) {
-				return true
-			}
-		}
-		return false
-	default:
-		return CompareBinaryJSON(obj, target) == 0
-	}
-}
-
-// OverlapsBinaryJSON is similar with ContainsBinaryJSON, but it checks the `OR` relationship.
-func OverlapsBinaryJSON(obj, target BinaryJSON) bool {
-	if obj.TypeCode != JSONTypeCodeArray && target.TypeCode == JSONTypeCodeArray {
-		obj, target = target, obj
-	}
-	switch obj.TypeCode {
-	case JSONTypeCodeObject:
-		if target.TypeCode == JSONTypeCodeObject {
-			elemCount := target.GetElemCount()
-			for i := 0; i < elemCount; i++ {
-				key := target.objectGetKey(i)
-				val := target.objectGetVal(i)
-				if exp, exists := obj.objectSearchKey(key); exists && CompareBinaryJSON(exp, val) == 0 {
-					return true
-				}
-			}
-		}
-		return false
-	case JSONTypeCodeArray:
-		if target.TypeCode == JSONTypeCodeArray {
-			for i := 0; i < obj.GetElemCount(); i++ {
-				o := obj.ArrayGetElem(i)
-				for j := 0; j < target.GetElemCount(); j++ {
-					if CompareBinaryJSON(o, target.ArrayGetElem(j)) == 0 {
-						return true
-					}
-				}
-			}
-			return false
-		}
-		elemCount := obj.GetElemCount()
-		for i := 0; i < elemCount; i++ {
-			if CompareBinaryJSON(obj.ArrayGetElem(i), target) == 0 {
+			if ContainsBinaryJSON(obj.arrayGetElem(i), target) {
 				return true
 			}
 		}
@@ -1175,7 +1109,7 @@ func (bj BinaryJSON) GetElemDepth() int {
 		elemCount := bj.GetElemCount()
 		maxDepth := 0
 		for i := 0; i < elemCount; i++ {
-			obj := bj.ArrayGetElem(i)
+			obj := bj.arrayGetElem(i)
 			depth := obj.GetElemDepth()
 			if depth > maxDepth {
 				maxDepth = depth
@@ -1241,42 +1175,23 @@ func (bj BinaryJSON) extractToCallback(pathExpr JSONPathExpression, callbackFn e
 	}
 
 	currentLeg, subPathExpr := pathExpr.popOneLeg()
-	if currentLeg.typ == jsonPathLegArraySelection && bj.TypeCode == JSONTypeCodeArray {
+	if currentLeg.typ == jsonPathLegIndex && bj.TypeCode == JSONTypeCodeArray {
 		elemCount := bj.GetElemCount()
-		switch selection := currentLeg.arraySelection.(type) {
-		case jsonPathArraySelectionAsterisk:
+		if currentLeg.arrayIndex == arrayIndexAsterisk {
 			for i := 0; i < elemCount; i++ {
-				// buf = bj.ArrayGetElem(i).extractTo(buf, subPathExpr)
-				path := fullpath.pushBackOneArraySelectionLeg(jsonPathArraySelectionIndex{jsonPathArrayIndexFromStart(i)})
-				stop, err = bj.ArrayGetElem(i).extractToCallback(subPathExpr, callbackFn, path)
+				// buf = bj.arrayGetElem(i).extractTo(buf, subPathExpr)
+				path := fullpath.pushBackOneIndexLeg(i)
+				stop, err = bj.arrayGetElem(i).extractToCallback(subPathExpr, callbackFn, path)
 				if stop || err != nil {
 					return
 				}
 			}
-		case jsonPathArraySelectionIndex:
-			idx := selection.index.getIndexFromStart(bj)
-			if idx < elemCount && idx >= 0 {
-				// buf = bj.ArrayGetElem(currentLeg.arraySelection).extractTo(buf, subPathExpr)
-				path := fullpath.pushBackOneArraySelectionLeg(currentLeg.arraySelection)
-				stop, err = bj.ArrayGetElem(idx).extractToCallback(subPathExpr, callbackFn, path)
-				if stop || err != nil {
-					return
-				}
-			}
-		case jsonPathArraySelectionRange:
-			start := selection.start.getIndexFromStart(bj)
-			end := selection.end.getIndexFromStart(bj)
-			if end >= elemCount {
-				end = elemCount - 1
-			}
-			if start <= end && start >= 0 {
-				for i := start; i <= end; i++ {
-					path := fullpath.pushBackOneArraySelectionLeg(jsonPathArraySelectionIndex{jsonPathArrayIndexFromStart(i)})
-					stop, err = bj.ArrayGetElem(i).extractToCallback(subPathExpr, callbackFn, path)
-					if stop || err != nil {
-						return
-					}
-				}
+		} else if currentLeg.arrayIndex < elemCount {
+			// buf = bj.arrayGetElem(currentLeg.arrayIndex).extractTo(buf, subPathExpr)
+			path := fullpath.pushBackOneIndexLeg(currentLeg.arrayIndex)
+			stop, err = bj.arrayGetElem(currentLeg.arrayIndex).extractToCallback(subPathExpr, callbackFn, path)
+			if stop || err != nil {
+				return
 			}
 		}
 	} else if currentLeg.typ == jsonPathLegKey && bj.TypeCode == JSONTypeCodeObject {
@@ -1311,9 +1226,9 @@ func (bj BinaryJSON) extractToCallback(pathExpr JSONPathExpression, callbackFn e
 		if bj.TypeCode == JSONTypeCodeArray {
 			elemCount := bj.GetElemCount()
 			for i := 0; i < elemCount; i++ {
-				// buf = bj.ArrayGetElem(i).extractTo(buf, pathExpr)
-				path := fullpath.pushBackOneArraySelectionLeg(jsonPathArraySelectionIndex{jsonPathArrayIndexFromStart(i)})
-				stop, err = bj.ArrayGetElem(i).extractToCallback(pathExpr, callbackFn, path)
+				// buf = bj.arrayGetElem(i).extractTo(buf, pathExpr)
+				path := fullpath.pushBackOneIndexLeg(i)
+				stop, err = bj.arrayGetElem(i).extractToCallback(pathExpr, callbackFn, path)
 				if stop || err != nil {
 					return
 				}
@@ -1356,8 +1271,8 @@ func (bj BinaryJSON) Walk(walkFn BinaryJSONWalkFunc, pathExprList ...JSONPathExp
 		if bj.TypeCode == JSONTypeCodeArray {
 			elemCount := bj.GetElemCount()
 			for i := 0; i < elemCount; i++ {
-				path := fullpath.pushBackOneArraySelectionLeg(jsonPathArraySelectionIndex{jsonPathArrayIndexFromStart(i)})
-				stop, err = doWalk(path, bj.ArrayGetElem(i))
+				path := fullpath.pushBackOneIndexLeg(i)
+				stop, err = doWalk(path, bj.arrayGetElem(i))
 				if stop || err != nil {
 					return
 				}

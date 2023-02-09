@@ -28,7 +28,6 @@ type SchemaChecker struct {
 	SchemaValidator
 	schemaVer       int64
 	relatedTableIDs []int64
-	needCheckSchema bool
 }
 
 type intSchemaVer int64
@@ -45,12 +44,11 @@ var (
 )
 
 // NewSchemaChecker creates a new schema checker.
-func NewSchemaChecker(do *Domain, schemaVer int64, relatedTableIDs []int64, needCheckSchema bool) *SchemaChecker {
+func NewSchemaChecker(do *Domain, schemaVer int64, relatedTableIDs []int64) *SchemaChecker {
 	return &SchemaChecker{
 		SchemaValidator: do.SchemaValidator,
 		schemaVer:       schemaVer,
 		relatedTableIDs: relatedTableIDs,
-		needCheckSchema: needCheckSchema,
 	}
 }
 
@@ -64,7 +62,7 @@ func (s *SchemaChecker) CheckBySchemaVer(txnTS uint64, startSchemaVer tikv.Schem
 	schemaOutOfDateRetryInterval := SchemaOutOfDateRetryInterval.Load()
 	schemaOutOfDateRetryTimes := int(SchemaOutOfDateRetryTimes.Load())
 	for i := 0; i < schemaOutOfDateRetryTimes; i++ {
-		relatedChange, CheckResult := s.SchemaValidator.Check(txnTS, startSchemaVer.SchemaMetaVersion(), s.relatedTableIDs, s.needCheckSchema)
+		relatedChange, CheckResult := s.SchemaValidator.Check(txnTS, startSchemaVer.SchemaMetaVersion(), s.relatedTableIDs)
 		switch CheckResult {
 		case ResultSucc:
 			return nil, nil

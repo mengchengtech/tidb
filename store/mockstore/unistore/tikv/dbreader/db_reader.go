@@ -332,7 +332,6 @@ func (r *DBReader) CheckWriteItemForRcCheckTSRead(readTS uint64, item *badger.It
 			StartTS:          readTS,
 			ConflictTS:       userMeta.StartTS(),
 			ConflictCommitTS: userMeta.CommitTS(),
-			Reason:           kvrpcpb.WriteConflict_RcCheckTs,
 		}
 	}
 	return nil

@@ -224,8 +224,7 @@ func (r *RPCResult) StrategyForRetryStoreError() RetryStrategy {
 
 	if r.StoreError.GetServerIsBusy() != nil ||
 		r.StoreError.GetRegionNotInitialized() != nil ||
-		r.StoreError.GetNotLeader() != nil ||
-		r.StoreError.GetServerIsBusy() != nil {
+		r.StoreError.GetNotLeader() != nil {
 		return StrategyFromThisRegion
 	}
 

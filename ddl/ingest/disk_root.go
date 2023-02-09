@@ -15,8 +15,7 @@
 package ingest
 
 import (
-	"sync"
-
+	"github.com/pingcap/errors"
 	lcom "github.com/pingcap/tidb/br/pkg/lightning/common"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/util/logutil"
@@ -39,7 +38,6 @@ type diskRootImpl struct {
 	currentUsage uint64
 	maxQuota     uint64
 	bcCtx        *backendCtxManager
-	mu           sync.RWMutex
 }
 
 // NewDiskRootImpl creates a new DiskRoot.
@@ -52,32 +50,22 @@ func NewDiskRootImpl(path string, bcCtx *backendCtxManager) DiskRoot {
 
 // CurrentUsage implements DiskRoot interface.
 func (d *diskRootImpl) CurrentUsage() uint64 {
-	d.mu.RLock()
-	usage := d.currentUsage
-	d.mu.RUnlock()
-	return usage
+	return d.currentUsage
 }
 
 // MaxQuota implements DiskRoot interface.
 func (d *diskRootImpl) MaxQuota() uint64 {
-	d.mu.RLock()
-	quota := d.maxQuota
-	d.mu.RUnlock()
-	return quota
+	return d.maxQuota
 }
 
 // UpdateUsageAndQuota implements DiskRoot interface.
 func (d *diskRootImpl) UpdateUsageAndQuota() error {
-	totalDiskUsage := d.bcCtx.TotalDiskUsage()
+	d.currentUsage = d.bcCtx.TotalDiskUsage()
 	sz, err := lcom.GetStorageSize(d.path)
 	if err != nil {
 		logutil.BgLogger().Error(LitErrGetStorageQuota, zap.Error(err))
-		return err
+		return errors.New(LitErrGetStorageQuota)
 	}
-	maxQuota := mathutil.Min(variable.DDLDiskQuota.Load(), uint64(capacityThreshold*float64(sz.Capacity)))
-	d.mu.Lock()
-	d.currentUsage = totalDiskUsage
-	d.maxQuota = maxQuota
-	d.mu.Unlock()
+	d.maxQuota = mathutil.Min(variable.DDLDiskQuota.Load(), uint64(capacityThreshold*float64(sz.Capacity)))
 	return nil
 }

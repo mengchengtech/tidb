@@ -50,105 +50,27 @@ import (
 		select json_extract('{"a": "b", "c": [1, "2"]}', '$.*') -> ["b", [1, "2"]]
 */
 
-// if index is positive, it represents the [index]
-// if index is negative, it represents the [len() + index]
-// a normal index "5" will be parsed into "5", and the "last - 5" will be "-6"
-type jsonPathArrayIndex int
-
-func (index jsonPathArrayIndex) getIndexFromStart(obj BinaryJSON) int {
-	if index < 0 {
-		return obj.GetElemCount() + int(index)
-	}
-
-	return int(index)
-}
-
-// validateIndexRange returns whether `a` could be less or equal than `b`
-// if two indexes are all non-negative, or all negative, the comparison follows the number order
-// if the sign of them differs, this function will still return true
-func validateIndexRange(a jsonPathArrayIndex, b jsonPathArrayIndex) bool {
-	if (a >= 0 && b >= 0) || (a < 0 && b < 0) {
-		return a <= b
-	}
-
-	return true
-}
-
-func jsonPathArrayIndexFromStart(index int) jsonPathArrayIndex {
-	return jsonPathArrayIndex(index)
-}
-
-func jsonPathArrayIndexFromLast(index int) jsonPathArrayIndex {
-	return jsonPathArrayIndex(-1 - index)
-}
-
-type jsonPathArraySelection interface {
-	// returns the closed interval of the range it represents
-	// it ensures the `end` is less or equal than element count - 1
-	// the caller should validate the return value through checking start <= end
-	getIndexRange(bj BinaryJSON) (int, int)
-}
-
-var _ jsonPathArraySelection = jsonPathArraySelectionAsterisk{}
-var _ jsonPathArraySelection = jsonPathArraySelectionIndex{}
-var _ jsonPathArraySelection = jsonPathArraySelectionRange{}
-
-type jsonPathArraySelectionAsterisk struct{}
-
-func (jsonPathArraySelectionAsterisk) getIndexRange(bj BinaryJSON) (int, int) {
-	return 0, bj.GetElemCount() - 1
-}
-
-type jsonPathArraySelectionIndex struct {
-	index jsonPathArrayIndex
-}
-
-func (i jsonPathArraySelectionIndex) getIndexRange(bj BinaryJSON) (int, int) {
-	end := i.index.getIndexFromStart(bj)
-
-	// returns index, min(index, count - 1)
-	// so that the caller could only check the start <= end
-	elemCount := bj.GetElemCount()
-	if end >= elemCount {
-		end = elemCount - 1
-	}
-	return i.index.getIndexFromStart(bj), end
-}
-
-// jsonPathArraySelectionRange represents a closed interval
-type jsonPathArraySelectionRange struct {
-	start jsonPathArrayIndex
-	end   jsonPathArrayIndex
-}
-
-func (i jsonPathArraySelectionRange) getIndexRange(bj BinaryJSON) (int, int) {
-	start := i.start.getIndexFromStart(bj)
-	end := i.end.getIndexFromStart(bj)
-
-	elemCount := bj.GetElemCount()
-	if end >= elemCount {
-		end = elemCount - 1
-	}
-	return start, end
-}
-
 type jsonPathLegType byte
 
 const (
 	// jsonPathLegKey indicates the path leg with '.key'.
 	jsonPathLegKey jsonPathLegType = 0x01
-	// jsonPathLegArraySelection indicates the path leg with form '[index]', '[index to index]'.
-	jsonPathLegArraySelection jsonPathLegType = 0x02
+	// jsonPathLegIndex indicates the path leg with form '[number]'.
+	jsonPathLegIndex jsonPathLegType = 0x02
 	// jsonPathLegDoubleAsterisk indicates the path leg with form '**'.
 	jsonPathLegDoubleAsterisk jsonPathLegType = 0x03
 )
 
 // jsonPathLeg is only used by JSONPathExpression.
 type jsonPathLeg struct {
-	typ            jsonPathLegType
-	arraySelection jsonPathArraySelection // if typ is jsonPathLegArraySelection, the value should be parsed into here.
-	dotKey         string                 // if typ is jsonPathLegKey, the key should be parsed into here.
+	typ        jsonPathLegType
+	arrayIndex int    // if typ is jsonPathLegIndex, the value should be parsed into here.
+	dotKey     string // if typ is jsonPathLegKey, the key should be parsed into here.
 }
+
+// arrayIndexAsterisk is for parsing `*` into a number.
+// we need this number represent "all".
+const arrayIndexAsterisk = -1
 
 // jsonPathExpressionFlag holds attributes of JSONPathExpression
 type jsonPathExpressionFlag byte
@@ -156,7 +78,6 @@ type jsonPathExpressionFlag byte
 const (
 	jsonPathExpressionContainsAsterisk       jsonPathExpressionFlag = 0x01
 	jsonPathExpressionContainsDoubleAsterisk jsonPathExpressionFlag = 0x02
-	jsonPathExpressionContainsRange          jsonPathExpressionFlag = 0x04
 )
 
 // containsAnyAsterisk returns true if pef contains any asterisk.
@@ -165,22 +86,10 @@ func (pef jsonPathExpressionFlag) containsAnyAsterisk() bool {
 	return byte(pef) != 0
 }
 
-// containsAnyRange returns true if pef contains any range.
-func (pef jsonPathExpressionFlag) containsAnyRange() bool {
-	pef &= jsonPathExpressionContainsRange
-	return byte(pef) != 0
-}
-
 // JSONPathExpression is for JSON path expression.
 type JSONPathExpression struct {
 	legs  []jsonPathLeg
 	flags jsonPathExpressionFlag
-}
-
-func (pe JSONPathExpression) clone() JSONPathExpression {
-	legs := make([]jsonPathLeg, len(pe.legs))
-	copy(legs, pe.legs)
-	return JSONPathExpression{legs: legs, flags: pe.flags}
 }
 
 var peCache JSONPathExpressionCache
@@ -204,13 +113,8 @@ func (pe JSONPathExpression) popOneLeg() (jsonPathLeg, JSONPathExpression) {
 		flags: 0,
 	}
 	for _, leg := range newPe.legs {
-		if leg.typ == jsonPathLegArraySelection {
-			switch leg.arraySelection.(type) {
-			case jsonPathArraySelectionAsterisk:
-				newPe.flags |= jsonPathExpressionContainsAsterisk
-			case jsonPathArraySelectionRange:
-				newPe.flags |= jsonPathExpressionContainsRange
-			}
+		if leg.typ == jsonPathLegIndex && leg.arrayIndex == -1 {
+			newPe.flags |= jsonPathExpressionContainsAsterisk
 		} else if leg.typ == jsonPathLegKey && leg.dotKey == "*" {
 			newPe.flags |= jsonPathExpressionContainsAsterisk
 		} else if leg.typ == jsonPathLegDoubleAsterisk {
@@ -228,17 +132,14 @@ func (pe JSONPathExpression) popOneLastLeg() (JSONPathExpression, jsonPathLeg) {
 	return JSONPathExpression{legs: pe.legs[:lastLegIdx]}, lastLeg
 }
 
-// pushBackOneArraySelectionLeg pushback one leg of INDEX type
-func (pe JSONPathExpression) pushBackOneArraySelectionLeg(arraySelection jsonPathArraySelection) JSONPathExpression {
+// pushBackOneIndexLeg pushback one leg of INDEX type
+func (pe JSONPathExpression) pushBackOneIndexLeg(index int) JSONPathExpression {
 	newPe := JSONPathExpression{
-		legs:  append(pe.legs, jsonPathLeg{typ: jsonPathLegArraySelection, arraySelection: arraySelection}),
+		legs:  append(pe.legs, jsonPathLeg{typ: jsonPathLegIndex, arrayIndex: index}),
 		flags: pe.flags,
 	}
-	switch arraySelection.(type) {
-	case jsonPathArraySelectionAsterisk:
+	if index == -1 {
 		newPe.flags |= jsonPathExpressionContainsAsterisk
-	case jsonPathArraySelectionRange:
-		newPe.flags |= jsonPathExpressionContainsRange
 	}
 	return newPe
 }
@@ -255,9 +156,9 @@ func (pe JSONPathExpression) pushBackOneKeyLeg(key string) JSONPathExpression {
 	return newPe
 }
 
-// CouldMatchMultipleValues returns true if pe contains any asterisk or range selection.
-func (pe JSONPathExpression) CouldMatchMultipleValues() bool {
-	return pe.flags.containsAnyAsterisk() || pe.flags.containsAnyRange()
+// ContainsAnyAsterisk returns true if pe contains any asterisk.
+func (pe JSONPathExpression) ContainsAnyAsterisk() bool {
+	return pe.flags.containsAnyAsterisk()
 }
 
 type jsonPathStream struct {
@@ -354,85 +255,6 @@ func parseJSONPathWildcard(s *jsonPathStream, p *JSONPathExpression) bool {
 	return true
 }
 
-func (s *jsonPathStream) tryReadString(expected string) bool {
-	recordPos := s.pos
-
-	i := 0
-	str, meetEnd := s.readWhile(func(b byte) bool {
-		i += 1
-		return i <= len(expected)
-	})
-
-	if meetEnd || str != expected {
-		s.pos = recordPos
-		return false
-	}
-	return true
-}
-
-func (s *jsonPathStream) tryReadIndexNumber() (int, bool) {
-	recordPos := s.pos
-
-	str, meetEnd := s.readWhile(func(b byte) bool {
-		return b >= '0' && b <= '9'
-	})
-	if meetEnd {
-		s.pos = recordPos
-		return 0, false
-	}
-
-	index, err := strconv.Atoi(str)
-	if err != nil || index > math.MaxUint32 {
-		s.pos = recordPos
-		return 0, false
-	}
-
-	return index, true
-}
-
-// tryParseArrayIndex tries to read an arrayIndex, which is 'number', 'last' or 'last - number'
-// if failed, the stream will not be pushed forward
-func (s *jsonPathStream) tryParseArrayIndex() (jsonPathArrayIndex, bool) {
-	recordPos := s.pos
-
-	s.skipWhiteSpace()
-	if s.exhausted() {
-		return 0, false
-	}
-	switch c := s.peek(); {
-	case c >= '0' && c <= '9':
-		index, ok := s.tryReadIndexNumber()
-		if !ok {
-			s.pos = recordPos
-			return 0, false
-		}
-		return jsonPathArrayIndexFromStart(index), true
-	case c == 'l':
-		if !s.tryReadString("last") {
-			s.pos = recordPos
-			return 0, false
-		}
-		s.skipWhiteSpace()
-		if s.exhausted() {
-			return jsonPathArrayIndexFromLast(0), true
-		}
-
-		if s.peek() != '-' {
-			return jsonPathArrayIndexFromLast(0), true
-		}
-		s.skip(1)
-		s.skipWhiteSpace()
-
-		index, ok := s.tryReadIndexNumber()
-		if !ok {
-			s.pos = recordPos
-			return 0, false
-		}
-		return jsonPathArrayIndexFromLast(index), true
-	}
-	return 0, false
-}
-
 func parseJSONPathArray(s *jsonPathStream, p *JSONPathExpression) bool {
 	s.skip(1)
 	s.skipWhiteSpace()
@@ -443,37 +265,20 @@ func parseJSONPathArray(s *jsonPathStream, p *JSONPathExpression) bool {
 	if s.peek() == '*' {
 		s.skip(1)
 		p.flags |= jsonPathExpressionContainsAsterisk
-		p.legs = append(p.legs, jsonPathLeg{typ: jsonPathLegArraySelection, arraySelection: jsonPathArraySelectionAsterisk{}})
+		p.legs = append(p.legs, jsonPathLeg{typ: jsonPathLegIndex, arrayIndex: arrayIndexAsterisk})
 	} else {
-		start, ok := s.tryParseArrayIndex()
-		if !ok {
+		// FIXME: only support an integer index for now. Need to support [last], [1 to 2]... in the future.
+		str, meetEnd := s.readWhile(func(b byte) bool {
+			return b >= '0' && b <= '9'
+		})
+		if meetEnd {
 			return false
 		}
-
-		var selection jsonPathArraySelection
-		selection = jsonPathArraySelectionIndex{start}
-		// try to read " to " and the end
-		if unicode.IsSpace(rune(s.peek())) {
-			s.skipWhiteSpace()
-			if s.tryReadString("to") && unicode.IsSpace(rune(s.peek())) {
-				s.skipWhiteSpace()
-				if s.exhausted() {
-					return false
-				}
-				end, ok := s.tryParseArrayIndex()
-				if !ok {
-					return false
-				}
-
-				if !validateIndexRange(start, end) {
-					return false
-				}
-				p.flags |= jsonPathExpressionContainsRange
-				selection = jsonPathArraySelectionRange{start, end}
-			}
+		index, err := strconv.Atoi(str)
+		if err != nil || index > math.MaxUint32 {
+			return false
 		}
-
-		p.legs = append(p.legs, jsonPathLeg{typ: jsonPathLegArraySelection, arraySelection: selection})
+		p.legs = append(p.legs, jsonPathLeg{typ: jsonPathLegIndex, arrayIndex: index})
 	}
 
 	s.skipWhiteSpace()
@@ -557,7 +362,7 @@ func ParseJSONPathExpr(pathExpr string) (JSONPathExpression, error) {
 	val, ok := peCache.cache.Get(jsonPathExpressionKey(pathExpr))
 	if ok {
 		peCache.mu.Unlock()
-		return val.(JSONPathExpression).clone(), nil
+		return val.(JSONPathExpression), nil
 	}
 	peCache.mu.Unlock()
 
@@ -570,35 +375,18 @@ func ParseJSONPathExpr(pathExpr string) (JSONPathExpression, error) {
 	return pathExpression, err
 }
 
-func (index jsonPathArrayIndex) String() string {
-	if index < 0 {
-		indexStr := strconv.Itoa(int(math.Abs(float64(index + 1))))
-		return "last-" + indexStr
-	}
-
-	indexStr := strconv.Itoa(int(index))
-	return indexStr
-}
-
 func (pe JSONPathExpression) String() string {
 	var s strings.Builder
 
 	s.WriteString("$")
 	for _, leg := range pe.legs {
 		switch leg.typ {
-		case jsonPathLegArraySelection:
-			switch selection := leg.arraySelection.(type) {
-			case jsonPathArraySelectionAsterisk:
+		case jsonPathLegIndex:
+			if leg.arrayIndex == -1 {
 				s.WriteString("[*]")
-			case jsonPathArraySelectionIndex:
+			} else {
 				s.WriteString("[")
-				s.WriteString(selection.index.String())
-				s.WriteString("]")
-			case jsonPathArraySelectionRange:
-				s.WriteString("[")
-				s.WriteString(selection.start.String())
-				s.WriteString(" to ")
-				s.WriteString(selection.end.String())
+				s.WriteString(strconv.Itoa(leg.arrayIndex))
 				s.WriteString("]")
 			}
 		case jsonPathLegKey:

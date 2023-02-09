@@ -23,7 +23,6 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/ddl"
-	"github.com/pingcap/tidb/ddl/internal/callback"
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/sessionctx"
@@ -98,7 +97,7 @@ func TestParallelDDL(t *testing.T) {
 
 	// set hook to execute jobs after all jobs are in queue.
 	jobCnt := 11
-	tc := &callback.TestDDLCallback{Do: dom}
+	tc := &ddl.TestDDLCallback{Do: dom}
 	once := sync.Once{}
 	var checkErr error
 	tc.OnJobRunBeforeExported = func(job *model.Job) {
@@ -270,12 +269,10 @@ func TestJobNeedGC(t *testing.T) {
 	job := &model.Job{Type: model.ActionAddIndex, State: model.JobStateCancelled}
 	require.False(t, ddl.JobNeedGCForTest(job))
 
-	job = &model.Job{Type: model.ActionAddColumn, State: model.JobStateDone}
-	require.False(t, ddl.JobNeedGCForTest(job))
 	job = &model.Job{Type: model.ActionAddIndex, State: model.JobStateDone}
-	require.True(t, ddl.JobNeedGCForTest(job))
+	require.False(t, ddl.JobNeedGCForTest(job))
 	job = &model.Job{Type: model.ActionAddPrimaryKey, State: model.JobStateDone}
-	require.True(t, ddl.JobNeedGCForTest(job))
+	require.False(t, ddl.JobNeedGCForTest(job))
 	job = &model.Job{Type: model.ActionAddIndex, State: model.JobStateRollbackDone}
 	require.True(t, ddl.JobNeedGCForTest(job))
 	job = &model.Job{Type: model.ActionAddPrimaryKey, State: model.JobStateRollbackDone}
@@ -283,17 +280,11 @@ func TestJobNeedGC(t *testing.T) {
 
 	job = &model.Job{Type: model.ActionMultiSchemaChange, State: model.JobStateDone, MultiSchemaInfo: &model.MultiSchemaInfo{
 		SubJobs: []*model.SubJob{
-			{Type: model.ActionAddColumn, State: model.JobStateDone},
-			{Type: model.ActionRebaseAutoID, State: model.JobStateDone},
-		}}}
-	require.False(t, ddl.JobNeedGCForTest(job))
-	job = &model.Job{Type: model.ActionMultiSchemaChange, State: model.JobStateDone, MultiSchemaInfo: &model.MultiSchemaInfo{
-		SubJobs: []*model.SubJob{
 			{Type: model.ActionAddIndex, State: model.JobStateDone},
 			{Type: model.ActionAddColumn, State: model.JobStateDone},
 			{Type: model.ActionRebaseAutoID, State: model.JobStateDone},
 		}}}
-	require.True(t, ddl.JobNeedGCForTest(job))
+	require.False(t, ddl.JobNeedGCForTest(job))
 	job = &model.Job{Type: model.ActionMultiSchemaChange, State: model.JobStateDone, MultiSchemaInfo: &model.MultiSchemaInfo{
 		SubJobs: []*model.SubJob{
 			{Type: model.ActionAddIndex, State: model.JobStateDone},

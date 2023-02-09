@@ -18,17 +18,16 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"flag"
 	"math/rand"
 	"testing"
 
 	"github.com/pingcap/tidb/config"
-	"github.com/pingcap/tidb/extension"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/parser/auth"
 	tmysql "github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/util/arena"
 	"github.com/pingcap/tidb/util/chunk"
-	"github.com/pingcap/tidb/util/intest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -80,7 +79,7 @@ func (mc *mockConn) ID() uint64 {
 func CreateMockServer(t *testing.T, store kv.Storage) *Server {
 	if !RunInGoTest {
 		// If CreateMockServer is called in another package, RunInGoTest is not initialized.
-		RunInGoTest = intest.InTest
+		RunInGoTest = flag.Lookup("test.v") != nil || flag.Lookup("check.v") != nil
 	}
 	tidbdrv := NewTiDBDriver(store)
 	cfg := config.NewConfig()
@@ -95,11 +94,8 @@ func CreateMockServer(t *testing.T, store kv.Storage) *Server {
 
 // CreateMockConn creates a mock connection together with a session.
 func CreateMockConn(t *testing.T, server *Server) MockConn {
-	extensions, err := extension.GetExtensions()
-	require.NoError(t, err)
-
 	connID := rand.Uint64()
-	tc, err := server.driver.OpenCtx(connID, 0, uint8(tmysql.DefaultCollationID), "", nil, extensions.NewSessionExtensions())
+	tc, err := server.driver.OpenCtx(connID, 0, uint8(tmysql.DefaultCollationID), "", nil)
 	require.NoError(t, err)
 
 	cc := &clientConn{
@@ -112,14 +108,12 @@ func CreateMockConn(t *testing.T, server *Server) MockConn {
 		pkt: &packetIO{
 			bufWriter: bufio.NewWriter(bytes.NewBuffer(nil)),
 		},
-		extensions: tc.GetExtensions(),
 	}
 	cc.setCtx(tc)
 	cc.server.rwlock.Lock()
 	server.clients[cc.connectionID] = cc
 	cc.server.rwlock.Unlock()
 	tc.Session.SetSessionManager(server)
-	tc.Session.GetSessionVars().ConnectionInfo = cc.connectInfo()
 	err = tc.Session.Auth(&auth.UserIdentity{Username: "root", Hostname: "localhost"}, nil, nil)
 	require.NoError(t, err)
 	return &mockConn{

@@ -300,38 +300,6 @@ func TestGetMergeRegionSizeAndCount(t *testing.T) {
 					Labels: []*metapb.StoreLabel{
 						{
 							Key:   "engine",
-							Value: "tiflash",
-						},
-					},
-				},
-				{
-					Id:    2,
-					State: metapb.StoreState_Up,
-					Labels: []*metapb.StoreLabel{
-						{
-							Key:   "engine",
-							Value: "tikv",
-						},
-					},
-				},
-			},
-			content: []string{
-				"",
-				// Assuming the TiKV has failed due to some reason.
-				"",
-			},
-			// no tikv detected in this case
-			regionSplitSize: DefaultMergeRegionSizeBytes,
-			regionSplitKeys: DefaultMergeRegionKeyCount,
-		},
-		{
-			stores: []*metapb.Store{
-				{
-					Id:    1,
-					State: metapb.StoreState_Up,
-					Labels: []*metapb.StoreLabel{
-						{
-							Key:   "engine",
 							Value: "tikv",
 						},
 					},
@@ -420,7 +388,8 @@ func TestGetMergeRegionSizeAndCount(t *testing.T) {
 		httpCli := mockServer.Client()
 		mgr := &Mgr{PdController: &pdutil.PdController{}}
 		mgr.PdController.SetPDClient(pdCli)
-		rs, rk := mgr.GetMergeRegionSizeAndCount(ctx, httpCli)
+		rs, rk, err := mgr.GetMergeRegionSizeAndCount(ctx, httpCli)
+		require.NoError(t, err)
 		require.Equal(t, ca.regionSplitSize, rs)
 		require.Equal(t, ca.regionSplitKeys, rk)
 		mockServer.Close()

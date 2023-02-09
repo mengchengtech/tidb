@@ -21,7 +21,6 @@ import (
 	"io"
 	"math"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -54,16 +53,12 @@ import (
 	"github.com/pingcap/tidb/br/pkg/utils"
 	"github.com/pingcap/tidb/br/pkg/version"
 	"github.com/pingcap/tidb/br/pkg/version/build"
-	"github.com/pingcap/tidb/keyspace"
 	tidbkv "github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/meta/autoid"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/store/driver"
-	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/collate"
 	"github.com/pingcap/tidb/util/mathutil"
-	regexprrouter "github.com/pingcap/tidb/util/regexpr-router"
-	"github.com/pingcap/tidb/util/set"
 	pd "github.com/tikv/pd/client"
 	"go.uber.org/atomic"
 	"go.uber.org/multierr"
@@ -228,23 +223,12 @@ type Controller struct {
 	diskQuotaState atomic.Int32
 	compactState   atomic.Int32
 	status         *LightningStatus
-	dupIndicator   *atomic.Bool
 
 	preInfoGetter       PreRestoreInfoGetter
 	precheckItemBuilder *PrecheckItemBuilder
-
-	keyspaceName string
 }
 
-// LightningStatus provides the finished bytes and total bytes of the current task.
-// It should keep the value after restart from checkpoint.
-// When it is tidb backend, FinishedFileSize can be counted after chunk data is
-// restored to tidb. When it is local backend it's counted after whole engine is
-// imported.
-// TotalFileSize may be an estimated value, so when the task is finished, it may
-// not equal to FinishedFileSize.
 type LightningStatus struct {
-	backend          string
 	FinishedFileSize atomic.Int64
 	TotalFileSize    atomic.Int64
 }
@@ -267,10 +251,6 @@ type ControllerParam struct {
 	CheckpointStorage storage.ExternalStorage
 	// when CheckpointStorage is not nil, save file checkpoint to it with this name
 	CheckpointName string
-	// DupIndicator can expose the duplicate detection result to the caller
-	DupIndicator *atomic.Bool
-	// Keyspace name
-	KeyspaceName string
 }
 
 func NewRestoreController(
@@ -358,7 +338,7 @@ func NewRestoreControllerWithPauser(
 			}
 		}
 
-		backend, err = local.NewLocalBackend(ctx, tls, cfg, p.Glue, maxOpenFiles, errorMgr, p.KeyspaceName)
+		backend, err = local.NewLocalBackend(ctx, tls, cfg, p.Glue, maxOpenFiles, errorMgr)
 		if err != nil {
 			return nil, common.NormalizeOrWrapErr(common.ErrUnknown, err)
 		}
@@ -369,7 +349,6 @@ func NewRestoreControllerWithPauser(
 	default:
 		return nil, common.ErrUnknownBackend.GenWithStackByArgs(cfg.TikvImporter.Backend)
 	}
-	p.Status.backend = cfg.TikvImporter.Backend
 
 	var metaBuilder metaMgrBuilder
 	isSSTImport := cfg.TikvImporter.Backend == config.BackendLocal
@@ -438,12 +417,9 @@ func NewRestoreControllerWithPauser(
 		errorMgr:       errorMgr,
 		status:         p.Status,
 		taskMgr:        nil,
-		dupIndicator:   p.DupIndicator,
 
 		preInfoGetter:       preInfoGetter,
 		precheckItemBuilder: preCheckBuilder,
-
-		keyspaceName: p.KeyspaceName,
 	}
 
 	return rc, nil
@@ -541,15 +517,9 @@ type restoreSchemaWorker struct {
 func (worker *restoreSchemaWorker) addJob(sqlStr string, job *schemaJob) error {
 	stmts, err := createIfNotExistsStmt(worker.glue.GetParser(), sqlStr, job.dbName, job.tblName)
 	if err != nil {
-		worker.logger.Warn("failed to rewrite statement, will use raw input instead",
-			zap.String("db", job.dbName),
-			zap.String("table", job.tblName),
-			zap.String("statement", sqlStr),
-			zap.Error(err))
-		job.stmts = []string{sqlStr}
-	} else {
-		job.stmts = stmts
+		return err
 	}
+	job.stmts = stmts
 	return worker.appendJob(job)
 }
 
@@ -686,25 +656,7 @@ loop:
 			for _, stmt := range job.stmts {
 				task := logger.Begin(zap.DebugLevel, fmt.Sprintf("execute SQL: %s", stmt))
 				err = sqlWithRetry.Exec(worker.ctx, "run create schema job", stmt)
-				if err != nil {
-					// try to imitate IF NOT EXISTS behavior for parsing errors
-					exists := false
-					switch job.stmtType {
-					case schemaCreateDatabase:
-						var err2 error
-						exists, err2 = common.SchemaExists(worker.ctx, session, job.dbName)
-						if err2 != nil {
-							task.Error("failed to check database existence", zap.Error(err2))
-						}
-					case schemaCreateTable:
-						exists, _ = common.TableExists(worker.ctx, session, job.dbName, job.tblName)
-					}
-					if exists {
-						err = nil
-					}
-				}
 				task.End(zap.ErrorLevel, err)
-
 				if err != nil {
 					err = common.ErrCreateSchema.Wrap(err).GenWithStackByArgs(common.UniqueTable(job.dbName, job.tblName), job.stmtType.String())
 					worker.wg.Done()
@@ -945,7 +897,7 @@ func (rc *Controller) estimateChunkCountIntoMetrics(ctx context.Context) error {
 					if _, ok := fileChunks[c.Key.Path]; !ok {
 						fileChunks[c.Key.Path] = 0.0
 					}
-					remainChunkCnt := float64(c.UnfinishedSize()) / float64(c.TotalSize())
+					remainChunkCnt := float64(c.Chunk.EndOffset-c.Chunk.Offset) / float64(c.Chunk.EndOffset-c.Key.Offset)
 					fileChunks[c.Key.Path] += remainChunkCnt
 				}
 			}
@@ -960,8 +912,7 @@ func (rc *Controller) estimateChunkCountIntoMetrics(ctx context.Context) error {
 				}
 				if fileMeta.FileMeta.Type == mydump.SourceTypeCSV {
 					cfg := rc.cfg.Mydumper
-					if fileMeta.FileMeta.FileSize > int64(cfg.MaxRegionSize) && cfg.StrictFormat &&
-						!cfg.CSV.Header && fileMeta.FileMeta.Compression == mydump.CompressionNone {
+					if fileMeta.FileMeta.FileSize > int64(cfg.MaxRegionSize) && cfg.StrictFormat && !cfg.CSV.Header {
 						estimatedChunkCount += math.Round(float64(fileMeta.FileMeta.FileSize) / float64(cfg.MaxRegionSize))
 					} else {
 						estimatedChunkCount++
@@ -1507,7 +1458,7 @@ func (rc *Controller) restoreTables(ctx context.Context) (finalErr error) {
 
 		// Disable GC because TiDB enables GC already.
 		kvStore, err = driver.TiKVDriver{}.OpenWithOptions(
-			fmt.Sprintf("tikv://%s?disableGC=true&keyspaceName=%s", rc.cfg.TiDB.PdAddr, rc.keyspaceName),
+			fmt.Sprintf("tikv://%s?disableGC=true", rc.cfg.TiDB.PdAddr),
 			driver.WithSecurity(rc.tls.ToTiKVSecurityConfig()),
 		)
 		if err != nil {
@@ -1627,7 +1578,7 @@ func (rc *Controller) restoreTables(ctx context.Context) (finalErr error) {
 			} else {
 				for _, eng := range cp.Engines {
 					for _, chunk := range eng.Chunks {
-						totalDataSizeToRestore += chunk.UnfinishedSize()
+						totalDataSizeToRestore += chunk.Chunk.EndOffset - chunk.Chunk.Offset
 					}
 				}
 			}
@@ -1682,53 +1633,6 @@ func (rc *Controller) restoreTables(ctx context.Context) (finalErr error) {
 	return nil
 }
 
-func addExtendDataForCheckpoint(
-	ctx context.Context,
-	cfg *config.Config,
-	cp *checkpoints.TableCheckpoint,
-) error {
-	if len(cfg.Routes) == 0 {
-		return nil
-	}
-	hasExtractor := false
-	for _, route := range cfg.Routes {
-		hasExtractor = hasExtractor || route.TableExtractor != nil || route.SchemaExtractor != nil || route.SourceExtractor != nil
-		if hasExtractor {
-			break
-		}
-	}
-	if !hasExtractor {
-		return nil
-	}
-
-	// Use default file router directly because fileRouter and router are not compatible
-	fileRouter, err := mydump.NewDefaultFileRouter(log.FromContext(ctx))
-	if err != nil {
-		return err
-	}
-	var router *regexprrouter.RouteTable
-	router, err = regexprrouter.NewRegExprRouter(cfg.Mydumper.CaseSensitive, cfg.Routes)
-	if err != nil {
-		return err
-	}
-	for _, engine := range cp.Engines {
-		for _, chunk := range engine.Chunks {
-			_, file := filepath.Split(chunk.FileMeta.Path)
-			var res *mydump.RouteResult
-			res, err = fileRouter.Route(file)
-			if err != nil {
-				return err
-			}
-			extendCols, extendData := router.FetchExtendColumn(res.Schema, res.Name, cfg.Mydumper.SourceID)
-			chunk.FileMeta.ExtendData = mydump.ExtendColumnData{
-				Columns: extendCols,
-				Values:  extendData,
-			}
-		}
-	}
-	return nil
-}
-
 func (tr *TableRestore) restoreTable(
 	ctx context.Context,
 	rc *Controller,
@@ -1748,10 +1652,6 @@ func (tr *TableRestore) restoreTable(
 			zap.Int("enginesCnt", len(cp.Engines)),
 			zap.Int("filesCnt", cp.CountChunks()),
 		)
-		err := addExtendDataForCheckpoint(ctx, rc.cfg, cp)
-		if err != nil {
-			return false, errors.Trace(err)
-		}
 	} else if cp.Status < checkpoints.CheckpointStatusAllWritten {
 		if err := tr.populateChunks(ctx, rc, cp); err != nil {
 			return false, errors.Trace(err)
@@ -1853,7 +1753,7 @@ func (rc *Controller) fullCompact(ctx context.Context) error {
 
 	// wait until any existing level-1 compact to complete first.
 	task := log.FromContext(ctx).Begin(zap.InfoLevel, "wait for completion of existing level 1 compaction")
-	for !rc.compactState.CompareAndSwap(compactStateIdle, compactStateDoing) {
+	for !rc.compactState.CAS(compactStateIdle, compactStateDoing) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	task.End(zap.ErrorLevel, nil)
@@ -1913,7 +1813,7 @@ func (rc *Controller) switchTiKVMode(ctx context.Context, mode sstpb.SwitchMode)
 }
 
 func (rc *Controller) enforceDiskQuota(ctx context.Context) {
-	if !rc.diskQuotaState.CompareAndSwap(diskQuotaStateIdle, diskQuotaStateChecking) {
+	if !rc.diskQuotaState.CAS(diskQuotaStateIdle, diskQuotaStateChecking) {
 		// do not run multiple the disk quota check / import simultaneously.
 		// (we execute the lock check in background to avoid blocking the cron thread)
 		return
@@ -2148,10 +2048,6 @@ func (rc *Controller) preCheckRequirements(ctx context.Context) error {
 					return common.ErrCheckClusterRegion.Wrap(err).GenWithStackByArgs()
 				}
 			}
-			// even if checkpoint exists, we still need to make sure CDC/PiTR task is not running.
-			if err := rc.checkCDCPiTR(ctx); err != nil {
-				return common.ErrCheckCDCPiTR.Wrap(err).GenWithStackByArgs()
-			}
 		}
 	}
 
@@ -2215,7 +2111,13 @@ func newChunkRestore(
 ) (*chunkRestore, error) {
 	blockBufSize := int64(cfg.Mydumper.ReadBlockSize)
 
-	reader, err := openReader(ctx, chunk.FileMeta, store)
+	var reader storage.ReadSeekCloser
+	var err error
+	if chunk.FileMeta.Type == mydump.SourceTypeParquet {
+		reader, err = mydump.OpenParquetReader(ctx, store, chunk.FileMeta.Path, chunk.FileMeta.FileSize)
+	} else {
+		reader, err = store.Open(ctx, chunk.FileMeta.Path)
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -2244,15 +2146,8 @@ func newChunkRestore(
 		panic(fmt.Sprintf("file '%s' with unknown source type '%s'", chunk.Key.Path, chunk.FileMeta.Type.String()))
 	}
 
-	if chunk.FileMeta.Compression == mydump.CompressionNone {
-		if err = parser.SetPos(chunk.Chunk.Offset, chunk.Chunk.PrevRowIDMax); err != nil {
-			return nil, errors.Trace(err)
-		}
-	} else {
-		if err = mydump.ReadUntil(parser, chunk.Chunk.Offset); err != nil {
-			return nil, errors.Trace(err)
-		}
-		parser.SetRowID(chunk.Chunk.PrevRowIDMax)
+	if err = parser.SetPos(chunk.Chunk.Offset, chunk.Chunk.PrevRowIDMax); err != nil {
+		return nil, errors.Trace(err)
 	}
 	if len(chunk.ColumnPermutation) > 0 {
 		parser.SetColumns(getColumnNames(tableInfo.Core, chunk.ColumnPermutation))
@@ -2307,8 +2202,6 @@ type deliveredKVs struct {
 	columns []string
 	offset  int64
 	rowID   int64
-
-	realOffset int64 // indicates file reader's current position, only used for compressed files
 }
 
 type deliverResult struct {
@@ -2337,25 +2230,14 @@ func (cr *chunkRestore) deliverLoop(
 
 	dataSynced := true
 	hasMoreKVs := true
-	var startRealOffset, currRealOffset int64 // save to 0 at first
-
 	for hasMoreKVs {
-		c := keyspace.CodecV1
-		if t.kvStore != nil {
-			c = t.kvStore.GetCodec()
-		}
-		var (
-			dataChecksum  = verify.NewKVChecksumWithKeyspace(c)
-			indexChecksum = verify.NewKVChecksumWithKeyspace(c)
-		)
+		var dataChecksum, indexChecksum verify.KVChecksum
 		var columns []string
 		var kvPacket []deliveredKVs
 		// init these two field as checkpoint current value, so even if there are no kv pairs delivered,
 		// chunk checkpoint should stay the same
 		startOffset := cr.chunk.Chunk.Offset
 		currOffset := startOffset
-		startRealOffset = cr.chunk.Chunk.RealOffset
-		currRealOffset = startRealOffset
 		rowID := cr.chunk.Chunk.PrevRowIDMax
 
 	populate:
@@ -2370,14 +2252,12 @@ func (cr *chunkRestore) deliverLoop(
 					if p.kvs == nil {
 						// This is the last message.
 						currOffset = p.offset
-						currRealOffset = p.realOffset
 						hasMoreKVs = false
 						break populate
 					}
-					p.kvs.ClassifyAndAppend(&dataKVs, dataChecksum, &indexKVs, indexChecksum)
+					p.kvs.ClassifyAndAppend(&dataKVs, &dataChecksum, &indexKVs, &indexChecksum)
 					columns = p.columns
 					currOffset = p.offset
-					currRealOffset = p.realOffset
 					rowID = p.rowID
 				}
 			case <-ctx.Done():
@@ -2441,10 +2321,9 @@ func (cr *chunkRestore) deliverLoop(
 		// No need to apply a lock since this is the only thread updating `cr.chunk.**`.
 		// In local mode, we should write these checkpoints after engine flushed.
 		lastOffset := cr.chunk.Chunk.Offset
-		cr.chunk.Checksum.Add(dataChecksum)
-		cr.chunk.Checksum.Add(indexChecksum)
+		cr.chunk.Checksum.Add(&dataChecksum)
+		cr.chunk.Checksum.Add(&indexChecksum)
 		cr.chunk.Chunk.Offset = currOffset
-		cr.chunk.Chunk.RealOffset = currRealOffset
 		cr.chunk.Chunk.PrevRowIDMax = rowID
 
 		if m, ok := metric.FromContext(ctx); ok {
@@ -2452,21 +2331,11 @@ func (cr *chunkRestore) deliverLoop(
 			// comes from chunk.Chunk.Offset. so it shouldn't happen that currOffset - startOffset < 0.
 			// but we met it one time, but cannot reproduce it now, we add this check to make code more robust
 			// TODO: reproduce and find the root cause and fix it completely
-			var lowOffset, highOffset int64
-			if cr.chunk.FileMeta.Compression != mydump.CompressionNone {
-				lowOffset, highOffset = startRealOffset, currRealOffset
+			if currOffset >= startOffset {
+				m.BytesCounter.WithLabelValues(metric.BytesStateRestored).Add(float64(currOffset - startOffset))
 			} else {
-				lowOffset, highOffset = startOffset, currOffset
-			}
-			delta := highOffset - lowOffset
-			if delta >= 0 {
-				m.BytesCounter.WithLabelValues(metric.BytesStateRestored).Add(float64(delta))
-				if rc.status != nil && rc.status.backend == config.BackendTiDB {
-					rc.status.FinishedFileSize.Add(delta)
-				}
-			} else {
-				deliverLogger.Warn("offset go back", zap.Int64("curr", highOffset),
-					zap.Int64("start", lowOffset))
+				deliverLogger.Warn("offset go back", zap.Int64("curr", currOffset),
+					zap.Int64("start", startOffset))
 			}
 		}
 
@@ -2476,11 +2345,6 @@ func (cr *chunkRestore) deliverLoop(
 		}
 		failpoint.Inject("SlowDownWriteRows", func() {
 			deliverLogger.Warn("Slowed down write rows")
-			finished := rc.status.FinishedFileSize.Load()
-			total := rc.status.TotalFileSize.Load()
-			deliverLogger.Warn("PrintStatus Failpoint",
-				zap.Int64("finished", finished),
-				zap.Int64("total", total))
 		})
 		failpoint.Inject("FailAfterWriteRows", nil)
 		// TODO: for local backend, we may save checkpoint more frequently, e.g. after written
@@ -2543,52 +2407,6 @@ func saveCheckpoint(rc *Controller, t *TableRestore, engineID int32, chunk *chec
 	}
 }
 
-// filterColumns filter columns and extend columns.
-// It accepts:
-// - columnsNames, header in the data files;
-// - extendData, extendData fetched through data file name, that is to say, table info;
-// - ignoreColsMap, columns to be ignored when we import;
-// - tableInfo, tableInfo of the target table;
-// It returns:
-// - filteredColumns, columns of the original data to import.
-// - extendValueDatums, extended Data to import.
-// The data we import will use filteredColumns as columns, use (parser.LastRow+extendValueDatums) as data
-// ColumnPermutation will be modified to make sure the correspondence relationship is correct.
-// if len(columnsNames) > 0, it means users has specified each field definition, we can just use users
-func filterColumns(columnNames []string, extendData mydump.ExtendColumnData, ignoreColsMap map[string]struct{}, tableInfo *model.TableInfo) ([]string, []types.Datum) {
-	extendCols, extendVals := extendData.Columns, extendData.Values
-	extendColsSet := set.NewStringSet(extendCols...)
-	filteredColumns := make([]string, 0, len(columnNames))
-	if len(columnNames) > 0 {
-		if len(ignoreColsMap) > 0 {
-			for _, c := range columnNames {
-				_, ok := ignoreColsMap[c]
-				if !ok {
-					filteredColumns = append(filteredColumns, c)
-				}
-			}
-		} else {
-			filteredColumns = columnNames
-		}
-	} else if len(ignoreColsMap) > 0 || len(extendCols) > 0 {
-		// init column names by table schema
-		// after filtered out some columns, we must explicitly set the columns for TiDB backend
-		for _, col := range tableInfo.Columns {
-			_, ok := ignoreColsMap[col.Name.L]
-			// ignore all extend row values specified by users
-			if !col.Hidden && !ok && !extendColsSet.Exist(col.Name.O) {
-				filteredColumns = append(filteredColumns, col.Name.O)
-			}
-		}
-	}
-	extendValueDatums := make([]types.Datum, 0)
-	filteredColumns = append(filteredColumns, extendCols...)
-	for _, extendVal := range extendVals {
-		extendValueDatums = append(extendValueDatums, types.NewStringDatum(extendVal))
-	}
-	return filteredColumns, extendValueDatums
-}
-
 //nolint:nakedret // TODO: refactor
 func (cr *chunkRestore) encodeLoop(
 	ctx context.Context,
@@ -2625,10 +2443,7 @@ func (cr *chunkRestore) encodeLoop(
 	// WARN: this might be not correct when different SQL statements contains different fields,
 	// but since ColumnPermutation also depends on the hypothesis that the columns in one source file is the same
 	// so this should be ok.
-	var (
-		filteredColumns []string
-		extendVals      []types.Datum
-	)
+	var filteredColumns []string
 	ignoreColumns, err1 := rc.cfg.Mydumper.IgnoreColumns.GetIgnoreColumns(t.dbInfo.Name, t.tableInfo.Core.Name.O, rc.cfg.Mydumper.CaseSensitive)
 	if err1 != nil {
 		err = err1
@@ -2647,22 +2462,14 @@ func (cr *chunkRestore) encodeLoop(
 		canDeliver := false
 		kvPacket := make([]deliveredKVs, 0, maxKvPairsCnt)
 		curOffset := offset
-		var newOffset, rowID, realOffset int64
+		var newOffset, rowID int64
 		var kvSize uint64
-		var realOffsetErr error
 	outLoop:
 		for !canDeliver {
 			readDurStart := time.Now()
 			err = cr.parser.ReadRow()
 			columnNames := cr.parser.Columns()
 			newOffset, rowID = cr.parser.Pos()
-			if cr.chunk.FileMeta.Compression != mydump.CompressionNone {
-				realOffset, realOffsetErr = cr.parser.RealPos()
-				if realOffsetErr != nil {
-					logger.Warn("fail to get data engine RealPos, progress may not be accurate",
-						log.ShortError(realOffsetErr), zap.String("file", cr.chunk.FileMeta.Path))
-				}
-			}
 
 			switch errors.Cause(err) {
 			case nil:
@@ -2673,19 +2480,23 @@ func (cr *chunkRestore) encodeLoop(
 						}
 					}
 					filteredColumns = columnNames
-					ignoreColsMap := ignoreColumns.ColumnsMap()
-					if len(ignoreColsMap) > 0 || len(cr.chunk.FileMeta.ExtendData.Columns) > 0 {
-						filteredColumns, extendVals = filterColumns(columnNames, cr.chunk.FileMeta.ExtendData, ignoreColsMap, t.tableInfo.Core)
-					}
-					lastRow := cr.parser.LastRow()
-					lastRowLen := len(lastRow.Row)
-					extendColsMap := make(map[string]int)
-					for i, c := range cr.chunk.FileMeta.ExtendData.Columns {
-						extendColsMap[c] = lastRowLen + i
-					}
-					for i, col := range t.tableInfo.Core.Columns {
-						if p, ok := extendColsMap[col.Name.O]; ok {
-							cr.chunk.ColumnPermutation[i] = p
+					if ignoreColumns != nil && len(ignoreColumns.Columns) > 0 {
+						filteredColumns = make([]string, 0, len(columnNames))
+						ignoreColsMap := ignoreColumns.ColumnsMap()
+						if len(columnNames) > 0 {
+							for _, c := range columnNames {
+								if _, ok := ignoreColsMap[c]; !ok {
+									filteredColumns = append(filteredColumns, c)
+								}
+							}
+						} else {
+							// init column names by table schema
+							// after filtered out some columns, we must explicitly set the columns for TiDB backend
+							for _, col := range t.tableInfo.Core.Columns {
+								if _, ok := ignoreColsMap[col.Name.L]; !col.Hidden && !ok {
+									filteredColumns = append(filteredColumns, col.Name.O)
+								}
+							}
 						}
 					}
 					initializedColumns = true
@@ -2700,7 +2511,6 @@ func (cr *chunkRestore) encodeLoop(
 			readDur += time.Since(readDurStart)
 			encodeDurStart := time.Now()
 			lastRow := cr.parser.LastRow()
-			lastRow.Row = append(lastRow.Row, extendVals...)
 			// sql -> kv
 			kvs, encodeErr := kvEncoder.Encode(logger, lastRow.Row, lastRow.RowID, cr.chunk.ColumnPermutation, cr.chunk.Key.Path, curOffset)
 			encodeDur += time.Since(encodeDurStart)
@@ -2724,8 +2534,7 @@ func (cr *chunkRestore) encodeLoop(
 				continue
 			}
 
-			kvPacket = append(kvPacket, deliveredKVs{kvs: kvs, columns: filteredColumns, offset: newOffset,
-				rowID: rowID, realOffset: realOffset})
+			kvPacket = append(kvPacket, deliveredKVs{kvs: kvs, columns: filteredColumns, offset: newOffset, rowID: rowID})
 			kvSize += kvs.Size()
 			failpoint.Inject("mock-kv-size", func(val failpoint.Value) {
 				kvSize += uint64(val.(int))
@@ -2757,7 +2566,7 @@ func (cr *chunkRestore) encodeLoop(
 		}
 	}
 
-	err = send([]deliveredKVs{{offset: cr.chunk.Chunk.EndOffset, realOffset: cr.chunk.FileMeta.FileSize}})
+	err = send([]deliveredKVs{{offset: cr.chunk.Chunk.EndOffset}})
 	return
 }
 
@@ -2819,21 +2628,4 @@ func (cr *chunkRestore) restore(
 		deliverErr = ctx.Err()
 	}
 	return errors.Trace(firstErr(encodeErr, deliverErr))
-}
-
-func openReader(ctx context.Context, fileMeta mydump.SourceFileMeta, store storage.ExternalStorage) (
-	reader storage.ReadSeekCloser, err error) {
-	switch {
-	case fileMeta.Type == mydump.SourceTypeParquet:
-		reader, err = mydump.OpenParquetReader(ctx, store, fileMeta.Path, fileMeta.FileSize)
-	case fileMeta.Compression != mydump.CompressionNone:
-		compressType, err2 := mydump.ToStorageCompressType(fileMeta.Compression)
-		if err2 != nil {
-			return nil, err2
-		}
-		reader, err = storage.WithCompression(store, compressType).Open(ctx, fileMeta.Path)
-	default:
-		reader, err = store.Open(ctx, fileMeta.Path)
-	}
-	return
 }

@@ -83,14 +83,10 @@ func (extractHelper) extractColInConsExpr(extractCols map[int64]*types.FieldName
 	results := make([]types.Datum, 0, len(args[1:]))
 	for _, arg := range args[1:] {
 		constant, ok := arg.(*expression.Constant)
-		if !ok || constant.DeferredExpr != nil {
+		if !ok || constant.DeferredExpr != nil || constant.ParamMarker != nil {
 			return "", nil
 		}
-		v := constant.Value
-		if constant.ParamMarker != nil {
-			v = constant.ParamMarker.GetUserVar()
-		}
-		results = append(results, v)
+		results = append(results, constant.Value)
 	}
 	return name.ColName.L, results
 }
@@ -121,14 +117,10 @@ func (extractHelper) extractColBinaryOpConsExpr(extractCols map[int64]*types.Fie
 	// SELECT * FROM t1 WHERE c='rhs'
 	// SELECT * FROM t1 WHERE 'lhs'=c
 	constant, ok := args[1-colIdx].(*expression.Constant)
-	if !ok || constant.DeferredExpr != nil {
+	if !ok || constant.DeferredExpr != nil || constant.ParamMarker != nil {
 		return "", nil
 	}
-	v := constant.Value
-	if constant.ParamMarker != nil {
-		v = constant.ParamMarker.GetUserVar()
-	}
-	return name.ColName.L, []types.Datum{v}
+	return name.ColName.L, []types.Datum{constant.Value}
 }
 
 // extract the OR expression, e.g:
@@ -210,7 +202,6 @@ func (helper extractHelper) extractCol(
 	for _, expr := range predicates {
 		fn, ok := expr.(*expression.ScalarFunction)
 		if !ok {
-			remained = append(remained, expr)
 			continue
 		}
 		var colName string
@@ -334,7 +325,7 @@ func (helper extractHelper) extractLikePattern(
 	var colName string
 	var datums []types.Datum
 	switch fn.FuncName.L {
-	case ast.EQ, ast.Like, ast.Regexp, ast.RegexpLike:
+	case ast.EQ, ast.Like, ast.Regexp:
 		colName, datums = helper.extractColBinaryOpConsExpr(extractCols, fn)
 	}
 	if colName == extractColName {
@@ -346,7 +337,7 @@ func (helper extractHelper) extractLikePattern(
 				return true, stringutil.CompileLike2Regexp(datums[0].GetString())
 			}
 			return true, datums[0].GetString()
-		case ast.Regexp, ast.RegexpLike:
+		case ast.Regexp:
 			return true, datums[0].GetString()
 		default:
 			return false, ""
@@ -356,7 +347,7 @@ func (helper extractHelper) extractLikePattern(
 	}
 }
 
-func (extractHelper) findColumn(schema *expression.Schema, names []*types.FieldName, colName string) map[int64]*types.FieldName {
+func (helper extractHelper) findColumn(schema *expression.Schema, names []*types.FieldName, colName string) map[int64]*types.FieldName {
 	extractCols := make(map[int64]*types.FieldName)
 	for i, name := range names {
 		if name.ColName.L == colName {
@@ -370,7 +361,7 @@ func (extractHelper) findColumn(schema *expression.Schema, names []*types.FieldN
 // For the expression that push down to the coprocessor, the function name is different with normal compare function,
 // Then getTimeFunctionName will do a sample function name convert.
 // Currently, this is used to support query `CLUSTER_SLOW_QUERY` at any time.
-func (extractHelper) getTimeFunctionName(fn *expression.ScalarFunction) string {
+func (helper extractHelper) getTimeFunctionName(fn *expression.ScalarFunction) string {
 	switch fn.Function.PbCode() {
 	case tipb.ScalarFuncSig_GTTime:
 		return ast.GT
@@ -391,7 +382,7 @@ func (extractHelper) getTimeFunctionName(fn *expression.ScalarFunction) string {
 // For the expression that push down to the coprocessor, the function name is different with normal compare function,
 // Then getStringFunctionName will do a sample function name convert.
 // Currently, this is used to support query `CLUSTER_STMT_SUMMARY` at any string.
-func (extractHelper) getStringFunctionName(fn *expression.ScalarFunction) string {
+func (helper extractHelper) getStringFunctionName(fn *expression.ScalarFunction) string {
 	switch fn.Function.PbCode() {
 	case tipb.ScalarFuncSig_GTString:
 		return ast.GT
@@ -500,7 +491,7 @@ func (helper extractHelper) extractTimeRange(
 	return
 }
 
-func (extractHelper) parseQuantiles(quantileSet set.StringSet) []float64 {
+func (helper extractHelper) parseQuantiles(quantileSet set.StringSet) []float64 {
 	quantiles := make([]float64, 0, len(quantileSet))
 	for k := range quantileSet {
 		v, err := strconv.ParseFloat(k, 64)
@@ -514,7 +505,7 @@ func (extractHelper) parseQuantiles(quantileSet set.StringSet) []float64 {
 	return quantiles
 }
 
-func (extractHelper) parseUint64(uint64Set set.StringSet) []uint64 {
+func (helper extractHelper) parseUint64(uint64Set set.StringSet) []uint64 {
 	uint64s := make([]uint64, 0, len(uint64Set))
 	for k := range uint64Set {
 		v, err := strconv.ParseUint(k, 10, 64)
@@ -555,7 +546,7 @@ func (helper extractHelper) extractCols(
 	return remained, skipRequest, cols
 }
 
-func (extractHelper) convertToTime(t int64) time.Time {
+func (helper extractHelper) convertToTime(t int64) time.Time {
 	if t == 0 || t == math.MaxInt64 {
 		return time.Now()
 	}
@@ -1015,7 +1006,7 @@ func (e *MetricSummaryTableExtractor) Extract(
 	return remained
 }
 
-func (*MetricSummaryTableExtractor) explainInfo(_ *PhysicalMemTable) string {
+func (e *MetricSummaryTableExtractor) explainInfo(_ *PhysicalMemTable) string {
 	return ""
 }
 
@@ -1242,7 +1233,7 @@ func (e *SlowQueryExtractor) decodeBytesToTime(bs []byte) (int64, error) {
 	return 0, nil
 }
 
-func (*SlowQueryExtractor) decodeToTime(handle kv.Handle) (int64, error) {
+func (e *SlowQueryExtractor) decodeToTime(handle kv.Handle) (int64, error) {
 	tp := types.NewFieldType(mysql.TypeDatetime)
 	col := rowcodec.ColInfo{ID: 0, Ft: tp}
 	chk := chunk.NewChunkWithCapacity([]*types.FieldType{tp}, 1)
