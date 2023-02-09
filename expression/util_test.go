@@ -197,12 +197,12 @@ func TestGetUint64FromConstant(t *testing.T) {
 
 func TestSetExprColumnInOperand(t *testing.T) {
 	col := &Column{RetType: newIntFieldType()}
-	require.True(t, SetExprColumnInOperand(col).(*Column).InOperand)
+	require.True(t, setExprColumnInOperand(col).(*Column).InOperand)
 
 	f, err := funcs[ast.Abs].getFunction(mock.NewContext(), []Expression{col})
 	require.NoError(t, err)
 	fun := &ScalarFunction{Function: f}
-	SetExprColumnInOperand(fun)
+	setExprColumnInOperand(fun)
 	require.True(t, f.getArgs()[0].(*Column).InOperand)
 }
 

@@ -269,9 +269,7 @@ func (ft *FieldType) CompactStr() string {
 // returns a string.
 func (ft *FieldType) InfoSchemaStr() string {
 	suffix := ""
-	if mysql.HasUnsignedFlag(ft.flag) &&
-		ft.tp != mysql.TypeBit &&
-		ft.tp != mysql.TypeYear {
+	if mysql.HasUnsignedFlag(ft.flag) {
 		suffix = " unsigned"
 	}
 	return ft.CompactStr() + suffix

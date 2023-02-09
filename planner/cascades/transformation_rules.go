@@ -240,10 +240,9 @@ func NewRulePushSelDownIndexScan() Transformation {
 
 // OnTransform implements Transformation interface.
 // It will transform `Selection -> IndexScan` to:
-//
-//	  `IndexScan(with a new access range)` or
-//	  `Selection -> IndexScan(with a new access range)`
-//		 or just keep the two GroupExprs unchanged.
+//   `IndexScan(with a new access range)` or
+//   `Selection -> IndexScan(with a new access range)`
+//	 or just keep the two GroupExprs unchanged.
 func (r *PushSelDownIndexScan) OnTransform(old *memo.ExprIter) (newExprs []*memo.GroupExpr, eraseOld bool, eraseAll bool, err error) {
 	sel := old.GetExpr().ExprNode.(*plannercore.LogicalSelection)
 	is := old.Children[0].GetExpr().ExprNode.(*plannercore.LogicalIndexScan)
@@ -550,9 +549,8 @@ func (r *PushSelDownProjection) OnTransform(old *memo.ExprIter) (newExprs []*mem
 	canBePushed := make([]expression.Expression, 0, len(sel.Conditions))
 	canNotBePushed := make([]expression.Expression, 0, len(sel.Conditions))
 	for _, cond := range sel.Conditions {
-		substituted, hasFailed, newFilter := expression.ColumnSubstituteImpl(cond, projSchema, proj.Exprs, false)
-		if substituted && !hasFailed && !expression.HasGetSetVarFunc(newFilter) {
-			canBePushed = append(canBePushed, newFilter)
+		if !expression.HasGetSetVarFunc(cond) {
+			canBePushed = append(canBePushed, expression.ColumnSubstitute(cond, projSchema, proj.Exprs))
 		} else {
 			canNotBePushed = append(canNotBePushed, cond)
 		}

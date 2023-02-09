@@ -987,8 +987,7 @@ func (p *PhysicalTopN) getPushedDownTopN(childPlan PhysicalPlan) *PhysicalTopN {
 
 // canPushToIndexPlan checks if this TopN can be pushed to the index side of copTask.
 // It can be pushed to the index side when all columns used by ByItems are available from the index side and
-//
-//	there's no prefix index column.
+//   there's no prefix index column.
 func (p *PhysicalTopN) canPushToIndexPlan(indexPlan PhysicalPlan, byItemCols []*expression.Column) bool {
 	schema := indexPlan.Schema()
 	for _, col := range byItemCols {
@@ -1662,12 +1661,8 @@ func (p *PhysicalStreamAgg) attach2Task(tasks ...task) task {
 			inputRows = t.count()
 			attachPlan2Task(p, t)
 		} else {
-			storeType := cop.getStoreType()
-			// TiFlash doesn't support Stream Aggregation
-			if storeType == kv.TiFlash && len(p.GroupByItems) > 0 {
-				return invalidTask
-			}
-			partialAgg, finalAgg := p.newPartialAggregate(storeType, false)
+			copTaskType := cop.getStoreType()
+			partialAgg, finalAgg := p.newPartialAggregate(copTaskType, false)
 			if finalAgg != nil {
 				final = finalAgg.(*PhysicalStreamAgg)
 			}

@@ -17,6 +17,7 @@ package executor
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -224,7 +225,7 @@ func (b *executorBuilder) buildBRIE(s *ast.BRIEStmt, schema *expression.Schema) 
 		},
 	}
 
-	storageURL, err := storage.ParseRawURL(s.Storage)
+	storageURL, err := url.Parse(s.Storage)
 	if err != nil {
 		b.err = errors.Annotate(err, "invalid destination URL")
 		return nil
@@ -560,10 +561,4 @@ func (gs *tidbGlueSession) Record(name string, value uint64) {
 
 func (gs *tidbGlueSession) GetVersion() string {
 	return "TiDB\n" + printer.GetTiDBInfo()
-}
-
-// UseOneShotSession implements glue.Glue
-func (gs *tidbGlueSession) UseOneShotSession(store kv.Storage, closeDomain bool, fn func(se glue.Session) error) error {
-	// in SQL backup. we don't need to close domain.
-	return fn(gs)
 }

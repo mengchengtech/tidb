@@ -264,10 +264,9 @@ func (er *expressionRewriter) ctxStackAppend(col expression.Expression, name *ty
 // 1. If op are EQ or NE or NullEQ, constructBinaryOpFunctions converts (a0,a1,a2) op (b0,b1,b2) to (a0 op b0) and (a1 op b1) and (a2 op b2)
 // 2. Else constructBinaryOpFunctions converts (a0,a1,a2) op (b0,b1,b2) to
 // `IF( a0 NE b0, a0 op b0,
-//
-//	IF ( isNull(a0 NE b0), Null,
-//		IF ( a1 NE b1, a1 op b1,
-//			IF ( isNull(a1 NE b1), Null, a2 op b2))))`
+// 		IF ( isNull(a0 NE b0), Null,
+// 			IF ( a1 NE b1, a1 op b1,
+// 				IF ( isNull(a1 NE b1), Null, a2 op b2))))`
 func (er *expressionRewriter) constructBinaryOpFunction(l expression.Expression, r expression.Expression, op string) (expression.Expression, error) {
 	lLen, rLen := expression.GetRowLen(l), expression.GetRowLen(r)
 	if lLen == 1 && rLen == 1 {
@@ -480,7 +479,6 @@ func (er *expressionRewriter) buildSemiApplyFromEqualSubq(np LogicalPlan, l, r e
 				rColCopy := *rCol
 				rColCopy.InOperand = true
 				r = &rColCopy
-				l = expression.SetExprColumnInOperand(l)
 			}
 		} else {
 			rowFunc := r.(*expression.ScalarFunction)
@@ -503,7 +501,6 @@ func (er *expressionRewriter) buildSemiApplyFromEqualSubq(np LogicalPlan, l, r e
 				if er.err != nil {
 					return
 				}
-				l = expression.SetExprColumnInOperand(l)
 			}
 		}
 	}
@@ -914,15 +911,11 @@ func (er *expressionRewriter) handleInSubquery(ctx context.Context, v *ast.Patte
 		// normal column equal condition, so we specially mark the inner operand here.
 		if v.Not || asScalar {
 			// If both input columns of `in` expression are not null, we can treat the expression
-			// as normal column equal condition instead. Otherwise, mark the left and right side.
-			// eg: for some optimization, the column substitute in right side in projection elimination
-			// will cause case  like <lcol EQ rcol(inOperand)> as <lcol EQ constant> which is not
-			// a valid null-aware EQ. (null in lcol still need to be null-aware)
+			// as normal column equal condition instead.
 			if !expression.ExprNotNull(lexpr) || !expression.ExprNotNull(rCol) {
 				rColCopy := *rCol
 				rColCopy.InOperand = true
 				rexpr = &rColCopy
-				lexpr = expression.SetExprColumnInOperand(lexpr)
 			}
 		}
 	} else {
@@ -930,15 +923,10 @@ func (er *expressionRewriter) handleInSubquery(ctx context.Context, v *ast.Patte
 		for i, col := range np.Schema().Columns {
 			if v.Not || asScalar {
 				larg := expression.GetFuncArg(lexpr, i)
-				// If both input columns of `in` expression are not null, we can treat the expression
-				// as normal column equal condition instead. Otherwise, mark the left and right side.
 				if !expression.ExprNotNull(larg) || !expression.ExprNotNull(col) {
 					rarg := *col
 					rarg.InOperand = true
 					col = &rarg
-					if larg != nil {
-						lexpr.(*expression.ScalarFunction).GetArgs()[i] = expression.SetExprColumnInOperand(larg)
-					}
 				}
 			}
 			args = append(args, col)

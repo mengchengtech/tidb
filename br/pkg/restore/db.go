@@ -169,6 +169,7 @@ func (db *DB) CreateDatabase(ctx context.Context, schema *model.DBInfo) error {
 	return errors.Trace(err)
 }
 
+//
 func (db *DB) restoreSequence(ctx context.Context, table *metautil.Table) error {
 	var restoreMetaSQL string
 	var err error

@@ -119,15 +119,9 @@ func EnableSkipBinlogFlag() {
 }
 
 // DisableSkipBinlogFlag disable the skipBinlog flag.
-func DisableSkipBinlogFlag() error {
-	if err := statusListener(BinlogStatusOn); err != nil {
-		logutil.BgLogger().Warn("update binlog status failed", zap.Error(err))
-		return errors.Trace(err)
-	}
-
+func DisableSkipBinlogFlag() {
 	atomic.StoreUint32(&skipBinlog, 0)
 	logutil.BgLogger().Warn("[binloginfo] disable the skipBinlog flag")
-	return nil
 }
 
 // IsBinlogSkipped gets the skipBinlog flag.

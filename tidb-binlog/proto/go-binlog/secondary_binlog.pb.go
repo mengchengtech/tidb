@@ -2,23 +2,21 @@
 // source: secondary_binlog.proto
 
 /*
-Package slave_binlog is a generated protocol buffer package.
+	Package slave_binlog is a generated protocol buffer package.
 
-It is generated from these files:
+	It is generated from these files:
+		secondary_binlog.proto
 
-	secondary_binlog.proto
-
-It has these top-level messages:
-
-	Column
-	ColumnInfo
-	Row
-	Table
-	Key
-	TableMutation
-	DMLData
-	DDLData
-	Binlog
+	It has these top-level messages:
+		Column
+		ColumnInfo
+		Row
+		Table
+		Key
+		TableMutation
+		DMLData
+		DDLData
+		Binlog
 */
 package slave_binlog
 
@@ -352,7 +350,7 @@ func (m *Row) GetColumns() []*Column {
 	return nil
 }
 
-// Table contains mutations in a table.
+//  Table contains mutations in a table.
 type Table struct {
 	SchemaName *string          `protobuf:"bytes,1,opt,name=schema_name,json=schemaName" json:"schema_name,omitempty"`
 	TableName  *string          `protobuf:"bytes,2,opt,name=table_name,json=tableName" json:"table_name,omitempty"`

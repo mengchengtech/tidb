@@ -1061,8 +1061,8 @@ func (s *tableRestoreSuite) TestCheckClusterResource() {
 				"max-replicas": 1
 			}`),
 			"(.*)Cluster doesn't have enough space(.*)",
-			true,
-			0,
+			false,
+			1,
 		},
 	}
 
@@ -1175,8 +1175,8 @@ func (s *tableRestoreSuite) TestCheckClusterRegion() {
 				".*TiKV stores \\(1\\) contains more than 500 empty regions respectively.*",
 				".*Region distribution is unbalanced.*but we expect it should not be less than 0.75.*",
 			},
-			expectResult:   true,
-			expectErrorCnt: 0,
+			expectResult:   false,
+			expectErrorCnt: 1,
 		},
 		{
 			stores: pdtypes.StoresInfo{Stores: []*pdtypes.StoreInfo{

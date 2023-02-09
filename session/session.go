@@ -65,7 +65,6 @@ import (
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/ddl/placement"
 	"github.com/pingcap/tidb/domain"
-	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/errno"
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/infoschema"
@@ -728,10 +727,6 @@ func (s *session) commitTxnWithTemporaryData(ctx context.Context, txn kv.Transac
 	sessVars := s.sessionVars
 	txnTempTables := sessVars.TxnCtx.TemporaryTables
 	if len(txnTempTables) == 0 {
-		failpoint.Inject("mockSleepBeforeTxnCommit", func(v failpoint.Value) {
-			ms := v.(int)
-			time.Sleep(time.Millisecond * time.Duration(ms))
-		})
 		return txn.Commit(ctx)
 	}
 
@@ -1394,23 +1389,21 @@ func (s *session) SetProcessInfo(sql string, t time.Time, command byte, maxExecu
 		p = explain.TargetPlan
 	}
 	pi := util.ProcessInfo{
-		ID:                s.sessionVars.ConnectionID,
-		Port:              s.sessionVars.Port,
-		DB:                s.sessionVars.CurrentDB,
-		Command:           command,
-		Plan:              p,
-		PlanExplainRows:   plannercore.GetExplainRowsForPlan(p),
-		RuntimeStatsColl:  s.sessionVars.StmtCtx.RuntimeStatsColl,
-		Time:              t,
-		State:             s.Status(),
-		Info:              sql,
-		CurTxnStartTS:     curTxnStartTS,
-		StmtCtx:           s.sessionVars.StmtCtx,
-		RefCountOfStmtCtx: &s.sessionVars.RefCountOfStmtCtx,
-		StatsInfo:         plannercore.GetStatsInfo,
-		MaxExecutionTime:  maxExecutionTime,
-		RedactSQL:         s.sessionVars.EnableRedactLog,
-		ProtectedTSList:   &s.sessionVars.ProtectedTSList,
+		ID:               s.sessionVars.ConnectionID,
+		Port:             s.sessionVars.Port,
+		DB:               s.sessionVars.CurrentDB,
+		Command:          command,
+		Plan:             p,
+		PlanExplainRows:  plannercore.GetExplainRowsForPlan(p),
+		RuntimeStatsColl: s.sessionVars.StmtCtx.RuntimeStatsColl,
+		Time:             t,
+		State:            s.Status(),
+		Info:             sql,
+		CurTxnStartTS:    curTxnStartTS,
+		StmtCtx:          s.sessionVars.StmtCtx,
+		StatsInfo:        plannercore.GetStatsInfo,
+		MaxExecutionTime: maxExecutionTime,
+		RedactSQL:        s.sessionVars.EnableRedactLog,
 	}
 	oldPi := s.ShowProcess()
 	if p == nil {
@@ -1618,11 +1611,10 @@ func (s *session) GetAdvisoryLock(lockName string, timeout int64) error {
 		lock.IncrReferences()
 		return nil
 	}
-	sess, err := createSession(s.store)
+	sess, err := createSession(s.GetStore())
 	if err != nil {
 		return err
 	}
-	infosync.StoreInternalSession(sess)
 	lock := &advisoryLock{session: sess, ctx: context.TODO()}
 	err = lock.GetLock(lockName, timeout)
 	if err != nil {
@@ -1644,7 +1636,6 @@ func (s *session) ReleaseAdvisoryLock(lockName string) (released bool) {
 		if lock.ReferenceCount() <= 0 {
 			lock.Close()
 			delete(s.advisoryLocks, lockName)
-			infosync.DeleteInternalSession(lock.session)
 		}
 		return true
 	}
@@ -1661,7 +1652,6 @@ func (s *session) ReleaseAllAdvisoryLocks() int {
 		lock.Close()
 		count += lock.ReferenceCount()
 		delete(s.advisoryLocks, lockName)
-		infosync.DeleteInternalSession(lock.session)
 	}
 	return count
 }
@@ -1742,10 +1732,6 @@ func (s *session) useCurrentSession(execOption sqlexec.ExecOption) (*session, fu
 	if execOption.AnalyzeVer != 0 {
 		s.sessionVars.AnalyzeVersion = execOption.AnalyzeVer
 	}
-	prevAnalyzeSnapshot := s.sessionVars.EnableAnalyzeSnapshot
-	if execOption.AnalyzeSnapshot != nil {
-		s.sessionVars.EnableAnalyzeSnapshot = *execOption.AnalyzeSnapshot
-	}
 	prePruneMode := s.sessionVars.PartitionPruneMode.Load()
 	if len(execOption.PartitionPruneMode) > 0 {
 		s.sessionVars.PartitionPruneMode.Store(execOption.PartitionPruneMode)
@@ -1755,7 +1741,6 @@ func (s *session) useCurrentSession(execOption sqlexec.ExecOption) (*session, fu
 	prevTables := s.sessionVars.StmtCtx.Tables
 	return s, func() {
 		s.sessionVars.AnalyzeVersion = prevStatsVer
-		s.sessionVars.EnableAnalyzeSnapshot = prevAnalyzeSnapshot
 		if err := s.sessionVars.SetSystemVar(variable.TiDBSnapshot, ""); err != nil {
 			logutil.BgLogger().Error("set tidbSnapshot error", zap.Error(err))
 		}
@@ -1799,11 +1784,6 @@ func (s *session) getInternalSession(execOption sqlexec.ExecOption) (*session, f
 		se.sessionVars.AnalyzeVersion = execOption.AnalyzeVer
 	}
 
-	prevAnalyzeSnapshot := se.sessionVars.EnableAnalyzeSnapshot
-	if execOption.AnalyzeSnapshot != nil {
-		se.sessionVars.EnableAnalyzeSnapshot = *execOption.AnalyzeSnapshot
-	}
-
 	prePruneMode := se.sessionVars.PartitionPruneMode.Load()
 	if len(execOption.PartitionPruneMode) > 0 {
 		se.sessionVars.PartitionPruneMode.Store(execOption.PartitionPruneMode)
@@ -1811,7 +1791,6 @@ func (s *session) getInternalSession(execOption sqlexec.ExecOption) (*session, f
 
 	return se, func() {
 		se.sessionVars.AnalyzeVersion = prevStatsVer
-		se.sessionVars.EnableAnalyzeSnapshot = prevAnalyzeSnapshot
 		if err := se.sessionVars.SetSystemVar(variable.TiDBSnapshot, ""); err != nil {
 			logutil.BgLogger().Error("set tidbSnapshot error", zap.Error(err))
 		}
@@ -2095,14 +2074,6 @@ func runStmt(ctx context.Context, se *session, s sqlexec.Statement) (rs sqlexec.
 	se.updateTelemetryMetric(s.(*executor.ExecStmt))
 	sessVars.TxnCtx.StatementCount++
 	if rs != nil {
-		if se.GetSessionVars().StmtCtx.IsExplainAnalyzeDML {
-			if !sessVars.InTxn() {
-				se.StmtCommit()
-				if err := se.CommitTxn(ctx); err != nil {
-					return nil, err
-				}
-			}
-		}
 		return &execStmtResult{
 			RecordSet: rs,
 			sql:       s,
@@ -2993,10 +2964,6 @@ func createSessions(store kv.Storage, cnt int) ([]*session, error) {
 	return ses, nil
 }
 
-// createSession creates a new session.
-// Please note that such a session is not tracked by the internal session list.
-// This means the min ts reporter is not aware of it and may report a wrong min start ts.
-// In most cases you should use a session pool in domain instead.
 func createSession(store kv.Storage) (*session, error) {
 	return createSessionWithOpt(store, nil)
 }
