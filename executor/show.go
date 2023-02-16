@@ -1115,13 +1115,17 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 		for _, col := range fk.Cols {
 			colNames = append(colNames, stringutil.Escape(col.O, sqlMode))
 		}
-		buf.WriteString(fmt.Sprintf("(%s)", strings.Join(colNames, ",")))
+		// modify by zhangbing
+		buf.WriteString(fmt.Sprintf("(%s)", strings.Join(colNames, ", ")))
+		// modify end
 		buf.WriteString(fmt.Sprintf(" REFERENCES %s ", stringutil.Escape(fk.RefTable.O, sqlMode)))
 		refColNames := make([]string, 0, len(fk.Cols))
 		for _, refCol := range fk.RefCols {
 			refColNames = append(refColNames, stringutil.Escape(refCol.O, sqlMode))
 		}
-		buf.WriteString(fmt.Sprintf("(%s)", strings.Join(refColNames, ",")))
+		// modify by zhangbing
+		buf.WriteString(fmt.Sprintf("(%s)", strings.Join(refColNames, ", ")))
+		// modify end
 		if ast.ReferOptionType(fk.OnDelete) != 0 {
 			buf.WriteString(fmt.Sprintf(" ON DELETE %s", ast.ReferOptionType(fk.OnDelete).String()))
 		}

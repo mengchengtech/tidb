@@ -1502,10 +1502,12 @@ func keyColumnUsageInTable(schema *model.DBInfo, table *model.TableInfo) [][]typ
 		}
 	}
 	for _, fk := range table.ForeignKeys {
-		fkRefCol := ""
-		if len(fk.RefCols) > 0 {
-			fkRefCol = fk.RefCols[0].O
-		}
+		// delete by zhangbing 多主键 REFERENCED_COLUMN_NAME 显示出错
+		// fkRefCol := ""
+		// if len(fk.RefCols) > 0 {
+		// 	fkRefCol = fk.RefCols[0].O
+		// }
+		// delete end
 		for i, key := range fk.Cols {
 			col := nameToCol[key.L]
 			record := types.MakeDatums(
@@ -1520,7 +1522,7 @@ func keyColumnUsageInTable(schema *model.DBInfo, table *model.TableInfo) [][]typ
 				1,                     // POSITION_IN_UNIQUE_CONSTRAINT
 				schema.Name.O,         // REFERENCED_TABLE_SCHEMA
 				fk.RefTable.O,         // REFERENCED_TABLE_NAME
-				fkRefCol,              // REFERENCED_COLUMN_NAME
+				fk.RefCols[i].O,       // REFERENCED_COLUMN_NAME
 			)
 			rows = append(rows, record)
 		}
