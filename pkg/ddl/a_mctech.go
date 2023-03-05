@@ -1,9 +1,6 @@
 package ddl
 
 import (
-	"strings"
-
-	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/table"
 	"github.com/pingcap/tidb/pkg/util/logutil"
@@ -21,10 +18,11 @@ func setMCTechSequenceDefaultValue(c *table.Column, hasDefaultValue bool, setOnU
 			if err := c.SetDefaultValue("0"); err != nil {
 				logutil.BgLogger().Error("set default value failed", zap.Error(err))
 			}
-		} else {
-			if err := c.SetDefaultValue(strings.ToUpper(ast.MCTechSequence)); err != nil {
-				logutil.BgLogger().Error("set default value failed", zap.Error(err))
-			}
 		}
+		// else {
+		// 	if err := c.SetDefaultValue(strings.ToUpper(ast.MCTechSequence)); err != nil {
+		// 		logutil.BgLogger().Error("set default value failed", zap.Error(err))
+		// 	}
+		// }
 	}
 }
