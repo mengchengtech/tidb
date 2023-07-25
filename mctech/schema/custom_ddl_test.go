@@ -9,7 +9,6 @@ import (
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/auth"
-	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/stretchr/testify/require"
 )

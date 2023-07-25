@@ -3,7 +3,7 @@ package preps
 import (
 	"bytes"
 	"context"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
 
@@ -11,7 +11,6 @@ import (
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/auth"
-	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/stretchr/testify/require"
@@ -113,7 +112,7 @@ func createGetDoFunc(text string) getDoFuncType {
 	return func(_ *http.Request) (*http.Response, error) {
 		res := &http.Response{
 			StatusCode: 200,
-			Body:       ioutil.NopCloser(bytes.NewReader([]byte(text))),
+			Body:       io.NopCloser(bytes.NewReader([]byte(text))),
 		}
 		return res, nil
 	}
