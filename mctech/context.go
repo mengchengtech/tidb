@@ -473,15 +473,17 @@ func WithNewContext(session sessionctx.Context) (context.Context, Context, error
 // @Param usingTenantParam bool 添加租户条件时，是否使用参数占位符方式
 func WithNewContext3(parent context.Context,
 	session sessionctx.Context, usingTenantParam bool) (context.Context, Context, error) {
-	if NewContext == nil && intest.InTest {
-		return parent, nil, nil
+	if NewContext == nil {
+		var err error
+		if !intest.InTest {
+			err = errors.New("function variable 'mctech.NewContext' is nil")
+		}
+		return parent, nil, err
 	}
 
 	mctechCtx := NewContext(session, usingTenantParam)
 	ctx := context.WithValue(parent, customContextKey, mctechCtx)
-
-	err := errors.New("function variable 'mctech.NewContext' is nil")
-	return ctx, mctechCtx, err
+	return ctx, mctechCtx, nil
 }
 
 // GetContext get mctech context from session
