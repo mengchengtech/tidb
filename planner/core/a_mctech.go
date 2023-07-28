@@ -98,17 +98,21 @@ func (e *MCTech) RenderResult(ctx context.Context) error {
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
 func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (error) {
-	mctechCtx := mctech.GetContext(ctx)
+	mctechCtx, err := mctech.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+
 	// "global", "excludes", "tenant", "tenant_from_role", "dw_index", "params", "prepared_sql"
 	var sb strings.Builder
 	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags|format.RestoreBracketAroundBinaryOperation, &sb)
-	err := e.ExecStmt.Restore(restoreCtx)
+	err = e.ExecStmt.Restore(restoreCtx)
 	if err != nil {
 		return err
 	}
 
 	var (
-		global     = true
+		global     = false
 		excludes   = []string{}
 		tenant     string
 		tenantFrom = "none"
@@ -258,13 +262,19 @@ func (e *Execute) appendTxtProtoVars(ctx context.Context, prepared *ast.Prepared
 		return nil
 	}
 
-	mctechCtx := mctech.GetContext(ctx)
+	mctechCtx, err := mctech.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+
 	var tenantCode string
-	if mctechCtx != nil {
-		result := mctechCtx.PrepareResult()
-		if result != nil {
-			tenantCode = result.Tenant()
-		}
+	if mctechCtx == nil {
+		return nil
+	}
+
+	result := mctechCtx.PrepareResult()
+	if result != nil {
+		tenantCode = result.Tenant()
 	}
 
 	sctx := mctechCtx.Session()

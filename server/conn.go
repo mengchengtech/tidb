@@ -1827,9 +1827,15 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	ctx, mctechCtx := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
-	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+	ctx, mctechCtx, e := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
+	if e != nil {
 		return err
+	}
+
+	if mctechCtx != nil {
+		if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+			return err
+		}
 	}
 	// add end
 

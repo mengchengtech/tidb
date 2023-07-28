@@ -61,14 +61,14 @@ type VersionColumn struct {
 func initMCTechConfig() MCTech {
 	return MCTech{
 		Sequence: Sequence{
-			Mock:          false,
+			Mock:          true,
 			Debug:         false,
 			MaxFetchCount: 1000,
 			Backend:       3,
 			APIPrefix:     "http://node-infra-sequence-service.mc/",
 		},
 		Encryption: Encryption{
-			Mock:      false,
+			Mock:      true,
 			AccessID:  "oJEKJh1wvqncJYASxp1Iiw",
 			APIPrefix: "http://node-infra-encryption-service.mc/",
 		},
@@ -81,7 +81,7 @@ func initMCTechConfig() MCTech {
 		},
 		Tenant: Tenant{
 			Enabled:          true,
-			ForbiddenPrepare: true,
+			ForbiddenPrepare: false,
 		},
 		DDL: DDL{
 			Version: VersionColumn{

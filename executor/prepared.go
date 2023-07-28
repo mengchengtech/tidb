@@ -158,15 +158,21 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	mctechCtx := mctech.GetContext(ctx)
-	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-	modifyCtx.SetUsingTenantParam(true)
-	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
-		if strFmt, ok := e.ctx.(mctech.StringFormat); ok {
-			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
-				zap.String("session", strFmt.String()), zap.String("SQL", e.sqlText))
-		}
+	var mctechCtx mctech.Context
+	mctechCtx, err = mctech.GetContext(ctx)
+	if err != nil {
 		return err
+	}
+
+	if mctechCtx != nil {
+		modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+		modifyCtx.SetUsingTenantParam(true)
+		if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+			if strFmt, ok := e.ctx.(mctech.StringFormat); ok {
+				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", e.sqlText))
+			}
+			return err
+		}
 	}
 	// add end
 

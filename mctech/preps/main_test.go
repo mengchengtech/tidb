@@ -83,8 +83,10 @@ func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCas
 	session := createSession(t, tk, user, roles...)
 
 	for _, c := range cases {
-		_, mctechCtx := mctech.WithNewContext(session)
-		err := runTestCase(t, c, mctechCtx)
+		_, mctechCtx, err := mctech.WithNewContext(session)
+		require.NoError(t, err)
+		
+		err = runTestCase(t, c, mctechCtx)
 		if err == nil {
 			continue
 		}
