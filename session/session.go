@@ -2514,9 +2514,16 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	ctx, mctechCtx := mctech.WithNewContext3(ctx, s, true)
-	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+	ctx, mctechCtx, e := mctech.WithNewContext3(ctx, s, true)
+	if e != nil {
+		err = e
 		return
+	}
+
+	if mctechCtx != nil {
+		if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+			return
+		}
 	}
 	// add end
 

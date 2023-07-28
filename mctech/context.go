@@ -11,6 +11,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/util/intest"
 	"golang.org/x/exp/slices"
 )
 
@@ -462,7 +463,7 @@ var NewContext func(session sessionctx.Context, usingTenantParam bool) Context
 
 // WithContext
 // @Param session sessionctx.Context -
-func WithNewContext(session sessionctx.Context) (context.Context, Context) {
+func WithNewContext(session sessionctx.Context) (context.Context, Context, error) {
 	return WithNewContext3(context.Background(), session, false)
 }
 
@@ -471,19 +472,31 @@ func WithNewContext(session sessionctx.Context) (context.Context, Context) {
 // @Param session sessionctx.Context -
 // @Param usingTenantParam bool 添加租户条件时，是否使用参数占位符方式
 func WithNewContext3(parent context.Context,
-	session sessionctx.Context, usingTenantParam bool) (context.Context, Context) {
+	session sessionctx.Context, usingTenantParam bool) (context.Context, Context, error) {
+	if NewContext == nil && intest.InTest {
+		return parent, nil, nil
+	}
+
 	mctechCtx := NewContext(session, usingTenantParam)
 	ctx := context.WithValue(parent, customContextKey, mctechCtx)
-	return ctx, mctechCtx
+
+	err := errors.New("function variable 'mctech.NewContext' is nil")
+	return ctx, mctechCtx, err
 }
 
 // GetContext get mctech context from session
-func GetContext(ctx context.Context) Context {
+func GetContext(ctx context.Context) (Context, error) {
 	val := ctx.Value(customContextKey)
 	if sp, ok := val.(Context); ok {
-		return sp
+		return sp, nil
 	}
-	return nil
+
+	if intest.InTest {
+		return nil, nil
+	}
+
+	err := errors.New("CAN NOT Found 'mctech.Context'")
+	return nil, err
 }
 
 // 添加的租户条件假的文本位置偏移量
