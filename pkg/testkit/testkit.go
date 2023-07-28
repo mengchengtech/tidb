@@ -361,10 +361,12 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 
 		// add by zhangbing
 		handler := mctech.GetHandler()
-		mctechCtx := mctech.GetContext(ctx)
+		mctechCtx, err := mctech.GetContext(ctx)
+		if err != nil {
+			return nil, err
+		}
 
 		if mctechCtx != nil {
-			var err error
 			if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 				return nil, err
 			}
