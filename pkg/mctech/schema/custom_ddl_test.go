@@ -37,7 +37,8 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	ctx, _ := mctech.WithNewContext(session)
+	ctx, _, err := mctech.WithNewContext(session)
+	require.NoError(t, err)
 	tk.MustExecWithContext(ctx, createTableSQL)
 	res := tk.MustQuery("show create table version_table")
 	createSQL := res.Rows()[0][1].(string)
@@ -115,7 +116,8 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	ctx, _ := mctech.WithNewContext(session)
+	ctx, _, err := mctech.WithNewContext(session)
+	require.NoError(t, err)
 	tk.MustExecWithContext(ctx, createTableSQL)
 	tk.MustExec(
 		`insert into version_table

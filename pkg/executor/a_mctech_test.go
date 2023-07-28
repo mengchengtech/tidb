@@ -98,7 +98,7 @@ func TestPrepareByQuery(t *testing.T) {
 
 	session := tk.Session()
 	var ctx context.Context
-	ctx, _ = mctech.WithNewContext3(context.Background(), session, true)
+	ctx, _, _ = mctech.WithNewContext3(context.Background(), session, true)
 	tk.MustExecWithContext(
 		ctx,
 		fmt.Sprintf(`prepare st from "%s"`, sql),
@@ -108,7 +108,10 @@ func TestPrepareByQuery(t *testing.T) {
 		"SET @p1 = 'termination', @p2 = 'finished', @p3 = 'none', @p4 = 'project'",
 	)
 
-	ctx, _ = mctech.WithNewContext(session)
+	var err error
+	ctx, _, err = mctech.WithNewContext(session)
+	require.NoError(t, err)
+
 	rs := tk.MustQueryWithContext(
 		ctx,
 		`/*& tenant:mctest */ EXECUTE st USING @p1, @p2, @p3, @p4, @p4`,
@@ -135,7 +138,7 @@ func TestPrepareByCmd(t *testing.T) {
 
 	session := tk.Session()
 	var ctx context.Context
-	ctx, _ = mctech.WithNewContext3(context.Background(), session, true)
+	ctx, _, _ = mctech.WithNewContext3(context.Background(), session, true)
 	result1 := tk.MustQueryWithContext(ctx, sql, "termination", "finished", "none", "project", "project", "mctest")
 
 	rows1 := result1.Rows()
@@ -156,7 +159,7 @@ func TestPrepareByCmdNoTenant(t *testing.T) {
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("select * from information_schema.statements_summary limit ?", 5,)
+	tk.MustExec("select * from information_schema.statements_summary limit ?", 5)
 }
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
