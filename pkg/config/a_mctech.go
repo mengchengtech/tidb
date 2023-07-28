@@ -75,19 +75,19 @@ func init() {
 			APIPrefix: "http://node-infra-encryption-service.mc/",
 		},
 		DbChecker: DbChecker{
-			Enabled:          true,
+			Enabled:          false,
 			APIPrefix:        "http://node-infra-dim-service.mc/",
 			MutexAcrossDbs:   []string{},
 			ExcludeAcrossDbs: []string{},
 			AcrossDbGroups:   []string{},
 		},
 		Tenant: Tenant{
-			Enabled:          true,
+			Enabled:          false,
 			ForbiddenPrepare: false,
 		},
 		DDL: DDL{
 			Version: VersionColumn{
-				Enabled: true,
+				Enabled: false,
 				Name:    "__version",
 			},
 		},
