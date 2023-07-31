@@ -2,6 +2,7 @@ package mctech
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
 var apiClient = &http.Client{
