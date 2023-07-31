@@ -333,9 +333,8 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 		// add by zhangbing
 		if mctechCtx != nil {
 			if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
-				if strFmt, ok := tk.session.(mctech.StringFormat); ok {
-					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
-						zap.String("session", strFmt.String()), zap.String("SQL", sql))
+				if strFmt, ok := tk.session.(fmt.Stringer); ok {
+					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", sql))
 				}
 				return nil, err
 			}

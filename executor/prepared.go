@@ -16,6 +16,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
@@ -130,7 +131,7 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 		modifyCtx.SetUsingTenantParam(true)
 		if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
-			if strFmt, ok := e.ctx.(mctech.StringFormat); ok {
+			if strFmt, ok := e.ctx.(fmt.Stringer); ok {
 				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", e.sqlText))
 			}
 			return err
