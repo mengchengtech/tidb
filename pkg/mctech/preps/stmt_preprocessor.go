@@ -16,10 +16,10 @@ var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*
 
 // StatementPreprocessor interface
 type StatementPreprocessor interface {
-	PrepareSQL(mctechCtx mctech.Context, sql string) (string, *mctech.PrepareResult, error)
-	ResolveStmt(mctechCtx mctech.Context,
+	PrepareSQL(mctx mctech.Context, sql string) (string, *mctech.PrepareResult, error)
+	ResolveStmt(mctx mctech.Context,
 		stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error)
-	Validate(mctechCtx mctech.Context) error
+	Validate(mctx mctech.Context) error
 }
 
 type mctechStatementPreprocessor struct {
@@ -34,8 +34,8 @@ type actionInfo struct {
  * 预解析sql，解析的结果存到MCTechContext中
  */
 func (r *mctechStatementPreprocessor) PrepareSQL(
-	mctechCtx mctech.Context, sql string) (string, *mctech.PrepareResult, error) {
-	if mctechCtx.PrepareResult() != nil {
+	mctx mctech.Context, sql string) (string, *mctech.PrepareResult, error) {
+	if mctx.PrepareResult() != nil {
 		return "", nil, errors.New("[mctech] PrepareSQL failure, Context exists")
 	}
 
@@ -68,7 +68,7 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 
 	preprocessor := newSQLPreprocessor(sql)
 	var preparedSQL string
-	result, err := preprocessor.Prepare(mctechCtx, actions, params)
+	result, err := preprocessor.Prepare(mctx, actions, params)
 	if err != nil {
 		return preparedSQL, nil, err
 	}
@@ -77,9 +77,9 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 	return preparedSQL, result, nil
 }
 
-func (r *mctechStatementPreprocessor) ResolveStmt(mctechCtx mctech.Context,
+func (r *mctechStatementPreprocessor) ResolveStmt(mctx mctech.Context,
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = r.rewriteStmt(mctechCtx, stmt, charset, collation)
+	dbs, skipped, err = r.rewriteStmt(mctx, stmt, charset, collation)
 	if err != nil {
 		return nil, false, err
 	}
@@ -87,45 +87,45 @@ func (r *mctechStatementPreprocessor) ResolveStmt(mctechCtx mctech.Context,
 	return dbs, skipped, nil
 }
 
-func (r *mctechStatementPreprocessor) Validate(mctechCtx mctech.Context) error {
-	prepareResult := mctechCtx.PrepareResult()
+func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
+	prepareResult := mctx.PrepareResult()
 	// 执行到此处说明当前语句一定是DML或QUERY
 	// sql没有被改写，但是用到了global_xxx数据库，并且没有设置global为true
-	if !mctechCtx.SQLRewrited() && mctechCtx.SQLHasGlobalDB() &&
+	if !mctx.SQLRewrited() && mctx.SQLHasGlobalDB() &&
 		!prepareResult.Global() {
 		// 检查DML语句和QUERY语句改写状态
-		user := currentUser(mctechCtx.Session())
+		user := currentUser(mctx.Session())
 		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
 	}
 	return nil
 }
 
-func (r *mctechStatementPreprocessor) rewriteStmt(mctechCtx mctech.Context,
+func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = isolation.ApplyExtension(mctechCtx, stmt, charset, collation)
+	dbs, skipped, err = isolation.ApplyExtension(mctx, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, skipped, err
 	}
 
 	// 判断sql中是否使用了是否包含'global_xxx'这样的数据库
 	hasGlobalDb := slices.IndexFunc(dbs, func(db string) bool {
-		return mctechCtx.IsGlobalDb(db)
+		return mctx.IsGlobalDb(db)
 	}) >= 0
 
 	if !hasGlobalDb {
 		return nil, false, nil
 	}
 
-	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 	modifyCtx.SetSQLHasGlobalDB(true)
-	result := mctechCtx.PrepareResult()
+	result := mctx.PrepareResult()
 	if result.Global() {
 		// 启用global时，允许跨任意数据库查询
 		return nil, false, nil
 	}
 
 	// 未启用global,租户code为空，留到后续Validate步骤统一校验
-	if result.Tenant() == "" && !mctechCtx.UsingTenantParam() {
+	if result.Tenant() == "" && !mctx.UsingTenantParam() {
 		return nil, false, nil
 	}
 
