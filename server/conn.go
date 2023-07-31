@@ -57,7 +57,6 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
-	// "github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/errno"
@@ -1889,9 +1888,8 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
-		if strFmt, ok := cc.getCtx().Session.(mctech.StringFormat); ok {
-			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
-				zap.String("session", strFmt.String()), zap.String("SQL", sql))
+		if strFmt, ok := cc.getCtx().Session.(fmt.Stringer); ok {
+			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", sql))
 		}
 
 		return err
