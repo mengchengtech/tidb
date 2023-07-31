@@ -128,18 +128,18 @@ type isolationConditionVisitor struct {
 const tenantFieldName = "tenant"
 
 func newIsolationConditionVisitor(
-	mctechCtx mctech.Context,
+	mctx mctech.Context,
 	charset string, collation string) *isolationConditionVisitor {
 	visitor := &isolationConditionVisitor{
-		usingParam: mctechCtx.UsingTenantParam(),
+		usingParam: mctx.UsingTenantParam(),
 		databaseNameVisitor: &databaseNameVisitor{
-			context: mctechCtx,
+			context: mctx,
 			dbNames: map[string]bool{},
 		},
 		withClauseScope:     &nodeScope[*cteScopeItem]{items: list.New()},
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
-	result := mctechCtx.PrepareResult()
+	result := mctx.PrepareResult()
 	if result.Global() {
 		length := len(result.Excludes())
 		if length > 0 {

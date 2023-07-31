@@ -98,7 +98,7 @@ func (e *MCTech) RenderResult(ctx context.Context) error {
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
 func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (error) {
-	mctechCtx, err := mctech.GetContext(ctx)
+	mctx, err := mctech.GetContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -122,8 +122,8 @@ func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (error) {
 		restoreSQL = sb.String()
 	)
 
-	if mctechCtx != nil {
-		result := mctechCtx.PrepareResult()
+	if mctx != nil {
+		result := mctx.PrepareResult()
 		if result != nil {
 			global = result.Global()
 			params = result.Params()
@@ -137,7 +137,7 @@ func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (error) {
 				}
 			}
 		}
-		index, err = mctechCtx.GetDbIndex()
+		index, err = mctx.GetDbIndex()
 		if err != nil {
 			err = nil
 			index = -1
@@ -229,22 +229,22 @@ func (e *Execute) AppendVarExprs(ctx context.Context, prepared *ast.Prepared) er
 		return nil
 	}
 
-	mctechCtx, err := mctech.GetContext(ctx)
+	mctx, err := mctech.GetContext(ctx)
 	if err != nil {
 		return err
 	}
 
 	var tenantCode string
-	if mctechCtx == nil {
+	if mctx == nil {
 		return nil
 	}
 
-	result := mctechCtx.PrepareResult()
+	result := mctx.PrepareResult()
 	if result != nil {
 		tenantCode = result.Tenant()
 	}
 
-	sctx := mctechCtx.Session()
+	sctx := mctx.Session()
 	sessionVars := sctx.GetSessionVars()
 	if tenantCode == "" {
 		user := sessionVars.User.Username
