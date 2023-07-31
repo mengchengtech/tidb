@@ -10,13 +10,13 @@ import (
 type _msicExtension struct {
 }
 
-func (r *_msicExtension) Apply(mctechCtx mctech.Context, node ast.Node) (matched bool, err error) {
+func (r *_msicExtension) Apply(mctx mctech.Context, node ast.Node) (matched bool, err error) {
 	matched = true
 	switch stmtNode := node.(type) {
 	case *ast.UseStmt:
-		stmtNode.DBName, err = r.changeToPhysicalDb(mctechCtx, stmtNode.DBName)
+		stmtNode.DBName, err = r.changeToPhysicalDb(mctx, stmtNode.DBName)
 	case *ast.ShowStmt:
-		stmtNode.DBName, err = r.changeToPhysicalDb(mctechCtx, stmtNode.DBName)
+		stmtNode.DBName, err = r.changeToPhysicalDb(mctx, stmtNode.DBName)
 	default:
 		matched = false
 	}
@@ -24,8 +24,8 @@ func (r *_msicExtension) Apply(mctechCtx mctech.Context, node ast.Node) (matched
 }
 
 func (r *_msicExtension) changeToPhysicalDb(
-	mctechCtx mctech.Context, oriName string) (dbName string, err error) {
-	if dbName, err = mctechCtx.ToPhysicalDbName(oriName); err == nil {
+	mctx mctech.Context, oriName string) (dbName string, err error) {
+	if dbName, err = mctx.ToPhysicalDbName(oriName); err == nil {
 		return dbName, err
 	}
 
@@ -48,7 +48,7 @@ func getMsicExtension() *_msicExtension {
 }
 
 // ApplyExtension apply msic
-func ApplyExtension(mctechCtx mctech.Context, node ast.Node) (matched bool, err error) {
+func ApplyExtension(mctx mctech.Context, node ast.Node) (matched bool, err error) {
 	ext := getMsicExtension()
-	return ext.Apply(mctechCtx, node)
+	return ext.Apply(mctx, node)
 }
