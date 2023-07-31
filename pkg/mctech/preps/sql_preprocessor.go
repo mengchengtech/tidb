@@ -75,7 +75,7 @@ func newSQLPreprocessor(stmt string) *sqlPreprocessor {
 	}
 }
 
-func (p *sqlPreprocessor) Prepare(mctechCtx mctech.Context,
+func (p *sqlPreprocessor) Prepare(mctx mctech.Context,
 	actions []*actionInfo, params map[string]any) (*mctech.PrepareResult, error) {
 	if len(params) > 0 {
 		for name, formatter := range valueFormatters {
@@ -109,7 +109,7 @@ func (p *sqlPreprocessor) Prepare(mctechCtx mctech.Context,
 		}
 	}
 
-	tenantOnly, tenantCode, err := findTenantInfoFromRoles(mctechCtx.Session())
+	tenantOnly, tenantCode, err := findTenantInfoFromRoles(mctx.Session())
 	if err != nil {
 		return nil, err
 	}
