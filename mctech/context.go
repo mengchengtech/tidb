@@ -477,9 +477,9 @@ func WithNewContext3(parent context.Context,
 		return parent, nil, err
 	}
 
-	mctechCtx := NewContext(session, usingTenantParam)
-	ctx := context.WithValue(parent, customContextKey, mctechCtx)
-	return ctx, mctechCtx, nil
+	mctx := NewContext(session, usingTenantParam)
+	ctx := context.WithValue(parent, customContextKey, mctx)
+	return ctx, mctx, nil
 }
 
 // GetContext get mctech context from session
