@@ -1826,13 +1826,13 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	handler := mctech.GetHandler()
-	ctx, mctechCtx, e := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
+	ctx, mctx, e := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
 	if e != nil {
 		return err
 	}
 
-	if mctechCtx != nil {
-		if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+	if mctx != nil {
+		if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
 			return err
 		}
 	}
@@ -1864,7 +1864,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	// log.Warn(fmt.Sprintf("queryOnly: %t", queryOnly))
 	if queryOnly {
 		// 只对查询语句处理mpp
-		result := mctechCtx.PrepareResult()
+		result := mctx.PrepareResult()
 		// log.Warn(fmt.Sprintf("result is null: %t", result == nil))
 		if result != nil {
 			params := result.Params()
@@ -1875,7 +1875,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 			// log.Warn("mppValue: " + mppValue)
 			if mppValue != "allow" && mppValue != "" {
-				mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
+				mppVarCtx := mctx.(mctech.SessionMPPVarsContext)
 				if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
 					return err
 				}
@@ -1887,7 +1887,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		}
 	}
 
-	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+	if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
 		if strFmt, ok := cc.getCtx().Session.(fmt.Stringer); ok {
 			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", sql))
 		}
