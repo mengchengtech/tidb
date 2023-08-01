@@ -2,12 +2,17 @@ package executor
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
+	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/mathutil"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -77,5 +82,35 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 		}
 	}
 	e.cursor += numCurRows
+	return nil
+}
+
+func (e *PrepareExec) beforePrepare(ctx context.Context) error {
+	option := mctech.GetOption()
+	if option.ForbiddenPrepare {
+		return errors.New("[mctech] PREPARE not allowed")
+	}
+	return nil
+}
+
+func (e *PrepareExec) afterParseSql(ctx context.Context, stmts []ast.StmtNode) (err error) {
+	handler := mctech.GetHandler()
+	var mctx mctech.Context
+	mctx, err = mctech.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+
+	if mctx != nil {
+		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+		modifyCtx.SetUsingTenantParam(true)
+		if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
+			if strFmt, ok := e.ctx.(fmt.Stringer); ok {
+				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", e.sqlText))
+			}
+			return err
+		}
+	}
+
 	return nil
 }

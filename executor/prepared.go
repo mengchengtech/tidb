@@ -16,13 +16,11 @@ package executor
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
-	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/mysql"
@@ -32,7 +30,6 @@ import (
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/dbterror/exeerrors"
-	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/sqlexec"
 	"github.com/pingcap/tidb/util/topsql"
 	topsqlstate "github.com/pingcap/tidb/util/topsql/state"
@@ -77,9 +74,8 @@ func NewPrepareExec(ctx sessionctx.Context, sqlTxt string) *PrepareExec {
 // Next implements the Executor Next interface.
 func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	// add by zhangbing
-	option := mctech.GetOption()
-	if option.ForbiddenPrepare {
-		return errors.New("[mctech] PREPARE not allowed")
+	if err := e.beforePrepare(ctx); err != nil {
+		return err
 	}
 	// add end
 	vars := e.ctx.GetSessionVars()
@@ -120,22 +116,8 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	}
 
 	// add by zhangbing
-	handler := mctech.GetHandler()
-	var mctx mctech.Context
-	mctx, err = mctech.GetContext(ctx)
-	if err != nil {
+	if err = e.afterParseSql(ctx, stmts); err != nil {
 		return err
-	}
-
-	if mctx != nil {
-		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-		modifyCtx.SetUsingTenantParam(true)
-		if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
-			if strFmt, ok := e.ctx.(fmt.Stringer); ok {
-				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", e.sqlText))
-			}
-			return err
-		}
 	}
 	// add end
 
