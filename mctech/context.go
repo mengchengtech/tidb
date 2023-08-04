@@ -53,6 +53,11 @@ type Context interface {
 	// @title UsingTenantParam
 	// @description 租户过滤条件是否使用参数
 	UsingTenantParam() bool
+
+	// 获取给定sql语法树里用到的数据库
+	GetDbs(stmt ast.StmtNode) []string
+	// 设置给定sql语法树里用到的数据库
+	SetDbs(stmt ast.StmtNode, dbs []string)
 }
 
 // ContextForTest interface
@@ -238,6 +243,7 @@ type baseContext struct {
 	sqlRewrited      bool
 	sqlHasGlobalDB   bool
 	usingTenantParam bool
+	dbsDict          map[ast.StmtNode][]string
 }
 
 // DbPublicPrefix public类数据库前缀
@@ -254,7 +260,7 @@ const DbCustomSuffix = "_custom"
 
 // NewBaseContext create mctechContext (Context)
 func NewBaseContext(usingTenantParam bool) Context {
-	return &baseContext{usingTenantParam: usingTenantParam}
+	return &baseContext{usingTenantParam: usingTenantParam, dbsDict: make(map[ast.StmtNode][]string)}
 }
 
 func (d *baseContext) CurrentDB() string {
@@ -426,6 +432,17 @@ func (d *baseContext) GetDbIndex() (DbIndex, error) {
 		return -1, errors.New("db selector is nil")
 	}
 	return sel.GetDbIndex()
+}
+
+func (d *baseContext) GetDbs(stmt ast.StmtNode) []string {
+	if dbs, ok := d.dbsDict[stmt]; ok {
+		return dbs
+	}
+	return nil
+}
+
+func (d *baseContext) SetDbs(stmt ast.StmtNode, dbs []string) {
+	d.dbsDict[stmt] = dbs
 }
 
 /**
