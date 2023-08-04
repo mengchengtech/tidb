@@ -1,10 +1,12 @@
 package mctech
 
 import (
+	"encoding/json"
 	"net/url"
 	"strings"
 	"sync"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
@@ -61,18 +63,48 @@ var mctechOpts *Option
 
 // GetOption get mctech option
 func GetOption() *Option {
-	if mctechOpts != nil {
-		return mctechOpts
+	if mctechOpts == nil {
+		// 只能懒加载，需要在启动时先加载 config模块
+		once := &sync.Once{}
+		once.Do(initMCTechOption)
 	}
-	// 只能懒加载，需要在启动时先加载 config模块
-	once := &sync.Once{}
-	once.Do(func() {
-		mctechOpts = initMCTechOption()
+
+	failpoint.Inject("GetMctechOption", func(val failpoint.Value) {
+		opts := *mctechOpts
+		values := make(map[string]bool)
+		err := json.Unmarshal([]byte(val.(string)), &values)
+		if err != nil {
+			panic(err)
+		}
+		if v, ok := values["SequenceMock"]; ok {
+			opts.SequenceMock = v
+		}
+
+		if v, ok := values["EncryptionMock"]; ok {
+			opts.EncryptionMock = v
+		}
+		if v, ok := values["TenantEnabled"]; ok {
+			opts.TenantEnabled = v
+		}
+		if v, ok := values["ForbiddenPrepare"]; ok {
+			opts.ForbiddenPrepare = v
+		}
+		if v, ok := values["DbCheckerEnabled"]; ok {
+			opts.DbCheckerEnabled = v
+		}
+		if v, ok := values["DDLVersionColumnEnabled"]; ok {
+			opts.DDLVersionColumnEnabled = v
+		}
+		failpoint.Return(&opts)
 	})
 	return mctechOpts
 }
 
-func initMCTechOption() *Option {
+func initMCTechOption() {
+	if mctechOpts != nil {
+		return
+	}
+
 	opts := config.GetGlobalConfig().MCTech
 	option := &Option{
 		SequenceMock:          opts.Sequence.Mock,
@@ -102,7 +134,7 @@ func initMCTechOption() *Option {
 	if option.DefaultMPPValue == "" {
 		option.DefaultMPPValue = "allow"
 	}
-	return option
+	mctechOpts = option
 }
 
 func formatURL(str string) string {
