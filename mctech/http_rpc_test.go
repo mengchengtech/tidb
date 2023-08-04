@@ -12,5 +12,5 @@ func TestHttpRpcReturnError(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = DoRequest(get)
-	require.ErrorContainsf(t, err, `Get "http://localhost": dial tcp`, "")
+	require.ErrorContainsf(t, err, "rpc调用发生错误。详情请查询tidb服务日志", "")
 }
