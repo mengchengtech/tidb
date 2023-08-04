@@ -4,22 +4,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSequence(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+		mctech.M(t, map[string]bool{"SequenceMock": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache",
+		mctech.M(t, "true"),
+	)
 	now := time.Now().UnixNano()
-	var rpcClient = mctech.GetRPCClient()
-	mctech.SetRPCClientForTest(&mockClient{})
-	defer mctech.SetRPCClientForTest(rpcClient)
-	getDoFunc = createGetDoFunc("1310341421945856,1310341421945866")
+	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
+		mctech.M(t, "1310341421945856,1310341421945866"),
+	)
 	cache := GetCache()
 	id, err := cache.Next()
 	require.NoError(t, err)
 	require.Equal(t, int64(1310341421945856), id)
 	time.Sleep(time.Second)
-	renderSequenceMetrics(now)
+	renderSequenceMetrics(cache, now)
+	failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
+	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
+	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
 }
 
 func TestSequenceDecodeSuccess(t *testing.T) {
@@ -37,14 +46,24 @@ func TestSequenceDecodeFailure(t *testing.T) {
 }
 
 func TestVersionJustPass(t *testing.T) {
-	var rpcClient = mctech.GetRPCClient()
-	mctech.SetRPCClientForTest(&mockClient{})
-	defer mctech.SetRPCClientForTest(rpcClient)
-	getDoFunc = createGetDoFunc("1310341421945866")
+	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+		mctech.M(t, map[string]bool{"SequenceMock": false}),
+	)
+
+	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache",
+		mctech.M(t, "true"),
+	)
+
+	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
+		mctech.M(t, "1310341421945866"),
+	)
 	cache := GetCache()
 	version, err := cache.VersionJustPass()
 	require.NoError(t, err)
 	require.Equal(t, int64(1310341421945866), version)
+	failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
+	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
+	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
 }
 
 // // 性能测试

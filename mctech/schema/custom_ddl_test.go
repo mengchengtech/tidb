@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/parser/auth"
@@ -34,6 +35,9 @@ var createTableSQL = strings.Join([]string{
 }, "\n")
 
 func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+		mctech.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
+	)
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -67,6 +71,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 			"[__version bigint(20) NO  MCTECH_SEQUENCE DEFAULT_GENERATED on update MCTECH_SEQUENCE]",
 		}, "\n"),
 	)
+	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
 }
 
 func TestMCTechSequenceDefaultValueAlterSchemaTest(t *testing.T) {
@@ -113,6 +118,9 @@ func TestMCTechSequenceDefaultValueAlterSchemaTest(t *testing.T) {
 }
 
 func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+		mctech.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
+	)
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -147,6 +155,8 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	require.Len(t, seqs, len(rows)*2)
 	require.Len(t, stamps, 2)
 	// fmt.Printf("%v", rows)
+
+	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
 }
 
 func TestMCTechSequenceDefaultValueInitTest(t *testing.T) {
@@ -187,6 +197,10 @@ func TestBigintDefaultValueOnInsertTest(t *testing.T) {
 }
 
 func TestInsertSelectUseSequenceTest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+		mctech.M(t, map[string]bool{"SequenceMock": false}),
+	)
+
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -201,4 +215,5 @@ func TestInsertSelectUseSequenceTest(t *testing.T) {
 		seqs[row[1].(string)] = true
 	}
 	require.Len(t, seqs, len(rows))
+	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
 }
