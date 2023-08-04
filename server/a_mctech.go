@@ -117,7 +117,7 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 	return nil
 }
 
-func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sql string, err error) {
+func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, err error) {
 	if err != nil {
 		// 只记录执行成功的sql
 		return
@@ -129,11 +129,12 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sq
 	}
 
 	sessVars := cc.ctx.GetSessionVars()
+	origSql := stmt.OriginalText()
 	// 是否为内部sql查询
 	internal := sessVars.InRestrictedSQL
 	if internal {
 		// FIXME: 仅调试代码
-		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", sql))
+		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", origSql))
 		return
 	}
 
@@ -213,13 +214,13 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sq
 		writeKeys = execDetails.CommitDetail.WriteKeys
 	}
 
-	if len(sql) > mctech.GetOption().SqlTraceCompressThreshold {
+	if len(origSql) > mctech.GetOption().SqlTraceCompressThreshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		if _, err := gz.Write([]byte(sql)); err == nil {
+		if _, err := gz.Write([]byte(origSql)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
-					sql = base64.StdEncoding.EncodeToString(b.Bytes())
+					origSql = base64.StdEncoding.EncodeToString(b.Bytes())
 				}
 			}
 		}
@@ -242,6 +243,6 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sq
 		zap.Int64("DiskMax", diskMax),
 		zap.Int("WriteKeys", writeKeys),
 		zap.Int64("ResultRows", resultRows),
-		zap.String("SQL", sql),
+		zap.String("SQL", origSql),
 	)
 }
