@@ -7,7 +7,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/base64"
-	"fmt"
 	"time"
 
 	"github.com/pingcap/tidb/executor"
@@ -52,18 +51,10 @@ func (cc *clientConn) beforeParseSql(ctx context.Context, sql string) (context.C
 func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sql string, stmts []ast.StmtNode) (err error) {
 	// 判断当前是否是查询语句
 	queryOnly := false
-	sqlType := "other"
 	for _, stmt := range stmts {
 		switch stmtNode := stmt.(type) {
 		case *ast.SelectStmt, *ast.SetOprStmt:
 			queryOnly = true
-			sqlType = "select"
-		case *ast.DeleteStmt:
-			sqlType = "delete"
-		case *ast.InsertStmt:
-			sqlType = "insert"
-		case *ast.UpdateStmt:
-			sqlType = "update"
 		case *ast.MCTechStmt:
 			_, queryOnly = stmtNode.Stmt.(*ast.SelectStmt)
 		case *ast.ExplainStmt:
@@ -97,13 +88,6 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 		}
 	}
 
-	if opts := mctech.GetOption(); opts.LargeSqlEnabled {
-		if slices.Contains(opts.LargeSqlTypes, sqlType) && len(sql) > opts.LargeSqlThreshold {
-			// TODO: 记录超长sql
-			panic(fmt.Errorf("not implemented"))
-		}
-	}
-
 	handler := mctech.GetHandler()
 	if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
 		db, user, client := sessionctx.ResolveSession(cc.getCtx())
@@ -123,19 +107,25 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		return
 	}
 
-	opts := mctech.GetOption()
-	if !opts.SqlTraceEnabled {
-		return
+	var mctx mctech.Context
+	mctx, err = mctech.GetContext(ctx)
+	if err != nil {
+		panic(err)
 	}
 
-	sessVars := cc.ctx.GetSessionVars()
-	origSql := stmt.OriginalText()
-	// 是否为内部sql查询
-	internal := sessVars.InRestrictedSQL
-	if internal {
-		// FIXME: 仅调试代码
-		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", origSql))
-		return
+	opts := mctech.GetOption()
+	var dbs []string
+	if mctx != nil {
+		dbs = mctx.GetDbs(stmt)
+	}
+
+	if dbs != nil {
+		for _, db := range opts.SqlTraceIgnoreDbs {
+			if slices.Contains(dbs, db) {
+				// 不记录这些数据库下的sql
+				return
+			}
+		}
 	}
 
 	// 捕获后续执行的异常，不再向外抛出
@@ -144,6 +134,58 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 			logutil.Logger(ctx).Warn("记录sql执行信息出错", zap.Error(err.(error)))
 		}
 	}()
+
+	sessVars := cc.ctx.GetSessionVars()
+	stmtCtx := sessVars.StmtCtx
+	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
+	origSql := stmt.OriginalText()
+
+	// ---------------------------- 记录超长sql ---------------------------------
+
+	sqlType := "other"
+	switch stmt.(type) {
+	case *ast.SelectStmt, *ast.SetOprStmt:
+		sqlType = "select"
+	case *ast.DeleteStmt:
+		sqlType = "delete"
+	case *ast.InsertStmt:
+		sqlType = "insert"
+	case *ast.UpdateStmt:
+		sqlType = "update"
+	}
+
+	if slices.Contains(opts.LargeSqlTypes, sqlType) {
+		sqlLength := len(origSql)
+		if sqlLength > opts.LargeSqlThreshold {
+			_, digest = stmtCtx.SQLDigest() //
+			db, user, _ := sessionctx.ResolveSession(cc.getCtx())
+
+			var service string
+			if mctx != nil {
+				// TODO: 获取service
+				service = ""
+			}
+			_, err := cc.ctx.ExecuteInternal(ctx,
+				`insert into mysql.mctech_large_sql_log
+				(hash_id, db, user, service, sample_text, max_size, created_at)
+				values (%?, %?, %?, %?, %?, %?, %?)`,
+				digest.String(), db, user, service, origSql, sqlLength, time.Now())
+			panic(err)
+		}
+	}
+
+	// ---------------------------- 记录全量sql ---------------------------------
+	if !opts.SqlTraceEnabled {
+		return
+	}
+
+	// 是否为内部sql查询
+	internal := sessVars.InRestrictedSQL
+	if internal {
+		// FIXME: 仅调试代码
+		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", origSql))
+		return
+	}
 
 	switch stmt.(type) {
 	case *ast.UseStmt, // use
@@ -160,27 +202,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	default:
 		return
 	}
-	var mctx mctech.Context
-	mctx, err = mctech.GetContext(ctx)
-	if err != nil {
-		panic(err)
-	}
 
-	var dbs []string
-	if mctx != nil {
-		dbs = mctx.GetDbs(stmt)
-	}
-
-	if dbs != nil {
-		for _, db := range opts.SqlTraceIgnoreDbs {
-			if slices.Contains(dbs, db) {
-				// 不记录这些数据库下的sql
-				return
-			}
-		}
-	}
-
-	stmtCtx := sessVars.StmtCtx
 	execDetails := stmtCtx.GetExecDetails()
 
 	var stmtDetail execdetails.StmtExecDetails
@@ -199,8 +221,6 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	compileTime := sessVars.DurationCompile                                  // 生成执行计划耗时
 	copTime := execDetails.CopTime                                           // Coprocessor 执行耗时
 	var _ string                                                             // 移除注释并且参数替换后的sql模板
-	var digest *parser.Digest                                                // SQL 模板的唯一标识（SQL 指纹）
-	_, digest = stmtCtx.SQLDigest()                                          //
 	memMax := stmtCtx.MemTracker.MaxConsumed()                               // 该 SQL 查询执行时占用的最大内存空间
 	diskMax := stmtCtx.DiskTracker.MaxConsumed()                             // 该 SQL 查询执行时占用的最大磁盘空间
 	var user string                                                          // 执行该 SQL 查询的用户名，可能存在多个执行用户，仅显示其中某一个
@@ -212,6 +232,9 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	var writeKeys int = 0                                                    // 写入 Key 个数
 	if execDetails.CommitDetail != nil {
 		writeKeys = execDetails.CommitDetail.WriteKeys
+	}
+	if digest == nil {
+		_, digest = stmtCtx.SQLDigest() //
 	}
 
 	if len(origSql) > mctech.GetOption().SqlTraceCompressThreshold {
