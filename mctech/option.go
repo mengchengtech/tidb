@@ -64,6 +64,7 @@ type Option struct {
 
 	SqlTraceEnabled           bool
 	SqlTraceCompressThreshold int
+	SqlTraceIgnoreDbs         []string
 
 	SqlLogEnabled   bool
 	SqlLogMaxLength int
@@ -146,6 +147,7 @@ func initMCTechOption() {
 
 		SqlTraceEnabled:           opts.SqlTrace.Enabled,
 		SqlTraceCompressThreshold: opts.SqlTrace.CompressThreshold,
+		SqlTraceIgnoreDbs:         []string{"mysql", "test", "information_schema", "metrics_schema", "performance_schema"},
 
 		SqlLogEnabled:   opts.Metrics.SqlLog.Enabled,
 		SqlLogMaxLength: opts.Metrics.SqlLog.MaxLength,

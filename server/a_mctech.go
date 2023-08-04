@@ -123,7 +123,8 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sq
 		return
 	}
 
-	if opts := mctech.GetOption(); !opts.SqlTraceEnabled {
+	opts := mctech.GetOption()
+	if !opts.SqlTraceEnabled {
 		return
 	}
 
@@ -143,18 +144,39 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sq
 		}
 	}()
 
-	var skipLog = true
 	switch stmt.(type) {
-	case *ast.SelectStmt, *ast.SetOprStmt, // select
-		*ast.DeleteStmt, // delete
-		*ast.InsertStmt, // insert
-		*ast.UpdateStmt: // update
-		skipLog = false
+	case *ast.UseStmt, // use
+		*ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt, // execute
+		*ast.BeginStmt, *ast.RollbackStmt, *ast.CommitStmt, // transaction
+		*ast.SelectStmt, *ast.SetOprStmt, // select
+		*ast.NonTransactionalDeleteStmt, *ast.DeleteStmt, // delete
+		*ast.InsertStmt,                            // insert
+		*ast.UpdateStmt,                            // update
+		*ast.LockTablesStmt, *ast.UnlockTablesStmt, // lock/unlock table
+		*ast.CallStmt, // precedure
+		*ast.DoStmt:   // do block
+		break
+	default:
+		return
+	}
+	var mctx mctech.Context
+	mctx, err = mctech.GetContext(ctx)
+	if err != nil {
+		panic(err)
 	}
 
-	if skipLog {
-		// logutil.Logger(ctx).Warn("跳过记录sql. ", zap.String("Type", ast.GetStmtLabel(stmt)))
-		return
+	var dbs []string
+	if mctx != nil {
+		dbs = mctx.GetDbs(stmt)
+	}
+
+	if dbs != nil {
+		for _, db := range opts.SqlTraceIgnoreDbs {
+			if slices.Contains(dbs, db) {
+				// 不记录这些数据库下的sql
+				return
+			}
+		}
 	}
 
 	stmtCtx := sessVars.StmtCtx
