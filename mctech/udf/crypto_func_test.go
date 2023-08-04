@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +17,7 @@ type encryptionTestCases struct {
 
 func TestMCTechCrypto(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
-		mctech.M(t, map[string]bool{"EncryptionMock": false}),
+		mock.M(t, map[string]bool{"EncryptionMock": false}),
 	)
 	cases := []*encryptionTestCases{
 		{true, "13511868785", "{crypto}HMvlbGus4V3geqwFULvOUw==", ""},
@@ -31,7 +31,7 @@ func TestMCTechCrypto(t *testing.T) {
 
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mctech.M(t, map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="}),
+		mock.M(t, map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="}),
 	)
 
 	client := newAesCryptoClientFromService()

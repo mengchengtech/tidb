@@ -7,6 +7,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/pingcap/tidb/session"
 	"github.com/stretchr/testify/require"
 )
@@ -53,7 +54,7 @@ func TestHandlerWithTenantEnable(t *testing.T) {
 
 func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Context) (err error) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
-		mctech.M(t, map[string]bool{"TenantEnabled": c.tenantEnabled, "DbCheckerEnabled": c.dbCheckerEnabled}),
+		mock.M(t, map[string]bool{"TenantEnabled": c.tenantEnabled, "DbCheckerEnabled": c.dbCheckerEnabled}),
 	)
 
 	defer func() {

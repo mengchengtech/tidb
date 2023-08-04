@@ -1,4 +1,4 @@
-package mctech
+package mock
 
 import (
 	"encoding/json"
