@@ -113,7 +113,7 @@ func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	}) >= 0
 
 	if !hasGlobalDb {
-		return nil, false, nil
+		return dbs, false, nil
 	}
 
 	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
@@ -121,12 +121,12 @@ func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	result := mctx.PrepareResult()
 	if result.Global() {
 		// 启用global时，允许跨任意数据库查询
-		return nil, false, nil
+		return dbs, false, nil
 	}
 
 	// 未启用global,租户code为空，留到后续Validate步骤统一校验
 	if result.Tenant() == "" && !mctx.UsingTenantParam() {
-		return nil, false, nil
+		return dbs, false, nil
 	}
 
 	modifyCtx.SetSQLRewrited(!skipped)
