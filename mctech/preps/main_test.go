@@ -1,10 +1,7 @@
 package preps
 
 import (
-	"bytes"
 	"context"
-	"io"
-	"net/http"
 	"testing"
 
 	"github.com/pingcap/tidb/kv"
@@ -85,7 +82,7 @@ func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCas
 	for _, c := range cases {
 		_, mctechCtx, err := mctech.WithNewContext(session)
 		require.NoError(t, err)
-		
+
 		err = runTestCase(t, c, mctechCtx)
 		if err == nil {
 			continue
@@ -96,26 +93,5 @@ func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCas
 		} else {
 			require.NoErrorf(t, err, "source %v", c.Source())
 		}
-	}
-}
-
-type getDoFuncType func(req *http.Request) (*http.Response, error)
-
-var getDoFunc getDoFuncType
-
-type mockClient struct {
-}
-
-func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
-	return getDoFunc(req)
-}
-
-func createGetDoFunc(text string) getDoFuncType {
-	return func(_ *http.Request) (*http.Response, error) {
-		res := &http.Response{
-			StatusCode: 200,
-			Body:       io.NopCloser(bytes.NewReader([]byte(text))),
-		}
-		return res, nil
 	}
 }

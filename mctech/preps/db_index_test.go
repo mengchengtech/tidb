@@ -3,6 +3,7 @@ package preps
 import (
 	"testing"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
@@ -38,11 +39,9 @@ func TestDbSelectorGetDbIndex(t *testing.T) {
 }
 
 func contextRunTestCase(t *testing.T, c *testContextCase) error {
-	var rpcClient = mctech.GetRPCClient()
-	mctech.SetRPCClientForTest(&mockClient{})
-	defer mctech.SetRPCClientForTest(rpcClient)
-	getDoFunc = createGetDoFunc(c.response)
-
+	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
+		mctech.M(t, c.response),
+	)
 	result, err := mctech.NewPrepareResult(c.tenant, c.params)
 	if err != nil {
 		return err
@@ -53,5 +52,6 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 		return err
 	}
 	require.Equal(t, c.expect, index, c.Source())
+	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 	return nil
 }

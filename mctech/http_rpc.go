@@ -1,38 +1,22 @@
 package mctech
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/log"
+	"go.uber.org/zap"
 )
 
-// RPCClient rpc invoke client
-type RPCClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
-var (
-	apiClient RPCClient
-)
-
-func init() {
-	apiClient = &http.Client{
-		Transport: &http.Transport{
-			IdleConnTimeout: time.Second,
-			// DisableKeepAlives: true,
-		},
-	}
-}
-
-// SetRPCClientForTest for test
-func SetRPCClientForTest(client RPCClient) {
-	apiClient = client
-}
-
-// GetRPCClient get rpc invoke client
-func GetRPCClient() RPCClient {
-	return apiClient
+var apiClient = &http.Client{
+	Transport: &http.Transport{
+		IdleConnTimeout: time.Second,
+		// DisableKeepAlives: true,
+	},
 }
 
 // DoRequest invoke rpc api
@@ -50,6 +34,11 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 }
 
 func do(request *http.Request) ([]byte, error) {
+	failpoint.Inject("MockMctechHttp", func(val failpoint.Value) {
+		bytes := []byte(val.(string))
+		failpoint.Return(bytes, nil)
+	})
+
 	response, err := apiClient.Do(request)
 	if err != nil {
 		// 网络问题或者是服务器不定时出的502错误，重试几次

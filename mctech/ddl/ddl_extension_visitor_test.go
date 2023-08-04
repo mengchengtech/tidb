@@ -105,7 +105,7 @@ var ddlExtensionCases = [][]*ddlMCTechTestCase{
 
 func TestDDLExtensionVisitor(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
-		mctech.TestMarshal(t, map[string]bool{"DDLVersionColumnEnabled": true}),
+		mctech.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
 	)
 	for _, lst := range ddlExtensionCases {
 		doRunTest(t, doRunDDLMCTechTestCase, lst)
