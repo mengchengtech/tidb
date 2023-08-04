@@ -28,7 +28,7 @@ func (cc *clientConn) beforeParseSql(ctx context.Context, sql string) (context.C
 			sql = sql[0:opts.SqlLogMaxLength]
 		}
 		db, user, client := sessionctx.ResolveSession(cc.getCtx())
-		logutil.Logger(ctx).Warn("mctech SQL handleQuery",
+		logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
 			zap.String("token", mctech.LogFilterToken),
 			zap.String("db", db), zap.String("user", user), zap.String("client", client),
 			zap.String("SQL", sql))
