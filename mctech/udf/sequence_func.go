@@ -11,6 +11,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pkg/errors"
@@ -261,8 +262,11 @@ type SequenceCache struct {
 	// 激活后台取序列的阈值
 	backendThreshold int64
 
-	mock  bool
 	debug bool
+
+	mock         bool
+	mockSequence int64
+	mockLock     *sync.Mutex
 }
 
 func newSequenceCache() *SequenceCache {
@@ -271,6 +275,9 @@ func newSequenceCache() *SequenceCache {
 	sc.frange = newCompositeRange()
 
 	sc.mock = option.SequenceMock
+	sc.mockSequence = time.Now().UnixMicro()
+	sc.mockLock = &sync.Mutex{}
+
 	sc.debug = option.SequenceDebug
 
 	// 后台取序列的最大线程数
@@ -291,7 +298,12 @@ func (s *SequenceCache) GetMetrics() *sequenceMetrics {
 func (s *SequenceCache) VersionJustPass() (int64, error) {
 	if s.mock {
 		// 用于调试场景
-		return 0, nil
+		s.mockLock.Lock()
+		defer s.mockLock.Unlock()
+
+		val := s.mockSequence
+		s.mockSequence = s.mockSequence + 1
+		return val, nil
 	}
 
 	url := s.serviceURLPrefix + "version"
@@ -321,7 +333,12 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 func (s *SequenceCache) Next() (int64, error) {
 	if s.mock {
 		// 用于调试场景
-		return 0, nil
+		s.mockLock.Lock()
+		defer s.mockLock.Unlock()
+
+		val := s.mockSequence
+		s.mockSequence = s.mockSequence + 1
+		return val, nil
 	}
 
 	s.frange.frontLock.Lock()
@@ -395,6 +412,10 @@ var sequenceInitOnce sync.Once
 
 // GetCache 获取带缓存的序列服务客户端
 func GetCache() *SequenceCache {
+	failpoint.Inject("ResetSequenceCache", func() {
+		failpoint.Return(newSequenceCache())
+	})
+
 	if cache != nil {
 		return cache
 	}
@@ -411,7 +432,7 @@ func GetCache() *SequenceCache {
 					default:
 						start := time.Now().UnixNano()
 						time.Sleep(time.Second)
-						renderSequenceMetrics(start)
+						renderSequenceMetrics(cache, start)
 					}
 				}
 			}()
@@ -434,7 +455,7 @@ func SequenceDecode(id int64) (int64, error) {
 	return ep + delta, nil
 }
 
-func renderSequenceMetrics(startNano int64) {
+func renderSequenceMetrics(cache *SequenceCache, startNano int64) {
 	metric := cache.GetMetrics()
 	if metric.TotalFetchCount == 0 {
 		return
