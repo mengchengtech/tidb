@@ -30,7 +30,10 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 		retryCount--
 	}
 
-	return nil, err
+	if err != nil {
+		log.Error("rpc调用发生错误。", zap.Error(err))
+	}
+	return nil, errors.New("rpc调用发生错误。详情请查询tidb服务日志")
 }
 
 func do(request *http.Request) ([]byte, error) {
