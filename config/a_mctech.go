@@ -1,3 +1,5 @@
+// add by zhangbing
+
 package config
 
 // MCTech mctech custom config
