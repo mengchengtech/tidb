@@ -1,3 +1,5 @@
+// add by zhangbing
+
 package ast_test
 
 import (
