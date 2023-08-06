@@ -251,15 +251,20 @@ func TestCA(t *testing.T) {
 	}
 }
 
-func handler(w http.ResponseWriter, req *http.Request) {
+// add by zhangbing
+type httpHandler struct {}
+func (h *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("This an example server"))
 }
+// add end
 
 func runServer(ctx context.Context, tlsCfg *tls.Config, t *testing.T) (*http.Server, int) {
-	http.HandleFunc("/", handler)
-	server := &http.Server{Addr: ":0", Handler: nil}
-
+	// modify by zhangbing
+	// http.HandleFunc("/", handler)
+	// server := &http.Server{Addr: ":0", Handler: nil}
+	server := &http.Server{Addr: ":0", Handler: &httpHandler{}}
+	// modify end
 	conn, err := net.Listen("tcp", server.Addr)
 	if err != nil {
 		require.NoError(t, err)
