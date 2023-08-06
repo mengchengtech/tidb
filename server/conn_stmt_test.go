@@ -16,7 +16,6 @@ package server
 
 import (
 	"context"
-	"encoding/binary"
 	"testing"
 
 	"github.com/pingcap/tidb/parser/mysql"
@@ -259,7 +258,11 @@ func TestCursorReadHoldTS(t *testing.T) {
 	srv.SetDomain(dom)
 	defer srv.Close()
 
-	appendUint32 := binary.LittleEndian.AppendUint32
+	// delete by zhangbing
+	// go1.18版本中 binary.LittleEndian 不包含 AppendUint32 1.19版本后新增
+	// appendUint32 := binary.LittleEndian.AppendUint32
+	// delete end
+
 	ctx := context.Background()
 	c := CreateMockConn(t, store, srv)
 	tk := testkit.NewTestKitWithSession(t, store, c.Context().Session)
