@@ -19,10 +19,12 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "runtime" // import link package
-	_ "unsafe"  // required by go:linkname
+	"strconv"
+	_ "unsafe" // required by go:linkname
 
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/parser/mysql"
+	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/israce"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/versioninfo"
@@ -46,6 +48,10 @@ func PrintTiDBInfo() {
 		panic(err)
 	}
 	logutil.BgLogger().Info("loaded config", zap.ByteString("config", configJSON))
+	// add by zhangbing
+	logutil.BgLogger().Info("是否测试环境:" + strconv.FormatBool(intest.InTest))
+	// add end
+
 }
 
 // GetTiDBInfo returns the git hash and build time of this tidb-server binary.
