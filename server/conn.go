@@ -1834,7 +1834,9 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
-	err = cc.afterParseSql(ctx, mctechCtx, sql, stmts)
+	if err = cc.afterParseSql(ctx, mctechCtx, sql, stmts); err != nil {
+		return err
+	}
 	// add end
 
 	warns := sc.GetWarnings()

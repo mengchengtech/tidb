@@ -40,7 +40,7 @@ func TestHandlerWithTenantDisable(t *testing.T) {
 	doRunWithSessionTest(t, handlerRunTestCase, cases, "mock_write", "code_gslq", "code_gslq")
 }
 
-func TestHandlerWithTenantEnable(t *testing.T) {
+func TestHandlerWithTenantEnableAndTenantRole(t *testing.T) {
 	cases := []*handlerTestCase{
 		{"select * from information_schema.analyze_status", true, true, false, []string{"information_schema"}, ""},
 		{"/*& tenant:gslq */ select * from company", true, true, false, []string{"test"}, ""},
@@ -50,6 +50,14 @@ func TestHandlerWithTenantEnable(t *testing.T) {
 	}
 
 	doRunWithSessionTest(t, handlerRunTestCase, cases, "mock_write", "code_gslq", "code_gslq")
+}
+
+func TestHandlerWithTenantEnableAndNoTenantRole(t *testing.T) {
+	cases := []*handlerTestCase{
+		{"select * from global_platform.company", true, true, false, []string{"test"}, "当前用户mock_write无法确定所属租户信息"},
+	}
+
+	doRunWithSessionTest(t, handlerRunTestCase, cases, "mock_write")
 }
 
 func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Context) (err error) {
