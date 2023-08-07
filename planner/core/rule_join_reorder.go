@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/plancodec"
 	"github.com/pingcap/tidb/util/tracing"
 )
@@ -36,8 +37,10 @@ import (
 func extractJoinGroup(p LogicalPlan) (group []LogicalPlan, eqEdges []*expression.ScalarFunction,
 	otherConds []expression.Expression, joinTypes []*joinTypeWithExtMsg, hintInfo []*tableHintInfo, hasOuterJoin bool) {
 	join, isJoin := p.(*LogicalJoin)
-	if !isJoin || join.JoinType != InnerJoin {
-		return []LogicalPlan{p}, nil, nil, nil, nil, false
+	if !intest.InTest {
+		if !isJoin || join.JoinType != InnerJoin {
+			return []LogicalPlan{p}, nil, nil, nil, nil, false
+		}
 	}
 	if isJoin && join.preferJoinOrder {
 		// When there is a leading hint, the hint may not take effect for other reasons.
