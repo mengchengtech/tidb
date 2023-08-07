@@ -392,16 +392,14 @@ func NewColDesc(col *Column) *ColDesc {
 	} else if mysql.HasOnUpdateNowFlag(col.GetFlag()) {
 		// in order to match the rules of mysql 8.0.16 version
 		// see https://github.com/pingcap/tidb/issues/10337
-		// add by zhangbing
-		switch col.GetType() {
-		case mysql.TypeTimestamp:
-			extra = "DEFAULT_GENERATED on update CURRENT_TIMESTAMP" + OptionalFsp(&col.FieldType)
-		case mysql.TypeLonglong:
-			extra = "DEFAULT_GENERATED on update MCTECH_SEQUENCE" + OptionalFsp(&col.FieldType)
-		default:
-			panic(fmt.Errorf("[ON UPDATE]: not support type %d", col.GetType()))
+		// modify by zhangbing
+		var expr = "CURRENT_TIMESTAMP"
+		if col.GetType() == mysql.TypeLonglong {
+			expr = "MCTECH_SEQUENCE"
 		}
-		// add end
+
+		extra = "DEFAULT_GENERATED on update " + expr + OptionalFsp(&col.FieldType)
+		// modify end
 	} else if col.IsGenerated() {
 		if col.GeneratedStored {
 			extra = "STORED GENERATED"
