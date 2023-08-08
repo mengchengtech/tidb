@@ -87,11 +87,11 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 			zap.String("db", db), zap.String("user", user), zap.String("client", client),
 			zap.String("SQL", sql))
 		return err
-	} else {
-		opts := mctech.GetOption()
+	}
+
+	if opts := mctech.GetOption(); !opts.SqlLogEnabled {
 		for _, stmt := range stmts {
-			var dbs []string
-			dbs = mctx.GetDbs(stmt)
+			dbs := mctx.GetDbs(stmt)
 			if dbs != nil {
 				ignore := false
 				for _, db := range opts.SqlTraceIgnoreDbs {
@@ -121,17 +121,15 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 				break
 			}
 
-			if opts := mctech.GetOption(); opts.SqlLogEnabled {
-				origSql := stmt.OriginalText()
-				if len(origSql) > opts.SqlLogMaxLength {
-					origSql = origSql[0:opts.SqlLogMaxLength]
-				}
-				db, user, client := sessionctx.ResolveSession(cc.getCtx())
-				logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
-					zap.String("token", mctech.LogFilterToken),
-					zap.String("db", db), zap.String("user", user), zap.String("client", client),
-					zap.String("SQL", origSql))
+			origSql := stmt.OriginalText()
+			if len(origSql) > opts.SqlLogMaxLength {
+				origSql = origSql[0:opts.SqlLogMaxLength]
 			}
+			db, user, client := sessionctx.ResolveSession(cc.getCtx())
+			logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
+				zap.String("token", mctech.LogFilterToken),
+				zap.String("db", db), zap.String("user", user), zap.String("client", client),
+				zap.String("SQL", origSql))
 		}
 	}
 
@@ -172,13 +170,18 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		}
 	}()
 
+	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
+	cc.logLargeSql(ctx, stmt, digest)
+	if opts.SqlTraceEnabled {
+		cc.traceFullSql(ctx, stmt, digest)
+	}
+}
+
+// 记录超长sql
+func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest *parser.Digest) {
+	opts := mctech.GetOption()
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
-	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
-	origSql := stmt.OriginalText()
-
-	// ---------------------------- 记录超长sql ---------------------------------
-
 	sqlType := "other"
 	switch stmt.(type) {
 	case *ast.SelectStmt, *ast.SetOprStmt:
@@ -192,17 +195,21 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	}
 
 	if slices.Contains(opts.LargeSqlTypes, sqlType) {
+		origSql := stmt.OriginalText()
 		sqlLength := len(origSql)
 		if sqlLength > opts.LargeSqlThreshold {
-			_, digest = stmtCtx.SQLDigest() //
+			if digest == nil {
+				_, digest = stmtCtx.SQLDigest() //
+			}
 			db, user, _ := sessionctx.ResolveSession(cc.getCtx())
 
 			var service string
+			mctx, err := mctech.GetContext(ctx)
 			if mctx != nil {
 				// TODO: 获取service
 				service = ""
 			}
-			_, err := cc.ctx.ExecuteInternal(ctx,
+			_, err = cc.ctx.ExecuteInternal(ctx,
 				`insert into mysql.mctech_large_sql_log
 				(hash_id, db, user, service, sample_text, max_size, created_at)
 				values (%?, %?, %?, %?, %?, %?, %?)`,
@@ -210,11 +217,13 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 			panic(err)
 		}
 	}
+}
 
-	// ---------------------------- 记录全量sql ---------------------------------
-	if !opts.SqlTraceEnabled {
-		return
-	}
+// 记录全量sql
+func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, digest *parser.Digest) {
+	sessVars := cc.ctx.GetSessionVars()
+	stmtCtx := sessVars.StmtCtx
+	origSql := stmt.OriginalText()
 
 	// 是否为内部sql查询
 	internal := sessVars.InRestrictedSQL
@@ -280,7 +289,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		if _, err := gz.Write([]byte(origSql)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
-					origSql = base64.StdEncoding.EncodeToString(b.Bytes())
+					origSql = "{gzip}" + base64.StdEncoding.EncodeToString(b.Bytes())
 				}
 			}
 		}
