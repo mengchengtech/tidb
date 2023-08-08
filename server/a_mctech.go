@@ -24,17 +24,6 @@ import (
 )
 
 func (cc *clientConn) beforeParseSql(ctx context.Context, sql string) (context.Context, mctech.Context, string, error) {
-	if opts := mctech.GetOption(); opts.SqlLogEnabled {
-		if len(sql) > opts.SqlLogMaxLength {
-			sql = sql[0:opts.SqlLogMaxLength]
-		}
-		db, user, client := sessionctx.ResolveSession(cc.getCtx())
-		logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
-			zap.String("token", mctech.LogFilterToken),
-			zap.String("db", db), zap.String("user", user), zap.String("client", client),
-			zap.String("SQL", sql))
-	}
-
 	handler := mctech.GetHandler()
 	subCtx, mctx, err := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
 	if err != nil {
@@ -98,6 +87,52 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 			zap.String("db", db), zap.String("user", user), zap.String("client", client),
 			zap.String("SQL", sql))
 		return err
+	} else {
+		opts := mctech.GetOption()
+		for _, stmt := range stmts {
+			var dbs []string
+			dbs = mctx.GetDbs(stmt)
+			if dbs != nil {
+				ignore := false
+				for _, db := range opts.SqlTraceIgnoreDbs {
+					if slices.Contains(dbs, db) {
+						// 不记录这些数据库下的sql
+						ignore = true
+						break
+					}
+				}
+
+				if ignore {
+					break
+				}
+			}
+
+			shouldLog := false
+			switch stmt.(type) {
+			case *ast.SelectStmt, *ast.SetOprStmt,
+				*ast.DeleteStmt, *ast.InsertStmt, *ast.UpdateStmt,
+				*ast.PrepareStmt,
+				*ast.NonTransactionalDeleteStmt:
+				shouldLog = true
+			}
+
+			if !shouldLog {
+				// 不记录指定类型以外的sql
+				break
+			}
+
+			if opts := mctech.GetOption(); opts.SqlLogEnabled {
+				origSql := stmt.OriginalText()
+				if len(origSql) > opts.SqlLogMaxLength {
+					origSql = origSql[0:opts.SqlLogMaxLength]
+				}
+				db, user, client := sessionctx.ResolveSession(cc.getCtx())
+				logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
+					zap.String("token", mctech.LogFilterToken),
+					zap.String("db", db), zap.String("user", user), zap.String("client", client),
+					zap.String("SQL", origSql))
+			}
+		}
 	}
 
 	return nil
