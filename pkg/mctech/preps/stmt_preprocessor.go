@@ -12,7 +12,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
-var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*/`)
+var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+)[:|](.*?)\s*\*/`)
 
 // StatementPreprocessor interface
 type StatementPreprocessor interface {
