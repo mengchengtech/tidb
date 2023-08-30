@@ -54,6 +54,10 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "{{{,gslq,false,[{mpp,allow} {tenant,gslq}],{false,[]}}},public_data}", ""}, // replace
 		{"pd", "/*& $replace:tenant=mctech */ select * from company", "{{{,,false,[{mpp,allow}],{false,[]}}},public_data}", ""},
 		{"pd", "/*& $replace:tenant */ select * from company", "", "执行[replace]时未找到名称为'tenant'的参数的值"},
+
+		// 新的值声明方式
+		{"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 	}
 
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")

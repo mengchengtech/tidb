@@ -12,7 +12,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*/`)
+var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+)[:|](.*?)\s*\*/`)
 
 // StatementPreprocessor interface
 type StatementPreprocessor interface {
