@@ -259,10 +259,10 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
 	}
 
-	timeStart := sessVars.StartTime                                      // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-	timeEnd := time.Now()                                                // 该 SQL 查询结束运行时的时间
-	var db string                                                        // 执行该 SQL 查询时使用的数据库名称
-	connId := sessVars.ConnectionID                                      // SQL 查询客户端连接 ID
+	timeStart := sessVars.StartTime // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
+	timeEnd := time.Now()           // 该 SQL 查询结束运行时的时间
+	var db string                   // 执行该 SQL 查询时使用的数据库名称
+	// connId := sessVars.ConnectionID                                          // SQL 查询客户端连接 ID
 	queryTime := time.Since(sessVars.StartTime) + sessVars.DurationParse // 执行 SQL 耗费的自然时间
 	parseTime := sessVars.DurationParse                                  // 解析耗时
 	compileTime := sessVars.DurationCompile                              // 生成执行计划耗时
@@ -296,18 +296,20 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		}
 	}
 
-	mctech.F().Warn("", // 忽略Message字段
+	mctech.F().Info("", // 忽略Message字段
 		zap.String("DB", db),
 		zap.String("User", user),
-		zap.Uint64("ConnId", connId),
-		zap.String("Start", timeStart.Format(time.RFC3339Nano)),
-		zap.String("End", timeEnd.Format(time.RFC3339Nano)),
-		zap.Duration("QueryTime", queryTime),
-		zap.Duration("ParseTime", parseTime),
-		zap.Duration("CompileTime", compileTime),
-		zap.Duration("CopTime", copTime),
-		zap.Stringer("RenderTime", writeSQLRespTotal),
-		zap.Duration("FirstRowTime", firstRowReadyTime),
+		// zap.Uint64("ConnId", connId),
+		zap.Int64("Start", timeStart.UnixMilli()),
+		zap.Int64("End", timeEnd.UnixMilli()),
+		zap.Object("Time", &mctech.LobTimeObject{
+			Query:   queryTime,
+			Parse:   parseTime,
+			Compile: compileTime,
+			Cop:     copTime,
+			Ready:   firstRowReadyTime,
+			Render:  writeSQLRespTotal,
+		}),
 		zap.Stringer("Digest", digest),
 		zap.Int64("MemMax", memMax),
 		zap.Int64("DiskMax", diskMax),
