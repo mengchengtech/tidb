@@ -136,7 +136,7 @@ func init() {
 			Enabled:           false,
 			FileMaxDays:       7,
 			FileMaxSize:       300,
-			CompressThreshold: 64 * 1024,
+			CompressThreshold: 16 * 1024,
 		},
 	}
 }
