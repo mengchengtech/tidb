@@ -3,11 +3,13 @@ package mctech
 import (
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var fullSqlLogger *zap.Logger
@@ -53,4 +55,23 @@ func initLogger() {
 	}
 
 	fullSqlLogger = logger
+}
+
+type LobTimeObject struct {
+	Query   time.Duration
+	Parse   time.Duration
+	Compile time.Duration
+	Cop     time.Duration
+	Ready   time.Duration
+	Render  time.Duration
+}
+
+func (lt *LobTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddDuration("Query", lt.Query)
+	enc.AddDuration("Parse", lt.Parse)
+	enc.AddDuration("Compile", lt.Compile)
+	enc.AddDuration("Cop", lt.Cop)
+	enc.AddDuration("Ready", lt.Ready)
+	enc.AddDuration("Render", lt.Render)
+	return nil
 }
