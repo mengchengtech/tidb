@@ -25,6 +25,23 @@ func F() *zap.Logger {
 	return fullSqlLogger
 }
 
+func newJsonEncoder(cfg *log.Config) zapcore.Encoder {
+	cc := zapcore.EncoderConfig{
+		TimeKey:        "", // 不记录生成日志时的time
+		LevelKey:       "", // 不记录日志级别
+		NameKey:        "", // 不记录日志对象的名称
+		CallerKey:      "", // 不记录日志所在方法调用者信息
+		MessageKey:     "", // 不记录日志的"message"内容
+		StacktraceKey:  "", // 不记录日志调用时的调用堆栈信息
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalLevelEncoder,
+		EncodeTime:     log.DefaultTimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
+		EncodeCaller:   log.ShortCallerEncoder,
+	}
+	return zapcore.NewJSONEncoder(cc)
+}
+
 func initLogger() {
 	if fullSqlLogger != nil {
 		return
@@ -35,7 +52,7 @@ func initLogger() {
 	cfg := globalConfig.Log.ToLogConfig()
 	// copy the global log config to full sql log config
 	fsConfig := cfg.Config
-	fsConfig.Level = "info"
+	fsConfig.Level = ""
 	fsConfig.Format = "json"
 	fsConfig.DisableTimestamp = true
 	fsConfig.DisableStacktrace = true
@@ -49,7 +66,14 @@ func initLogger() {
 		logDir := filepath.Dir(globalConfig.Log.File.Filename)
 		fsConfig.File.Filename = filepath.Join(logDir, "mctech_tidb_full_sql.log")
 	}
-	logger, _, err := log.InitLogger(&fsConfig)
+	logger, prop, err := log.InitLogger(&fsConfig)
+	jsonEncoder := newJsonEncoder(&cfg.Config)
+	newCore := log.NewTextCore(jsonEncoder, prop.Syncer, prop.Level)
+	logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return newCore
+	}))
+	prop.Core = newCore
+
 	if err != nil {
 		panic(errors.Trace(err))
 	}
