@@ -233,18 +233,25 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		return
 	}
 
+	var sqlType string // sql语句类型
 	switch stmt.(type) {
-	case *ast.UseStmt, // use
-		*ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt, // execute
-		*ast.BeginStmt, *ast.RollbackStmt, *ast.CommitStmt, // transaction
-		*ast.SelectStmt, *ast.SetOprStmt, // select
-		*ast.NonTransactionalDeleteStmt, *ast.DeleteStmt, // delete
-		*ast.InsertStmt,                            // insert
-		*ast.UpdateStmt,                            // update
-		*ast.LockTablesStmt, *ast.UnlockTablesStmt, // lock/unlock table
+	case *ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt: // execute
+		sqlType = "exec"
+	case *ast.BeginStmt, *ast.RollbackStmt, *ast.CommitStmt: // transaction
+		sqlType = "tx"
+	case *ast.SelectStmt, *ast.SetOprStmt: // select
+		sqlType = "select"
+	case *ast.NonTransactionalDeleteStmt, *ast.DeleteStmt: // delete
+		sqlType = "delete"
+	case *ast.InsertStmt: // insert
+		sqlType = "insert"
+	case *ast.UpdateStmt: // update
+		sqlType = "update"
+	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, // lock/unlock table
+		// *ast.UseStmt,  // use
 		*ast.CallStmt, // precedure
 		*ast.DoStmt:   // do block
-		break
+		sqlType = "misc"
 	default:
 		return
 	}
@@ -299,6 +306,7 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		zap.String("DB", db),
 		zap.String("User", user),
 		// zap.Uint64("ConnId", connId),
+		zap.String("Type", sqlType),
 		zap.Int64("Start", timeStart.UnixMilli()),
 		zap.Int64("End", timeEnd.UnixMilli()),
 		zap.Object("Time", &mctech.LobTimeObject{
