@@ -171,6 +171,8 @@ func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildr
 
 	if v.enabled() {
 		switch node := n.(type) {
+		case *ast.LoadDataStmt:
+			v.enterLoadDataStatement(node)
 		case
 			*ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt,
 			*ast.SetOprSelectList, *ast.SetOprStmt: // InsertStmt不支持With
@@ -242,6 +244,28 @@ func (v *isolationConditionVisitor) leaveWithScope(node ast.Node) {
 		return
 	}
 	v.withClauseScope.Pop()
+}
+
+func (v *isolationConditionVisitor) enterLoadDataStatement(node *ast.LoadDataStmt) {
+	tableName := node.Table
+	dbName := tableName.Schema.L
+
+	sd := v.context
+	if dbName == "" {
+		dbName = sd.CurrentDB()
+	}
+
+	// 只处理global_xxxx的表
+	if sd.PrepareResult().Global() || !sd.IsGlobalDb(dbName) {
+		return
+	}
+
+	node.ColumnAssignments = append(node.ColumnAssignments, &ast.Assignment{
+		Column: &ast.ColumnName{
+			Name: model.NewCIStr(tenantFieldName),
+		},
+		Expr: v.createTenantExpr(),
+	})
 }
 
 func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
