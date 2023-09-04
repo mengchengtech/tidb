@@ -134,7 +134,7 @@ func initMCTechConfig() MCTech {
 		},
 		SqlTrace: SqlTrace{
 			Enabled:           false,
-			FileMaxDays:       7,
+			FileMaxDays:       1,
 			FileMaxSize:       300,
 			CompressThreshold: 16 * 1024,
 		},
