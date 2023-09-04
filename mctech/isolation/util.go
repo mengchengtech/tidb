@@ -18,6 +18,7 @@ func ApplyExtension(mctx mctech.Context, node ast.Node,
 		}
 	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.InsertStmt,
 		*ast.SetOprSelectList, *ast.SetOprStmt,
+		*ast.LoadDataStmt,
 		*ast.TruncateTableStmt:
 		dbs, err = doApplyExtension(mctx, stmtNode, charset, collation)
 	case *ast.MCTechStmt:
