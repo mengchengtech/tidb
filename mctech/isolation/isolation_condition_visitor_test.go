@@ -204,6 +204,11 @@ var updateWithCTECases = []*tenantMCTechTestCase{
 	{false, false, nil, "pf", "with tmp as (select * from component_param as b where b.component_id is not null) update component a join Tmp b on a.id = b.id set version=mctech_sequence() ", "WITH `tmp` AS (SELECT * FROM `component_param` AS `b` WHERE ((`b`.`tenant`='gslq4dev') AND `b`.`component_id` IS NOT NULL)) UPDATE `component` AS `a` JOIN `Tmp` AS `b` ON (`a`.`id`=`b`.`id`) SET `version`=MCTECH_SEQUENCE() WHERE (`a`.`tenant`='gslq4dev')"},
 }
 
+var loadDataCases = []*tenantMCTechTestCase{
+	{false, false, nil, "pf", "load data infile '/tmp/t0.txt' ignore into table t0 character set gbk fields terminated by ',' enclosed by '\"' lines terminated by '\n' (`name`,`age`,`description`)", "LOAD DATA INFILE '/tmp/t0.txt' IGNORE INTO TABLE `t0` FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' (`name`,`age`,`description`) SET `tenant`='gslq4dev'"},
+	{true, false, []string{"ys2"}, "pf", "load data infile '/tmp/t1.txt' ignore into table t1 character set gbk fields terminated by ',' enclosed by '\"' lines terminated by '\n' (`name`,`age`,`description`)", "LOAD DATA INFILE '/tmp/t1.txt' IGNORE INTO TABLE `t1` FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' (`name`,`age`,`description`)"},
+}
+
 var nopCases = []*tenantMCTechTestCase{
 	{true, false, nil, "pf", "select * from public_data.table1", "SELECT * FROM `mock_public_data`.`table1`"},
 	{true, false, []string{"ys2"}, "pf", "select * from component_param", "SELECT * FROM `component_param` WHERE `component_param`.`tenant` NOT IN ('ys2')"},
@@ -216,6 +221,7 @@ func TestIsolationConditionVisitor(t *testing.T) {
 		selectFromJoinCases, selectFromMultipleTasbleCases, selectFromSubqueryCases, selectWithCTECases, selectFunctionCases, selectStarCases, selectUnionCases,
 		simpleCases,
 		updateSingleTableCases, updateMultipleTableCases, updateWithSubqueryCases, updateWithCTECases,
+		loadDataCases,
 		nopCases,
 		miscStmtCases,
 	}
