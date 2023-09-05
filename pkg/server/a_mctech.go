@@ -94,7 +94,7 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 			dbs := mctx.GetDbs(stmt)
 			if dbs != nil {
 				ignore := false
-				for _, db := range opts.SqlTraceIgnoreDbs {
+				for _, db := range opts.SqlTraceExcludeDbs {
 					if slices.Contains(dbs, db) {
 						// 不记录这些数据库下的sql
 						ignore = true
@@ -155,7 +155,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	}
 
 	if dbs != nil {
-		for _, db := range opts.SqlTraceIgnoreDbs {
+		for _, db := range opts.SqlTraceExcludeDbs {
 			if slices.Contains(dbs, db) {
 				// 不记录这些数据库下的sql
 				return
