@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pkg/errors"
 )
@@ -111,7 +112,7 @@ func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) 
 }
 
 func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
-	option := mctech.GetOption()
+	option := config.GetOption()
 	apiPrefix := option.DbCheckerAPIPrefix
 	apiURL := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, env)
 	get, err := http.NewRequest("GET", apiURL, nil)
@@ -133,7 +134,7 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 }
 
 func (d *dbSelector) getDbIndexByTicketFromService(env string, requestID string) (mctech.DbIndex, error) {
-	option := mctech.GetOption()
+	option := config.GetOption()
 	apiPrefix := option.DbCheckerAPIPrefix
 	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestID)
 	get, err := http.NewRequest("GET", apiURL, nil)

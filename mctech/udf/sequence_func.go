@@ -13,6 +13,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -271,7 +272,7 @@ type SequenceCache struct {
 
 func newSequenceCache() *SequenceCache {
 	sc := new(SequenceCache)
-	option := mctech.GetOption()
+	option := config.GetOption()
 	sc.frange = newCompositeRange()
 
 	sc.mock = option.SequenceMock
