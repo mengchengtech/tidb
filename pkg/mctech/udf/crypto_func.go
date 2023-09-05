@@ -23,15 +23,15 @@ const cryptoPrefix = "{crypto}"
 var cryptoPfrefixLength = len(cryptoPrefix)
 
 type aesCryptoClient struct {
-	mock bool
-	key  []byte
-	iv   []byte
+	option *config.Option
+	key    []byte
+	iv     []byte
 }
 
 func newAesCryptoClientFromService() *aesCryptoClient {
 	c := new(aesCryptoClient)
 	option := config.GetOption()
-	c.mock = option.EncryptionMock
+	c.option = option
 
 	key, iv, err := loadCryptoParams(option)
 	if err == nil {
@@ -66,7 +66,7 @@ func newAesCryptoClientFromService() *aesCryptoClient {
 
 // Encrypt encrypt plain text
 func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
-	if c.mock {
+	if c.option.EncryptionMock {
 		// 用于调试场景
 		return plainText, nil
 	}
@@ -92,7 +92,7 @@ func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
 
 // Decrypt decrypt cipher text
 func (c *aesCryptoClient) Decrypt(content string) (string, error) {
-	if c.mock {
+	if c.option.EncryptionMock {
 		// 用于调试场景
 		return content, nil
 	}
