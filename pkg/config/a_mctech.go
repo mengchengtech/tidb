@@ -15,11 +15,12 @@ type MCTech struct {
 }
 
 type SqlTrace struct {
-	Enabled           bool   `toml:"enabled" json:"enabled"`                       // 是否记录所有sql执行结果到独立文件中
-	Filename          string `toml:"file-name" json:"file-name"`                   // 日志文件名称
-	FileMaxDays       int    `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
-	FileMaxSize       int    `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
-	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
+	Enabled           bool     `toml:"enabled" json:"enabled"`                       // 是否记录所有sql执行结果到独立文件中
+	Filename          string   `toml:"file-name" json:"file-name"`                   // 日志文件名称
+	FileMaxDays       int      `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
+	FileMaxSize       int      `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
+	Exclude           []string `toml:"exclude" json:"exclude"`                       // 需要排除记录的数据库，使用','分隔
+	CompressThreshold int      `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
 }
 
 type MctechMetrics struct {
@@ -135,7 +136,8 @@ func initMCTechConfig() MCTech {
 		SqlTrace: SqlTrace{
 			Enabled:           false,
 			FileMaxDays:       1,
-			FileMaxSize:       300,
+			FileMaxSize:       1024,
+			Exclude:           []string{},
 			CompressThreshold: 16 * 1024,
 		},
 	}
