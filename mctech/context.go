@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/intest"
@@ -145,7 +146,7 @@ type PrepareResult struct {
 func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
-		params[ParamMPP] = GetOption().DefaultMPPValue
+		params[ParamMPP] = config.GetOption().MPPDefaultValue
 	}
 
 	if v, ok := params[ParamTenant]; ok {
