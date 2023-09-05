@@ -12,6 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
+var defaultExcludeDbs = []string{
+	"test", "dp_stat",
+	"mysql", "information_schema", "metrics_schema", "performance_schema",
+}
+
 // Option mctech option
 type Option struct {
 	// sequence是否使用mock模式，不执行rpc调用，从本地返回固定的值
@@ -64,7 +69,7 @@ type Option struct {
 
 	SqlTraceEnabled           bool
 	SqlTraceCompressThreshold int
-	SqlTraceIgnoreDbs         []string
+	SqlTraceExcludeDbs        []string
 
 	SqlLogEnabled   bool
 	SqlLogMaxLength int
@@ -147,10 +152,14 @@ func initMCTechOption() {
 
 		SqlTraceEnabled:           opts.SqlTrace.Enabled,
 		SqlTraceCompressThreshold: opts.SqlTrace.CompressThreshold,
-		SqlTraceIgnoreDbs:         []string{"mysql", "test", "information_schema", "metrics_schema", "performance_schema"},
+		SqlTraceExcludeDbs:        defaultExcludeDbs,
 
 		SqlLogEnabled:   opts.Metrics.SqlLog.Enabled,
 		SqlLogMaxLength: opts.Metrics.SqlLog.MaxLength,
+	}
+
+	if len(opts.SqlTrace.Exclude) > 0 {
+		option.SqlTraceExcludeDbs = append(option.SqlTraceExcludeDbs, opts.SqlTrace.Exclude...)
 	}
 
 	if option.DefaultMPPValue == "" {
