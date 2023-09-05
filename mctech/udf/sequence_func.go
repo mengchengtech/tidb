@@ -256,16 +256,10 @@ type SequenceCache struct {
 	sem *semaphore.Weighted
 	// 统计信息
 	metrics sequenceMetrics
-	// 服务地址前缀 'http://xxxx/'
-	serviceURLPrefix string
-	// 每次最大取回的序列数
-	maxFetchCount int64
+	option  *config.Option
 	// 激活后台取序列的阈值
 	backendThreshold int64
 
-	debug bool
-
-	mock         bool
 	mockSequence int64
 	mockLock     *sync.Mutex
 }
@@ -275,18 +269,13 @@ func newSequenceCache() *SequenceCache {
 	option := config.GetOption()
 	sc.frange = newCompositeRange()
 
-	sc.mock = option.SequenceMock
 	sc.mockSequence = time.Now().UnixMicro()
 	sc.mockLock = &sync.Mutex{}
-
-	sc.debug = option.SequenceDebug
+	sc.option = option
 
 	// 后台取序列的最大线程数
-	backendCount := option.SequenceBackend
-	sc.maxFetchCount = option.SequenceMaxFetchCount
-	sc.sem = semaphore.NewWeighted(backendCount)
-	sc.serviceURLPrefix = option.SequenceAPIPrefix
-	sc.backendThreshold = (sc.maxFetchCount * backendCount * 2) / 3
+	sc.sem = semaphore.NewWeighted(sc.option.SequenceBackend)
+	sc.backendThreshold = (option.SequenceMaxFetchCount * option.SequenceBackend * 2) / 3
 	return sc
 }
 
@@ -297,7 +286,7 @@ func (s *SequenceCache) GetMetrics() *sequenceMetrics {
 
 // VersionJustPass versionJustPass
 func (s *SequenceCache) VersionJustPass() (int64, error) {
-	if s.mock {
+	if s.option.SequenceMock {
 		// 用于调试场景
 		s.mockLock.Lock()
 		defer s.mockLock.Unlock()
@@ -307,8 +296,8 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 		return val, nil
 	}
 
-	url := s.serviceURLPrefix + "version"
-	if s.debug {
+	url := s.option.SequenceAPIPrefix + "version"
+	if s.option.SequenceDebug {
 		log.Debug("version just pass url", zap.String("url", url))
 	}
 	post, err := http.NewRequest(
@@ -332,7 +321,7 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 
 // Next next
 func (s *SequenceCache) Next() (int64, error) {
-	if s.mock {
+	if s.option.SequenceMock {
 		// 用于调试场景
 		s.mockLock.Lock()
 		defer s.mockLock.Unlock()
@@ -349,7 +338,7 @@ func (s *SequenceCache) Next() (int64, error) {
 	var err error
 	if value < 0 {
 		// 没有可用的序列值，直接去服务端
-		err = s.loadSequence(s.maxFetchCount)
+		err = s.loadSequence(s.option.SequenceMaxFetchCount)
 		if err != nil {
 			return -2, err
 		}
@@ -379,7 +368,7 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 		}
 
 		defer s.sem.Release(1)
-		err := s.loadSequence(s.maxFetchCount)
+		err := s.loadSequence(s.option.SequenceMaxFetchCount)
 		if err != nil {
 			log.Error("[backend] fetch sequence error", zap.Error(err))
 		}
@@ -388,7 +377,7 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 }
 
 func (s *SequenceCache) loadSequence(count int64) error {
-	url := s.serviceURLPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
+	url := s.option.SequenceAPIPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
 	post, err := http.NewRequest("POST", url, &strings.Reader{})
 	if err != nil {
 		return err
@@ -423,7 +412,7 @@ func GetCache() *SequenceCache {
 
 	sequenceInitOnce.Do(func() {
 		cache = newSequenceCache()
-		if cache.debug {
+		if cache.option.SequenceDebug {
 			go func() {
 				c := make(chan os.Signal)
 				for {
