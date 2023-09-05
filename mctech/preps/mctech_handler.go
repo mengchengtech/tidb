@@ -1,6 +1,7 @@
 package preps
 
 import (
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/ddl"
 	"github.com/pingcap/tidb/mctech/msic"
@@ -20,7 +21,7 @@ type mctechHandler struct {
 
 // PrepareSQL prepare sql
 func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql string, err error) {
-	option := mctech.GetOption()
+	option := config.GetOption()
 	if !option.TenantEnabled {
 		// 禁用租户隔离
 		return rawSQL, nil
@@ -48,7 +49,7 @@ func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql stri
 
 // ApplyAndCheck apply tenant isolation and check db policies
 func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode) (bool, error) {
-	option := mctech.GetOption()
+	option := config.GetOption()
 	vars := mctx.Session().GetSessionVars()
 	charset, collation := vars.GetCharsetInfo()
 	preprocessor := preprocessor

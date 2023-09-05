@@ -61,12 +61,12 @@ func TestHandlerWithTenantEnableAndNoTenantRole(t *testing.T) {
 }
 
 func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Context) (err error) {
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
 		mock.M(t, map[string]bool{"TenantEnabled": c.tenantEnabled, "DbCheckerEnabled": c.dbCheckerEnabled}),
 	)
 
 	defer func() {
-		failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
 	}()
 	var sql string
 	if sql, err = handler.PrepareSQL(mctechCtx, c.sql); err != nil {

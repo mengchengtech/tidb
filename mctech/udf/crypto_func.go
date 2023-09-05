@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"go.uber.org/zap"
 )
@@ -29,7 +30,7 @@ type aesCryptoClient struct {
 
 func newAesCryptoClientFromService() *aesCryptoClient {
 	c := new(aesCryptoClient)
-	option := mctech.GetOption()
+	option := config.GetOption()
 	c.mock = option.EncryptionMock
 
 	key, iv, err := loadCryptoParams(option)
@@ -122,7 +123,7 @@ func (c *aesCryptoClient) Decrypt(content string) (string, error) {
 	return raw, nil
 }
 
-func loadCryptoParams(option *mctech.Option) (key []byte, iv []byte, err error) {
+func loadCryptoParams(option *config.Option) (key []byte, iv []byte, err error) {
 	// 从配置中获取
 	apiPrefix := option.EncryptionAPIPrefix
 	serviceURL := apiPrefix + "db/aes"

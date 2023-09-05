@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	plannercore "github.com/pingcap/tidb/planner/core"
@@ -88,8 +89,8 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 }
 
 func (e *PrepareExec) beforePrepare(ctx context.Context) error {
-	option := mctech.GetOption()
-	if option.ForbiddenPrepare {
+	option := config.GetOption()
+	if option.TenantForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
 	return nil

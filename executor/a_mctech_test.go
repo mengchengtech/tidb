@@ -46,7 +46,7 @@ func TestMCTechStatementsSummary(t *testing.T) {
 }
 
 func TestForbiddenPrepare(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
 		mock.M(t, map[string]bool{"ForbiddenPrepare": true}),
 	)
 	store := testkit.CreateMockStore(t)
@@ -60,7 +60,7 @@ func TestForbiddenPrepare(t *testing.T) {
 	for _, c := range cases {
 		tk.MustContainErrMsg(c.source, c.failure)
 	}
-	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
 }
 
 func TestIntegerAutoIncrement(t *testing.T) {
@@ -85,7 +85,7 @@ func TestIntegerAutoIncrement(t *testing.T) {
 }
 
 func TestPrepareByQuery(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
 		mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
 	)
 	store := testkit.CreateMockStore(t)
@@ -119,12 +119,12 @@ func TestPrepareByQuery(t *testing.T) {
 		seqs1[row[0].(string)] = true
 	}
 
-	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
 }
 
 func TestPrepareByCmd(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
-	mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
+		mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
 	)
 
 	store := testkit.CreateMockStore(t)
@@ -141,18 +141,18 @@ func TestPrepareByCmd(t *testing.T) {
 	for _, row := range rows1 {
 		seqs1[row[0].(string)] = true
 	}
-	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
 }
 
 func TestPrepareByCmdNoTenant(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
 		mock.M(t, map[string]bool{"ForbiddenPrepare": false}),
 	)
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("select * from information_schema.statements_summary limit ?", 5)
-	failpoint.Disable("github.com/pingcap/tidb/mctech/GetMctechOption")
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
 }
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {

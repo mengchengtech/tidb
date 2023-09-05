@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"golang.org/x/exp/slices"
 )
@@ -115,7 +116,7 @@ func getDatabaseChecker() DatabaseChecker {
 	}
 
 	dbCheckerInitOne.Do(func() {
-		option := mctech.GetOption()
+		option := config.GetOption()
 		dbChecker = newMutexDatabaseCheckerWithParams(
 			option.DbCheckerMutexAcrossDbs,
 			option.DbCheckerExcludeAcrossDbs,
