@@ -205,8 +205,8 @@ var updateWithCTECases = []*tenantMCTechTestCase{
 }
 
 var loadDataCases = []*tenantMCTechTestCase{
-	{false, false, nil, "pf", "load data infile '/tmp/t0.txt' ignore into table t0 character set gbk fields terminated by ',' enclosed by '\"' lines terminated by '\n' (`name`,`age`,`description`)", "LOAD DATA INFILE '/tmp/t0.txt' IGNORE INTO TABLE `t0` FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' (`name`,`age`,`description`) SET `tenant`='gslq4dev'"},
-	{true, false, []string{"ys2"}, "pf", "load data infile '/tmp/t1.txt' ignore into table t1 character set gbk fields terminated by ',' enclosed by '\"' lines terminated by '\n' (`name`,`age`,`description`)", "LOAD DATA INFILE '/tmp/t1.txt' IGNORE INTO TABLE `t1` FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\n' (`name`,`age`,`description`)"},
+	{false, false, nil, "pf", "load data infile '/tmp/t0.txt' ignore into table t0 character set gbk fields terminated by ',' enclosed by '\"' lines terminated by '\r\n' (`name`,`age`,`description`)", "LOAD DATA INFILE '/tmp/t0.txt' IGNORE INTO TABLE `t0` FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\r\n' (`name`,`age`,`description`) SET `tenant`='gslq4dev'"},
+	{true, false, []string{"ys2"}, "pf", "load data infile '/tmp/t1.txt' ignore into table t1 character set gbk fields terminated by ',' enclosed by '\"' lines terminated by '\r\n' (`name`,`age`,`description`)", "LOAD DATA INFILE '/tmp/t1.txt' IGNORE INTO TABLE `t1` FIELDS TERMINATED BY ',' ENCLOSED BY '\"' LINES TERMINATED BY '\r\n' (`name`,`age`,`description`)"},
 }
 
 var nopCases = []*tenantMCTechTestCase{
