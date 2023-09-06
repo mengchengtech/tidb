@@ -106,7 +106,7 @@ const (
 	DefaultForbiddenPrepare          = false
 	DefaultMPPValue                  = "allow"
 	DefaultMetricsSqlLogEnabled      = false
-	DefaultMetricsSqlLogMaxLength    = 16 * 1024 // 默认最大记录16K
+	DefaultMetricsSqlLogMaxLength    = 32 * 1024 // 默认最大记录32K
 	DefaultMetricsLargeSqlEnabled    = false
 	DefaultMetricsLargeSqlThreshold  = 1 * 1024 * 1024
 	DefaultSqlTraceEnabled           = false
