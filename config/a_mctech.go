@@ -5,6 +5,7 @@ package config
 import (
 	"encoding/json"
 	"net/url"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -23,21 +24,21 @@ type MCTech struct {
 	DDL        DDL           `toml:"ddl" json:"ddl"`
 	MPP        MPP           `toml:"mpp" json:"mpp"`
 	Metrics    MctechMetrics `toml:"metrics" json:"metrics"`
-	SqlTrace   SqlTrace      `toml:"sql-trace" json:"sql-trace"`
-}
-
-type SqlTrace struct {
-	Enabled           bool     `toml:"enabled" json:"enabled"`                       // 是否记录所有sql执行结果到独立文件中
-	Filename          string   `toml:"file-name" json:"file-name"`                   // 日志文件名称
-	FileMaxDays       int      `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
-	FileMaxSize       int      `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
-	Exclude           []string `toml:"exclude" json:"exclude"`                       // 需要排除记录的数据库，使用','分隔
-	CompressThreshold int      `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
 }
 
 type MctechMetrics struct {
+	Exclude  []string `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
 	SqlLog   SqlLog   `toml:"sql-log" json:"sql-log"`
 	LargeSql LargeSql `toml:"large-sql" json:"large-sql"`
+	SqlTrace SqlTrace `toml:"sql-trace" json:"sql-trace"`
+}
+
+type SqlTrace struct {
+	Enabled           bool   `toml:"enabled" json:"enabled"`                       // 是否记录所有sql执行结果到独立文件中
+	Filename          string `toml:"file-name" json:"file-name"`                   // 日志文件名称
+	FileMaxDays       int    `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
+	FileMaxSize       int    `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
+	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
 }
 
 // SqlLog sql log record used
@@ -115,7 +116,7 @@ const (
 	DefaultMetricsLargeSqlTypes      = "delete,insert,update,select"
 )
 
-func initMCTechConfig() MCTech {
+func newMCTech() MCTech {
 	return MCTech{
 		Sequence: Sequence{
 			Mock:          false,
@@ -151,6 +152,7 @@ func initMCTechConfig() MCTech {
 			DefaultValue: DefaultMPPValue,
 		},
 		Metrics: MctechMetrics{
+			Exclude: []string{},
 			SqlLog: SqlLog{
 				Enabled:   DefaultMetricsSqlLogEnabled,
 				MaxLength: DefaultMetricsSqlLogMaxLength,
@@ -160,13 +162,12 @@ func initMCTechConfig() MCTech {
 				Threshold: DefaultMetricsLargeSqlThreshold,
 				SqlTypes:  strings.Split(DefaultMetricsLargeSqlTypes, ","),
 			},
-		},
-		SqlTrace: SqlTrace{
-			Enabled:           DefaultSqlTraceEnabled,
-			FileMaxDays:       DefaultSqlTraceFileMaxDays,
-			FileMaxSize:       DefaultSqlTraceFileMaxSize,
-			Exclude:           []string{},
-			CompressThreshold: DefaultSqlTraceCompressThreshold,
+			SqlTrace: SqlTrace{
+				Enabled:           DefaultSqlTraceEnabled,
+				FileMaxDays:       DefaultSqlTraceFileMaxDays,
+				FileMaxSize:       DefaultSqlTraceFileMaxSize,
+				CompressThreshold: DefaultSqlTraceCompressThreshold,
+			},
 		},
 	}
 }
@@ -223,21 +224,27 @@ func GetMCTechConfig() *MCTech {
 	return mctechOpts
 }
 
-// StoreMCTechConfig
-func StoreMCTechConfig(opts *MCTech) {
+func storeMCTechConfig(config *Config) {
 	mctechConfigLock.Lock()
 	defer mctechConfigLock.Unlock()
-
+	opts := &config.MCTech
 	opts.Sequence.APIPrefix = formatURL(opts.Sequence.APIPrefix)
 	opts.Encryption.APIPrefix = formatURL(opts.Encryption.APIPrefix)
 	opts.DbChecker.APIPrefix = formatURL(opts.DbChecker.APIPrefix)
 
-	if len(opts.SqlTrace.Exclude) > 0 {
-		opts.SqlTrace.Exclude = append(DefaultSqlTraceExcludeDbs, opts.SqlTrace.Exclude...)
+	if len(opts.Metrics.Exclude) > 0 {
+		opts.Metrics.Exclude = append(DefaultSqlTraceExcludeDbs, opts.Metrics.Exclude...)
+	} else {
+		opts.Metrics.Exclude = DefaultSqlTraceExcludeDbs
 	}
 
 	if opts.MPP.DefaultValue == "" {
 		opts.MPP.DefaultValue = "allow"
+	}
+
+	if len(opts.Metrics.SqlTrace.Filename) == 0 {
+		logDir := filepath.Dir(config.Log.File.Filename)
+		opts.Metrics.SqlTrace.Filename = filepath.Join(logDir, "mctech_tidb_full_sql.log")
 	}
 
 	mctechConf.Store(opts)

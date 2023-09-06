@@ -1,7 +1,6 @@
 package mctech
 
 import (
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -48,7 +47,7 @@ func initLogger() {
 	}
 
 	globalConfig := config.GetGlobalConfig()
-	sqlTraceConfig := globalConfig.MCTech.SqlTrace
+	sqlTraceConfig := globalConfig.MCTech.Metrics.SqlTrace
 	cfg := globalConfig.Log.ToLogConfig()
 	// copy the global log config to full sql log config
 	fsConfig := cfg.Config
@@ -59,13 +58,8 @@ func initLogger() {
 	fsConfig.DisableCaller = true
 	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays // default 7 days
 	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize // 1024MB
+	fsConfig.File.Filename = sqlTraceConfig.Filename
 
-	if sqlTraceConfig.Filename != "" {
-		fsConfig.File.Filename = sqlTraceConfig.Filename
-	} else {
-		logDir := filepath.Dir(globalConfig.Log.File.Filename)
-		fsConfig.File.Filename = filepath.Join(logDir, "mctech_tidb_full_sql.log")
-	}
 	logger, prop, err := log.InitLogger(&fsConfig)
 	jsonEncoder := newJsonEncoder(&cfg.Config)
 	newCore := log.NewTextCore(jsonEncoder, prop.Syncer, prop.Level)
