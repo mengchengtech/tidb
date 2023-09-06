@@ -174,7 +174,9 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	}()
 
 	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
-	cc.logLargeSql(ctx, stmt, digest)
+	if opts.Metrics.LargeSql.Enabled {
+		cc.logLargeSql(ctx, stmt, digest)
+	}
 	if opts.Metrics.SqlTrace.Enabled {
 		cc.traceFullSql(ctx, stmt, digest)
 	}
