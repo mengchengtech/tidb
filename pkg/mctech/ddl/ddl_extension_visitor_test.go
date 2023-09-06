@@ -104,10 +104,10 @@ var ddlExtensionCases = [][]*ddlMCTechTestCase{
 }
 
 func TestDDLExtensionVisitor(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	for _, lst := range ddlExtensionCases {
 		doRunTest(t, doRunDDLMCTechTestCase, lst)
 	}
