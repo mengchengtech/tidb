@@ -146,7 +146,7 @@ type PrepareResult struct {
 func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
-		params[ParamMPP] = config.GetOption().MPPDefaultValue
+		params[ParamMPP] = config.GetMCTechConfig().MPP.DefaultValue
 	}
 
 	if v, ok := params[ParamTenant]; ok {

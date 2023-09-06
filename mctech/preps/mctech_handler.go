@@ -21,8 +21,8 @@ type mctechHandler struct {
 
 // PrepareSQL prepare sql
 func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql string, err error) {
-	option := config.GetOption()
-	if !option.TenantEnabled {
+	option := config.GetMCTechConfig()
+	if !option.Tenant.Enabled {
 		// 禁用租户隔离
 		return rawSQL, nil
 	}
@@ -49,7 +49,7 @@ func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql stri
 
 // ApplyAndCheck apply tenant isolation and check db policies
 func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode) (bool, error) {
-	option := config.GetOption()
+	option := config.GetMCTechConfig()
 	vars := mctx.Session().GetSessionVars()
 	charset, collation := vars.GetCharsetInfo()
 	preprocessor := preprocessor
@@ -80,7 +80,7 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode)
 			err     error
 		)
 		// ddl 与dml语句不必重复判断
-		if option.TenantEnabled {
+		if option.Tenant.Enabled {
 			modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 			modifyCtx.Reset()
 			// 启用租户隔离，改写SQL，添加租户隔离信息
@@ -92,7 +92,7 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode)
 				changed = true
 			}
 
-			if option.DbCheckerEnabled && len(dbs) > 0 {
+			if option.DbChecker.Enabled && len(dbs) > 0 {
 				// 启用数据库联合查询规则检查
 				if err = getDatabaseChecker().Check(mctx, dbs); err != nil {
 					return changed, err

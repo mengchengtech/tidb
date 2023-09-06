@@ -77,15 +77,15 @@ func getDDLExtension() *_ddlExtension {
 	}
 
 	ddlResolverInitOne.Do(func() {
-		option := config.GetOption()
+		option := config.GetMCTechConfig()
 		e := &_ddlExtension{
-			versionEnabled: option.DDLVersionColumnEnabled,
+			versionEnabled: option.DDL.Version.Enabled,
 		}
 
 		if e.versionEnabled {
-			e.visitor = newDDLExtensionVisitor(option.DDLVersionColumnName)
+			e.visitor = newDDLExtensionVisitor(option.DDL.Version.Name)
 			matchTexts := append(
-				slices.Clone(option.DDLVersionDbMatches),
+				slices.Clone(option.DDL.Version.DbMatches),
 				mctech.PrefixFilterPattern(mctech.DbGlobalPrefix),
 				mctech.PrefixFilterPattern(mctech.DbAssetPrefix),
 				mctech.PrefixFilterPattern(mctech.DbPublicPrefix),

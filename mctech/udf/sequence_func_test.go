@@ -10,8 +10,8 @@ import (
 )
 
 func TestSequence(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
-		mock.M(t, map[string]bool{"SequenceMock": false}),
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Sequence.Mock": false}),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache",
 		mock.M(t, "true"),
@@ -28,7 +28,7 @@ func TestSequence(t *testing.T) {
 	renderSequenceMetrics(cache, now)
 	failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
 	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func TestSequenceDecodeSuccess(t *testing.T) {
@@ -46,8 +46,8 @@ func TestSequenceDecodeFailure(t *testing.T) {
 }
 
 func TestVersionJustPass(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMctechOption",
-		mock.M(t, map[string]bool{"SequenceMock": false}),
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Sequence.Mock": false}),
 	)
 
 	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache",
@@ -63,7 +63,7 @@ func TestVersionJustPass(t *testing.T) {
 	require.Equal(t, int64(1310341421945866), version)
 	failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
 	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMctechOption")
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 // // 性能测试

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"time"
 
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/mctech"
@@ -90,12 +91,12 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 		return err
 	}
 
-	if opts := config.GetOption(); !opts.MetricsSqlLogEnabled {
+	if opts := config.GetMCTechConfig(); !opts.Metrics.SqlLog.Enabled {
 		for _, stmt := range stmts {
 			dbs := mctx.GetDbs(stmt)
 			if dbs != nil {
 				ignore := false
-				for _, db := range opts.SqlTraceExcludeDbs {
+				for _, db := range opts.SqlTrace.Exclude {
 					if slices.Contains(dbs, db) {
 						// 不记录这些数据库下的sql
 						ignore = true
@@ -123,8 +124,8 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 			}
 
 			origSql := stmt.OriginalText()
-			if len(origSql) > opts.MetricsSqlLogMaxLength {
-				origSql = origSql[0:opts.MetricsSqlLogMaxLength]
+			if len(origSql) > opts.Metrics.SqlLog.MaxLength {
+				origSql = origSql[0:opts.Metrics.SqlLog.MaxLength]
 			}
 			db, user, client := sessionctx.ResolveSession(cc.getCtx())
 			logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
@@ -149,14 +150,14 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		panic(err)
 	}
 
-	opts := config.GetOption()
+	opts := config.GetMCTechConfig()
 	var dbs []string
 	if mctx != nil {
 		dbs = mctx.GetDbs(stmt)
 	}
 
 	if dbs != nil {
-		for _, db := range opts.SqlTraceExcludeDbs {
+		for _, db := range opts.SqlTrace.Exclude {
 			if slices.Contains(dbs, db) {
 				// 不记录这些数据库下的sql
 				return
@@ -173,14 +174,14 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 
 	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
 	cc.logLargeSql(ctx, stmt, digest)
-	if opts.SqlTraceEnabled {
+	if opts.SqlTrace.Enabled {
 		cc.traceFullSql(ctx, stmt, digest)
 	}
 }
 
 // 记录超长sql
 func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest *parser.Digest) {
-	opts := config.GetOption()
+	opts := config.GetMCTechConfig()
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	sqlType := "other"
@@ -195,10 +196,10 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest
 		sqlType = "update"
 	}
 
-	if slices.Contains(opts.MetricsLargeSqlTypes, sqlType) {
+	if slices.Contains(opts.Metrics.LargeSql.SqlTypes, sqlType) {
 		origSql := stmt.OriginalText()
 		sqlLength := len(origSql)
-		if sqlLength > opts.MetricsLargeSqlThreshold {
+		if sqlLength > opts.Metrics.LargeSql.Threshold {
 			if digest == nil {
 				_, digest = stmtCtx.SQLDigest() //
 			}
@@ -291,15 +292,19 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		_, digest = stmtCtx.SQLDigest() //
 	}
 
-	if len(origSql) > config.GetOption().SqlTraceCompressThreshold {
+	if len(origSql) > config.GetMCTechConfig().SqlTrace.CompressThreshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		if _, err := gz.Write([]byte(origSql)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
 					origSql = "{gzip}" + base64.StdEncoding.EncodeToString(b.Bytes())
+				} else {
+					log.Error("trace sql error", zap.Error(err))
 				}
 			}
+		} else {
+			log.Error("trace sql error", zap.Error(err))
 		}
 	}
 

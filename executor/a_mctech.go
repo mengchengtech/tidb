@@ -89,8 +89,7 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 }
 
 func (e *PrepareExec) beforePrepare(ctx context.Context) error {
-	option := config.GetOption()
-	if option.TenantForbiddenPrepare {
+	if config.GetMCTechConfig().Tenant.ForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
 	return nil

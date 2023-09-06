@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
@@ -53,33 +54,33 @@ type LargeSql struct {
 
 // Sequence mctech_sequence functions used
 type Sequence struct {
-	APIPrefix     string `toml:"api-prefix" json:"api-prefix"`
-	Backend       int64  `toml:"backend" json:"backend"`
-	Mock          bool   `toml:"mock" json:"mock"`
-	Debug         bool   `toml:"debug" json:"debug"`
-	MaxFetchCount int64  `toml:"max-fetch-count" json:"max-fetch-count"`
+	APIPrefix     string `toml:"api-prefix" json:"api-prefix"`           // sequence服务的调用地址前缀
+	Backend       int64  `toml:"backend" json:"backend"`                 // 后台并行获取sequence的最大并发数
+	Mock          bool   `toml:"mock" json:"mock"`                       // sequence是否使用mock模式，不执行rpc调用，从本地返回固定的值
+	Debug         bool   `toml:"debug" json:"debug"`                     // 是否开启sequence取值过程的调试模式，输出更多的日志
+	MaxFetchCount int64  `toml:"max-fetch-count" json:"max-fetch-count"` // 每次rpc调用获取sequence的最大个数
 }
 
 // DbChecker db isolation check used
 type DbChecker struct {
-	Enabled          bool     `toml:"enabled" json:"enabled"`
-	APIPrefix        string   `toml:"api-prefix" json:"api-prefix"`
-	MutexAcrossDbs   []string `toml:"mutex" json:"mutex"`
-	ExcludeAcrossDbs []string `toml:"exclude" json:"exclude"`
+	Enabled          bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
+	APIPrefix        string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
+	MutexAcrossDbs   []string `toml:"mutex" json:"mutex"`           //
+	ExcludeAcrossDbs []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
 	AcrossDbGroups   []string `toml:"across" json:"across"`
 }
 
 // Tenant append tenant condition used
 type Tenant struct {
-	Enabled          bool `toml:"enabled" json:"enabled"`
-	ForbiddenPrepare bool `toml:"forbidden-prepare" json:"forbidden-prepare"`
+	Enabled          bool `toml:"enabled" json:"enabled"`                     // 是否启用租户隔离
+	ForbiddenPrepare bool `toml:"forbidden-prepare" json:"forbidden-prepare"` // 禁用Prepare/Execute语句
 }
 
 // Encryption custom crypto function used
 type Encryption struct {
-	Mock      bool   `toml:"mock" json:"mock"`
-	APIPrefix string `toml:"api-prefix" json:"api-prefix"`
-	AccessID  string `toml:"access-id" json:"access-id"`
+	Mock      bool   `toml:"mock" json:"mock"`             // 加密/解密是否使用mock模式，不执行rpc调用，从本地返回固定的值
+	APIPrefix string `toml:"api-prefix" json:"api-prefix"` // encryption服务的调用地址前缀
+	AccessID  string `toml:"access-id" json:"access-id"`   // 获取密钥接口使用的accessId
 }
 
 // DDL custom ddl config
@@ -89,14 +90,14 @@ type DDL struct {
 
 // MPP custom ddl config
 type MPP struct {
-	DefaultValue string `toml:"default-value" json:"default-value"`
+	DefaultValue string `toml:"default-value" json:"default-value"` // mpp 开关的默认值
 }
 
 // VersionColumn auto add version column
 type VersionColumn struct {
-	Enabled   bool     `toml:"enabled" json:"enabled"`
-	Name      string   `toml:"name" json:"name"`
-	DbMatches []string `toml:"db-matches" json:"db-matches"`
+	Enabled   bool     `toml:"enabled" json:"enabled"`       // 是否开启 create table自动插入特定的version列的特性
+	Name      string   `toml:"name" json:"name"`             // version列的名称
+	DbMatches []string `toml:"db-matches" json:"db-matches"` // 插入version的表需要满足的条件
 }
 
 const (
@@ -172,144 +173,82 @@ func initMCTechConfig() MCTech {
 
 // ########################### Option ##########################################
 
-var DefaultSqlTraceExcludeDbs = []string{
-	"test", "dp_stat",
-	"mysql", "information_schema", "metrics_schema", "performance_schema",
-}
-
-var AllMetricsLargeSqlTypes = strings.Split(DefaultMetricsLargeSqlTypes, ",")
-
-// Option mctech option
-type Option struct {
-	SequenceMock          bool   // sequence是否使用mock模式，不执行rpc调用，从本地返回固定的值
-	SequenceDebug         bool   // 是否开启sequence取值过程的调试模式，输出更多的日志
-	SequenceMaxFetchCount int64  // 每次rpc调用获取sequence的最大个数
-	SequenceBackend       int64  // 后台并行获取sequence的最大并发数
-	SequenceAPIPrefix     string // sequence服务的调用地址前缀
-
-	MPPDefaultValue string // mpp 开关的默认值
-
-	// encryption
-	EncryptionMock      bool
-	EncryptionAccessID  string
-	EncryptionAPIPrefix string // encryption服务的调用地址前缀
-
-	TenantEnabled          bool // 是否启用租户隔离
-	TenantForbiddenPrepare bool // 禁用Prepare/Execute语句
-
-	DbCheckerEnabled          bool // 是否开启同一sql语句中引用的数据库共存约束检查
-	DbCheckerMutexAcrossDbs   []string
-	DbCheckerExcludeAcrossDbs []string // 被排除在约束检查外的数据库名称
-	DbCheckerAcrossDbGroups   []string
-	DbCheckerAPIPrefix        string // 获取global_dw_*的当前索引的服务地址前缀
-
-	DDLVersionColumnEnabled bool     // 是否开启 create table自动插入特定的version列的特性
-	DDLVersionColumnName    string   // version列的名称
-	DDLVersionDbMatches     []string // 插入version的表需要满足的条件
-
-	MetricsLargeSqlEnabled   bool
-	MetricsLargeSqlTypes     []string
-	MetricsLargeSqlThreshold int
-	MetricsSqlLogEnabled     bool
-	MetricsSqlLogMaxLength   int
-
-	SqlTraceEnabled           bool
-	SqlTraceCompressThreshold int
-	SqlTraceExcludeDbs        []string
-}
-
-var mctechOpts *Option
+var (
+	mctechConf       atomic.Value
+	mctechConfigLock sync.Mutex
+)
 
 // GetOption get mctech option
-func GetOption() *Option {
-	if mctechOpts == nil {
-		// 只能懒加载，需要在启动时先加载 config模块
-		once := &sync.Once{}
-		once.Do(initMCTechOption)
-	}
+func GetMCTechConfig() *MCTech {
+	mctechOpts := mctechConf.Load().(*MCTech)
 
-	failpoint.Inject("GetMctechOption", func(val failpoint.Value) {
-		opts := *mctechOpts
-		values := make(map[string]bool)
-		err := json.Unmarshal([]byte(val.(string)), &values)
+	failpoint.Inject("GetMCTechConfig", func(val failpoint.Value) {
+		bytes, err := json.Marshal(mctechOpts)
 		if err != nil {
 			panic(err)
 		}
-		if v, ok := values["SequenceMock"]; ok {
-			opts.SequenceMock = v
+		// 深拷贝MCTech对象
+		var opts MCTech
+		err = json.Unmarshal(bytes, &opts)
+		if err != nil {
+			panic(err)
 		}
 
-		if v, ok := values["EncryptionMock"]; ok {
-			opts.EncryptionMock = v
+		values := make(map[string]bool)
+		err = json.Unmarshal([]byte(val.(string)), &values)
+		if err != nil {
+			panic(err)
 		}
-		if v, ok := values["TenantEnabled"]; ok {
-			opts.TenantEnabled = v
+		if v, ok := values["Sequence.Mock"]; ok {
+			opts.Sequence.Mock = v
 		}
-		if v, ok := values["ForbiddenPrepare"]; ok {
-			opts.TenantForbiddenPrepare = v
+
+		if v, ok := values["Encryption.Mock"]; ok {
+			opts.Encryption.Mock = v
 		}
-		if v, ok := values["DbCheckerEnabled"]; ok {
-			opts.DbCheckerEnabled = v
+		if v, ok := values["Tenant.Enabled"]; ok {
+			opts.Tenant.Enabled = v
 		}
-		if v, ok := values["DDLVersionColumnEnabled"]; ok {
-			opts.DDLVersionColumnEnabled = v
+		if v, ok := values["Tenant.ForbiddenPrepare"]; ok {
+			opts.Tenant.ForbiddenPrepare = v
+		}
+		if v, ok := values["DbChecker.Enabled"]; ok {
+			opts.DbChecker.Enabled = v
+		}
+		if v, ok := values["DDL.Version.Enabled"]; ok {
+			opts.DDL.Version.Enabled = v
 		}
 		failpoint.Return(&opts)
 	})
 	return mctechOpts
 }
 
-func initMCTechOption() {
-	if mctechOpts != nil {
-		return
-	}
+// StoreMCTechConfig
+func StoreMCTechConfig(opts *MCTech) {
+	mctechConfigLock.Lock()
+	defer mctechConfigLock.Unlock()
 
-	opts := GetGlobalConfig().MCTech
-	option := &Option{
-		SequenceMock:          opts.Sequence.Mock,
-		SequenceDebug:         opts.Sequence.Debug,
-		SequenceMaxFetchCount: opts.Sequence.MaxFetchCount,
-		SequenceBackend:       opts.Sequence.Backend,
-		SequenceAPIPrefix:     formatURL(opts.Sequence.APIPrefix),
-		MPPDefaultValue:       opts.MPP.DefaultValue,
-
-		EncryptionMock:      opts.Encryption.Mock,
-		EncryptionAccessID:  opts.Encryption.AccessID,
-		EncryptionAPIPrefix: formatURL(opts.Encryption.APIPrefix),
-
-		TenantEnabled:             opts.Tenant.Enabled,
-		TenantForbiddenPrepare:    opts.Tenant.ForbiddenPrepare,
-		DbCheckerEnabled:          opts.DbChecker.Enabled,
-		DbCheckerAPIPrefix:        formatURL(opts.DbChecker.APIPrefix),
-		DbCheckerMutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
-		DbCheckerExcludeAcrossDbs: opts.DbChecker.ExcludeAcrossDbs,
-		DbCheckerAcrossDbGroups:   opts.DbChecker.AcrossDbGroups,
-
-		DDLVersionColumnEnabled: opts.DDL.Version.Enabled,
-		DDLVersionColumnName:    opts.DDL.Version.Name,
-		DDLVersionDbMatches:     opts.DDL.Version.DbMatches,
-
-		MetricsLargeSqlEnabled:   opts.Metrics.LargeSql.Enabled,
-		MetricsLargeSqlThreshold: opts.Metrics.LargeSql.Threshold,
-		MetricsLargeSqlTypes:     opts.Metrics.LargeSql.SqlTypes,
-
-		SqlTraceEnabled:           opts.SqlTrace.Enabled,
-		SqlTraceCompressThreshold: opts.SqlTrace.CompressThreshold,
-		SqlTraceExcludeDbs:        DefaultSqlTraceExcludeDbs,
-
-		MetricsSqlLogEnabled:   opts.Metrics.SqlLog.Enabled,
-		MetricsSqlLogMaxLength: opts.Metrics.SqlLog.MaxLength,
-	}
+	opts.Sequence.APIPrefix = formatURL(opts.Sequence.APIPrefix)
+	opts.Encryption.APIPrefix = formatURL(opts.Encryption.APIPrefix)
+	opts.DbChecker.APIPrefix = formatURL(opts.DbChecker.APIPrefix)
 
 	if len(opts.SqlTrace.Exclude) > 0 {
-		option.SqlTraceExcludeDbs = append(option.SqlTraceExcludeDbs, opts.SqlTrace.Exclude...)
+		opts.SqlTrace.Exclude = append(DefaultSqlTraceExcludeDbs, opts.SqlTrace.Exclude...)
 	}
 
-	if option.MPPDefaultValue == "" {
-		option.MPPDefaultValue = "allow"
+	if opts.MPP.DefaultValue == "" {
+		opts.MPP.DefaultValue = "allow"
 	}
-	mctechOpts = option
+
+	mctechConf.Store(opts)
 }
+
+var DefaultSqlTraceExcludeDbs = []string{
+	"test", "dp_stat",
+	"mysql", "information_schema", "metrics_schema", "performance_schema",
+}
+
+var AllMetricsLargeSqlTypes = strings.Split(DefaultMetricsLargeSqlTypes, ",")
 
 func formatURL(str string) string {
 	u, err := url.Parse(str)
