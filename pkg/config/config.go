@@ -1113,13 +1113,13 @@ func GetGlobalConfig() *Config {
 // StoreGlobalConfig stores a new config to the globalConf. It mostly uses in the test to avoid some data races.
 func StoreGlobalConfig(config *Config) {
 	globalConf.Store(config)
+	// add by zhangbing
+	storeMCTechConfig(config)
+	// add end
 	TikvConfigLock.Lock()
 	defer TikvConfigLock.Unlock()
 	cfg := *config.GetTiKVConfig()
 	tikvcfg.StoreGlobalConfig(&cfg)
-	// add by zhangbing
-	StoreMCTechConfig(&config.MCTech)
-	// add end
 }
 
 // removedConfig contains items that are no longer supported.
