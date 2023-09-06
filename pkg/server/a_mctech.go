@@ -213,9 +213,14 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest
 			}
 			_, err = cc.ctx.ExecuteInternal(ctx,
 				`insert into mysql.mctech_large_sql_log
-				(hash_id, db, user, service, sample_text, max_size, created_at)
-				values (%?, %?, %?, %?, %?, %?, %?)`,
-				digest.String(), db, user, service, origSql, sqlLength, time.Now())
+				(hash_id, db, user, service, sample_text, max_size, sql_count, lastest_run_at, created_at)
+				values (%?, %?, %?, %?, %?, %?, %?, %?, %?)
+				on duplicate key update
+					db = values(db), user = values(user), service = values(service),
+					sample_text = values(sample_text), max_size = values(max_size),
+					sql_count = sql_count + 1, lastest_run_at = values(lastest_run_at)
+				`,
+				digest.String(), db, user, service, origSql, sqlLength, 1, time.Now(), time.Now())
 			panic(err)
 		}
 	}
