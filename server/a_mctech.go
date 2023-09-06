@@ -211,6 +211,18 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest
 				// TODO: 获取service
 				service = ""
 			}
+			// CREATE TABLE `mctech_large_sql_log` (
+			// 	`hash_id` VARCHAR(100) NOT NULL,
+			// 	`db` VARCHAR(50) DEFAULT NULL,
+			// 	`user` VARCHAR(50) DEFAULT NULL,
+			// 	`service` VARCHAR(100) DEFAULT NULL,
+			// 	`sample_text` TEXT NOT NULL,
+			// 	`max_size` INT(11) NOT NULL,
+			//  `sql_count` INT(11) NOT NULL DEFAULT 1,
+			// 	`created_at` DATETIME NOT NULL,
+			// 	`lastest_run_at` TIMESTAMP NULL DEFAULT NULL,
+			// 	PRIMARY KEY (`hash_id`)
+			// )
 			_, err = cc.ctx.ExecuteInternal(ctx,
 				`insert into mysql.mctech_large_sql_log
 				(hash_id, db, user, service, sample_text, max_size, sql_count, lastest_run_at, created_at)
@@ -273,7 +285,6 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 	}
 
 	timeStart := sessVars.StartTime // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-	timeEnd := time.Now()           // 该 SQL 查询结束运行时的时间
 	var db string                   // 执行该 SQL 查询时使用的数据库名称
 	// connId := sessVars.ConnectionID                                          // SQL 查询客户端连接 ID
 	queryTime := time.Since(sessVars.StartTime) + sessVars.DurationParse     // 执行 SQL 耗费的自然时间
@@ -318,9 +329,9 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		zap.String("User", user),
 		// zap.Uint64("ConnId", connId),
 		zap.String("Type", sqlType),
-		zap.Int64("Start", timeStart.UnixMilli()),
-		zap.Int64("End", timeEnd.UnixMilli()),
+		zap.String("Start", timeStart.Format("2006-01-02 15:04:05.000")),
 		zap.Object("Time", &mctech.LobTimeObject{
+			Total:   time.Now().Sub(timeStart),
 			Query:   queryTime,
 			Parse:   parseTime,
 			Compile: compileTime,

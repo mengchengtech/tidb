@@ -58,7 +58,7 @@ func initLogger() {
 	fsConfig.DisableStacktrace = true
 	fsConfig.DisableCaller = true
 	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays // default 7 days
-	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize // 300MB
+	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize // 1024MB
 
 	if sqlTraceConfig.Filename != "" {
 		fsConfig.File.Filename = sqlTraceConfig.Filename
@@ -82,6 +82,7 @@ func initLogger() {
 }
 
 type LobTimeObject struct {
+	Total   time.Duration
 	Query   time.Duration
 	Parse   time.Duration
 	Compile time.Duration
@@ -91,6 +92,7 @@ type LobTimeObject struct {
 }
 
 func (lt *LobTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddDuration("Total", lt.Total)
 	enc.AddDuration("Query", lt.Query)
 	enc.AddDuration("Parse", lt.Parse)
 	enc.AddDuration("Compile", lt.Compile)
