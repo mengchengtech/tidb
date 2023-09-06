@@ -91,12 +91,13 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 		return err
 	}
 
-	if opts := config.GetMCTechConfig(); !opts.Metrics.SqlLog.Enabled {
+	if opts := config.GetMCTechConfig(); opts.Metrics.SqlLog.Enabled {
+		exclude := opts.Metrics.Exclude
 		for _, stmt := range stmts {
 			dbs := mctx.GetDbs(stmt)
-			if dbs != nil {
+			if dbs != nil && len(exclude) > 0 {
 				ignore := false
-				for _, db := range opts.SqlTrace.Exclude {
+				for _, db := range exclude {
 					if slices.Contains(dbs, db) {
 						// 不记录这些数据库下的sql
 						ignore = true
@@ -157,7 +158,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	}
 
 	if dbs != nil {
-		for _, db := range opts.SqlTrace.Exclude {
+		for _, db := range opts.Metrics.Exclude {
 			if slices.Contains(dbs, db) {
 				// 不记录这些数据库下的sql
 				return
@@ -174,7 +175,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 
 	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
 	cc.logLargeSql(ctx, stmt, digest)
-	if opts.SqlTrace.Enabled {
+	if opts.Metrics.SqlTrace.Enabled {
 		cc.traceFullSql(ctx, stmt, digest)
 	}
 }
@@ -317,7 +318,7 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		_, digest = stmtCtx.SQLDigest() //
 	}
 
-	if len(origSql) > config.GetMCTechConfig().SqlTrace.CompressThreshold {
+	if len(origSql) > config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		if _, err := gz.Write([]byte(origSql)); err == nil {
