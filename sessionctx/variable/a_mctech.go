@@ -1,11 +1,15 @@
 package variable
 
 import (
+	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
+	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
 
@@ -92,7 +96,7 @@ func init() {
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsLargeSqlThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsLargeSqlThreshold),
-			MinValue: 4 * 1024,
+			MinValue: 4 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.LargeSql.Threshold), nil
 			},
@@ -115,7 +119,7 @@ func init() {
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSqlLogMaxLength, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSqlLogMaxLength),
-			MinValue: 16 * 1024,
+			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.SqlLog.MaxLength), nil
 			},
@@ -141,7 +145,7 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: "0"},
 		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: "0"},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceCompressThreshold),
-			MinValue: 16 * 1024,
+			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold), nil
 			},
@@ -150,6 +154,7 @@ func init() {
 				if err != nil {
 					return err
 				}
+
 				config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold = num
 				return nil
 			},
@@ -175,6 +180,12 @@ func init() {
 
 func LoadMctechSysVars() {
 	option := config.GetMCTechConfig()
+	bytes, err := json.Marshal(option)
+	if err != nil {
+		panic(err)
+	}
+	log.Warn("LoadMctechSysVars", zap.ByteString("config", bytes))
+
 	SetSysVar(MCTechSequenceMaxFetchCount, strconv.FormatInt(option.Sequence.MaxFetchCount, 10))
 	SetSysVar(MCTechSequenceBackend, strconv.FormatInt(option.Sequence.Backend, 10))
 
