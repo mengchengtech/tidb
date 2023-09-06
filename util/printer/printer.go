@@ -54,7 +54,7 @@ func PrintTiDBInfo() {
 	}
 	logutil.BgLogger().Info("loaded config", zap.ByteString("config", configJSON))
 	// add by zhangbing
-	logutil.BgLogger().Info("是否测试环境:" + strconv.FormatBool(intest.InTest))
+	logutil.BgLogger().Info("是否单元测试运行环境:" + strconv.FormatBool(intest.InTest))
 	// add end
 
 }
