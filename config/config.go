@@ -1088,6 +1088,9 @@ func StoreGlobalConfig(config *Config) {
 	defer TikvConfigLock.Unlock()
 	cfg := *config.GetTiKVConfig()
 	tikvcfg.StoreGlobalConfig(&cfg)
+	// add by zhangbing
+	StoreMCTechConfig(&config.MCTech)
+	// add end
 }
 
 // removedConfig contains items that are no longer supported.
