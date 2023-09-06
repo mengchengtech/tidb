@@ -102,14 +102,21 @@ type VersionColumn struct {
 }
 
 const (
+	DefaultSequenceMaxFetchCount     = 1000
+	DefaultSequenceBackend           = 3
+	DefaultDbCheckerEnabled          = false
 	DefaultTenantEnabled             = false
-	DefaultForbiddenPrepare          = false
+	DefaultTenantForbiddenPrepare    = false
+	DefaultDDLVersionEnabled         = false
+	DefaultDDLVersionColumnName      = "__version"
+	DefaultDDLVersionDbMatches       = ""
 	DefaultMPPValue                  = "allow"
 	DefaultMetricsSqlLogEnabled      = false
 	DefaultMetricsSqlLogMaxLength    = 32 * 1024 // 默认最大记录32K
 	DefaultMetricsLargeSqlEnabled    = false
 	DefaultMetricsLargeSqlThreshold  = 1 * 1024 * 1024
 	DefaultSqlTraceEnabled           = false
+	DefaultSqlTraceFilename          = "mctech_tidb_full_sql.log"
 	DefaultSqlTraceFileMaxDays       = 1
 	DefaultSqlTraceFileMaxSize       = 1024 // 1024MB
 	DefaultSqlTraceCompressThreshold = 16 * 1024
@@ -121,8 +128,8 @@ func newMCTech() MCTech {
 		Sequence: Sequence{
 			Mock:          false,
 			Debug:         false,
-			MaxFetchCount: 1000,
-			Backend:       3,
+			MaxFetchCount: DefaultSequenceMaxFetchCount,
+			Backend:       DefaultSequenceBackend,
 			APIPrefix:     "http://node-infra-sequence-service.mc/",
 		},
 		Encryption: Encryption{
@@ -131,7 +138,7 @@ func newMCTech() MCTech {
 			APIPrefix: "http://node-infra-encryption-service.mc/",
 		},
 		DbChecker: DbChecker{
-			Enabled:          false,
+			Enabled:          DefaultDbCheckerEnabled,
 			APIPrefix:        "http://node-infra-dim-service.mc/",
 			MutexAcrossDbs:   []string{},
 			ExcludeAcrossDbs: []string{},
@@ -139,13 +146,13 @@ func newMCTech() MCTech {
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
-			ForbiddenPrepare: DefaultForbiddenPrepare,
+			ForbiddenPrepare: DefaultTenantForbiddenPrepare,
 		},
 		DDL: DDL{
 			Version: VersionColumn{
-				Enabled:   false,
-				Name:      "__version",
-				DbMatches: []string{},
+				Enabled:   DefaultDDLVersionEnabled,
+				Name:      DefaultDDLVersionColumnName,
+				DbMatches: strToSlice(DefaultDDLVersionDbMatches, ","),
 			},
 		},
 		MPP: MPP{
@@ -160,7 +167,7 @@ func newMCTech() MCTech {
 			LargeSql: LargeSql{
 				Enabled:   DefaultMetricsLargeSqlEnabled,
 				Threshold: DefaultMetricsLargeSqlThreshold,
-				SqlTypes:  strings.Split(DefaultMetricsLargeSqlTypes, ","),
+				SqlTypes:  strToSlice(DefaultMetricsLargeSqlTypes, ","),
 			},
 			SqlTrace: SqlTrace{
 				Enabled:           DefaultSqlTraceEnabled,
@@ -242,9 +249,21 @@ func storeMCTechConfig(config *Config) {
 		opts.MPP.DefaultValue = "allow"
 	}
 
-	if len(opts.Metrics.SqlTrace.Filename) == 0 {
-		logDir := filepath.Dir(config.Log.File.Filename)
-		opts.Metrics.SqlTrace.Filename = filepath.Join(logDir, "mctech_tidb_full_sql.log")
+	sqlTrace := &opts.Metrics.SqlTrace
+	if len(sqlTrace.Filename) == 0 {
+
+	}
+
+	if len(sqlTrace.Filename) == 0 {
+		sqlTrace.Filename = DefaultSqlTraceFilename
+	}
+
+	if !filepath.IsAbs(sqlTrace.Filename) {
+		logFile := config.Log.File.Filename
+		if len(logFile) > 0 {
+			logDir := filepath.Dir(logFile)
+			sqlTrace.Filename = filepath.Join(logDir, DefaultSqlTraceFilename)
+		}
 	}
 
 	mctechConf.Store(opts)
@@ -271,4 +290,22 @@ func formatURL(str string) string {
 
 	log.Info("api prefix: " + apiPrefix)
 	return apiPrefix
+}
+
+func strToSlice(s string, sep string) []string {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return []string{}
+	}
+
+	items := strings.Split(s, sep)
+	list := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if len(item) == 0 {
+			continue
+		}
+		list = append(list, item)
+	}
+	return list
 }

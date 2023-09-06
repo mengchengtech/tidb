@@ -46,17 +46,17 @@ const (
 
 func init() {
 	var mctechSysVars = []*SysVar{
-		{Scope: ScopeNone, Name: MCTechSequenceMaxFetchCount, skipInit: true, Type: TypeInt, Value: "0"},
-		{Scope: ScopeNone, Name: MCTechSequenceBackend, skipInit: true, Type: TypeInt, Value: "3"},
+		{Scope: ScopeNone, Name: MCTechSequenceMaxFetchCount, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceMaxFetchCount)},
+		{Scope: ScopeNone, Name: MCTechSequenceBackend, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceBackend)},
 
-		{Scope: ScopeNone, Name: MCTechDbCheckerEnabled, skipInit: true, Type: TypeBool, Value: Off},
+		{Scope: ScopeNone, Name: MCTechDbCheckerEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerEnabled)},
 
-		{Scope: ScopeNone, Name: MCTechTenantEnabled, skipInit: true, Type: TypeBool, Value: Off},
-		{Scope: ScopeNone, Name: MCTechTenantForbiddenPrepare, skipInit: true, Type: TypeBool, Value: Off},
+		{Scope: ScopeNone, Name: MCTechTenantEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantEnabled)},
+		{Scope: ScopeNone, Name: MCTechTenantForbiddenPrepare, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantForbiddenPrepare)},
 
-		{Scope: ScopeNone, Name: MCTechDDLVersionEnabled, skipInit: true, Type: TypeBool, Value: Off},
-		{Scope: ScopeNone, Name: MCTechDDLVersionName, skipInit: true, Type: TypeStr, Value: config.GetMCTechConfig().DDL.Version.Name},
-		{Scope: ScopeNone, Name: MCTechDDLVersionDbMatches, skipInit: true, Type: TypeStr, Value: strings.Join(config.GetMCTechConfig().DDL.Version.DbMatches, ",")},
+		{Scope: ScopeNone, Name: MCTechDDLVersionEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultDDLVersionEnabled)},
+		{Scope: ScopeNone, Name: MCTechDDLVersionName, skipInit: true, Type: TypeStr, Value: config.DefaultDDLVersionColumnName},
+		{Scope: ScopeNone, Name: MCTechDDLVersionDbMatches, skipInit: true, Type: TypeStr, Value: config.DefaultDDLVersionDbMatches},
 
 		{Scope: ScopeGlobal, Name: MCTechMPPDefaultValue, skipInit: true, Type: TypeEnum, Value: config.DefaultMPPValue,
 			PossibleValues: []string{"allow", "force", "disable"},
@@ -82,16 +82,24 @@ func init() {
 				return strings.Join(config.GetMCTechConfig().Metrics.LargeSql.SqlTypes, ","), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
-				items := strings.Split(val, ",")
-				list := make([]string, len(items))
-				for i, item := range items {
-					item = strings.TrimSpace(item)
-					if !slices.Contains(config.AllMetricsLargeSqlTypes, item) {
-						panic(fmt.Errorf("sql types notsupported. %s", val))
+				val = strings.TrimSpace(val)
+				if len(val) == 0 {
+					config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = []string{}
+				} else {
+					items := strings.Split(val, ",")
+					list := make([]string, 0, len(items))
+					for _, item := range items {
+						item = strings.TrimSpace(item)
+						if len(item) == 0 {
+							continue
+						}
+						if !slices.Contains(config.AllMetricsLargeSqlTypes, item) {
+							panic(fmt.Errorf("sql types notsupported. %s", val))
+						}
+						list = append(list, item)
 					}
-					list[i] = item
+					config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = list
 				}
-				config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = list
 				return nil
 			},
 		},
@@ -141,9 +149,9 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFilename, skipInit: true, Type: TypeBool, Value: ""},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: "0"},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: "0"},
+		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFilename, skipInit: true, Type: TypeBool, Value: config.DefaultSqlTraceFilename},
+		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceFileMaxSize)},
+		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: strconv.Itoa(config.DefaultSqlTraceFileMaxDays)},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceCompressThreshold),
 			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
@@ -164,12 +172,21 @@ func init() {
 				return strings.Join(config.GetMCTechConfig().Metrics.Exclude, ","), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
-				items := strings.Split(val, ",")
-				list := make([]string, len(items))
-				for i, item := range items {
-					list[i] = strings.TrimSpace(item)
+				val = strings.TrimSpace(val)
+				if len(val) == 0 {
+					config.GetMCTechConfig().Metrics.Exclude = []string{}
+				} else {
+					items := strings.Split(val, ",")
+					list := make([]string, 0, len(items))
+					for _, item := range items {
+						item = strings.TrimSpace(item)
+						if len(item) == 0 {
+							continue
+						}
+						list = append(list, item)
+					}
+					config.GetMCTechConfig().Metrics.Exclude = list
 				}
-				config.GetMCTechConfig().Metrics.Exclude = list
 				return nil
 			},
 		},
