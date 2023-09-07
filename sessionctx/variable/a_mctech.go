@@ -3,7 +3,6 @@ package variable
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -79,28 +78,14 @@ func init() {
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsLargeSqlTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeSqlTypes,
+			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
+				return validateEnumSet(original, ",", config.AllMetricsLargeSqlTypes)
+			},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return strings.Join(config.GetMCTechConfig().Metrics.LargeSql.SqlTypes, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				val = strings.TrimSpace(val)
-				if len(val) == 0 {
-					config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = []string{}
-				} else {
-					items := strings.Split(val, ",")
-					list := make([]string, 0, len(items))
-					for _, item := range items {
-						item = strings.TrimSpace(item)
-						if len(item) == 0 {
-							continue
-						}
-						if !slices.Contains(config.AllMetricsLargeSqlTypes, item) {
-							panic(fmt.Errorf("sql types notsupported. %s", val))
-						}
-						list = append(list, item)
-					}
-					config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = list
-				}
+				config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = config.StrToSlice(val, ",")
 				return nil
 			},
 		},
@@ -173,27 +158,35 @@ func init() {
 				return strings.Join(config.GetMCTechConfig().Metrics.Exclude, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				val = strings.TrimSpace(val)
-				if len(val) == 0 {
-					config.GetMCTechConfig().Metrics.Exclude = []string{}
-				} else {
-					items := strings.Split(val, ",")
-					list := make([]string, 0, len(items))
-					for _, item := range items {
-						item = strings.TrimSpace(item)
-						if len(item) == 0 {
-							continue
-						}
-						list = append(list, item)
-					}
-					config.GetMCTechConfig().Metrics.Exclude = list
-				}
+				config.GetMCTechConfig().Metrics.Exclude = config.StrToSlice(val, ",")
 				return nil
 			},
 		},
 	}
 
 	defaultSysVars = append(defaultSysVars, mctechSysVars...)
+}
+
+func validateEnumSet(input string, sep string, possibleValues []string) (string, error) {
+	s := strings.TrimSpace(input)
+	if len(s) == 0 {
+		return "", nil
+	}
+
+	var result []string
+	parts := strings.Split(s, sep)
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if len(part) == 0 || slices.Contains(result, part) {
+			continue
+		}
+		if !slices.Contains(possibleValues, part) {
+			return input, ErrWrongValueForVar.GenWithStackByArgs(MCTechMetricsLargeSqlTypes, input)
+		}
+
+		result = append(result, part)
+	}
+	return strings.Join(result, sep), nil
 }
 
 func LoadMctechSysVars() {
