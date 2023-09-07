@@ -220,7 +220,7 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
 			// 	`max_size` INT(11) NOT NULL,
 			//  `sql_count` INT(11) NOT NULL DEFAULT 1,
 			// 	`created_at` DATETIME NOT NULL,
-			// 	`lastest_run_at` TIMESTAMP NULL DEFAULT NULL,
+			// 	`latest_run_at` TIMESTAMP NULL DEFAULT NULL,
 			// 	PRIMARY KEY (`hash_id`)
 			// )
 			_, err = cc.ctx.ExecuteInternal(ctx,
@@ -230,7 +230,7 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
 				on duplicate key update
 					db = values(db), user = values(user), service = values(service),
 					sample_text = values(sample_text), max_size = values(max_size),
-					sql_count = sql_count + 1, lastest_run_at = values(lastest_run_at)
+					sql_count = sql_count + 1, lastest_run_at = values(latest_run_at)
 				`,
 				digest.String(), db, user, service, origSql, sqlLength, 1, time.Now(), time.Now())
 			panic(err)
