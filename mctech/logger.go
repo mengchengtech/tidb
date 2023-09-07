@@ -24,7 +24,7 @@ func F() *zap.Logger {
 	return fullSqlLogger
 }
 
-func newJsonEncoder(cfg *log.Config) zapcore.Encoder {
+func newZapEncoder(cfg *log.Config) zapcore.Encoder {
 	cc := zapcore.EncoderConfig{
 		TimeKey:        "", // 不记录生成日志时的time
 		LevelKey:       "", // 不记录日志级别
@@ -61,8 +61,8 @@ func initLogger() {
 	fsConfig.File.Filename = sqlTraceConfig.Filename
 
 	logger, prop, err := log.InitLogger(&fsConfig)
-	jsonEncoder := newJsonEncoder(&cfg.Config)
-	newCore := log.NewTextCore(jsonEncoder, prop.Syncer, prop.Level)
+	newEncoder := newZapEncoder(&cfg.Config)
+	newCore := log.NewTextCore(newEncoder, prop.Syncer, prop.Level)
 	logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 		return newCore
 	}))
@@ -76,22 +76,20 @@ func initLogger() {
 }
 
 type LobTimeObject struct {
-	Total   time.Duration
-	Query   time.Duration
-	Parse   time.Duration
-	Compile time.Duration
-	Cop     time.Duration
-	Ready   time.Duration
-	Render  time.Duration
+	All   time.Duration // 执行总时间
+	Parse time.Duration // 解析语法树用时，含mctech扩展
+	Plan  time.Duration // 生成执行计划用时
+	Cop   time.Duration // cop用时
+	Ready time.Duration // 首行准备好用时
+	Send  time.Duration // 发送到客户端用时
 }
 
 func (lt *LobTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddDuration("Total", lt.Total)
-	enc.AddDuration("Query", lt.Query)
-	enc.AddDuration("Parse", lt.Parse)
-	enc.AddDuration("Compile", lt.Compile)
-	enc.AddDuration("Cop", lt.Cop)
-	enc.AddDuration("Ready", lt.Ready)
-	enc.AddDuration("Render", lt.Render)
+	enc.AddDuration("all", lt.All)
+	enc.AddDuration("parse", lt.Parse)
+	enc.AddDuration("plan", lt.Plan)
+	enc.AddDuration("cop", lt.Cop)
+	enc.AddDuration("ready", lt.Ready)
+	enc.AddDuration("send", lt.Send)
 	return nil
 }
