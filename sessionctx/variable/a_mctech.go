@@ -140,7 +140,7 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceFileMaxSize)},
 		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: strconv.Itoa(config.DefaultSqlTraceFileMaxDays)},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceCompressThreshold),
-			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
+			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold), nil
 			},
