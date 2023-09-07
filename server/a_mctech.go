@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	"encoding/base64"
+	"fmt"
 	"time"
 
 	"github.com/pingcap/log"
@@ -16,12 +16,12 @@ import (
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/mctech"
 	_ "github.com/pingcap/tidb/mctech/preps"
-	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/execdetails"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/slices"
 )
 
@@ -173,17 +173,16 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		}
 	}()
 
-	var digest *parser.Digest // SQL 模板的唯一标识（SQL 指纹）
 	if opts.Metrics.LargeSql.Enabled {
-		cc.logLargeSql(ctx, stmt, digest)
+		cc.logLargeSql(ctx, stmt)
 	}
 	if opts.Metrics.SqlTrace.Enabled {
-		cc.traceFullSql(ctx, stmt, digest)
+		cc.traceFullSql(ctx, stmt)
 	}
 }
 
 // 记录超长sql
-func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest *parser.Digest) {
+func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
 	opts := config.GetMCTechConfig()
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
@@ -203,9 +202,7 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest
 		origSql := stmt.OriginalText()
 		sqlLength := len(origSql)
 		if sqlLength > opts.Metrics.LargeSql.Threshold {
-			if digest == nil {
-				_, digest = stmtCtx.SQLDigest() //
-			}
+			_, digest := stmtCtx.SQLDigest() //
 			db, user, _ := sessionctx.ResolveSession(cc.getCtx())
 
 			var service string
@@ -242,7 +239,7 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest
 }
 
 // 记录全量sql
-func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, digest *parser.Digest) {
+func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode) {
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	origSql := stmt.OriginalText()
@@ -307,17 +304,18 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 	if execDetails.CommitDetail != nil {
 		writeKeys = execDetails.CommitDetail.WriteKeys
 	}
-	if digest == nil {
-		_, digest = stmtCtx.SQLDigest() //
-	}
+	normalizedSQL, digest := stmtCtx.SQLDigest() //
 
-	if len(origSql) > config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold {
+	var zip []byte
+	sqlLen := len(origSql)
+	if sqlLen > config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		if _, err := gz.Write([]byte(origSql)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
-					origSql = "{gzip}" + base64.StdEncoding.EncodeToString(b.Bytes())
+					zip = b.Bytes()
+					origSql = normalizedSQL[:128] + fmt.Sprintf("...length(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}
@@ -327,7 +325,7 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		}
 	}
 
-	mctech.F().Info("", // 忽略Message字段
+	var fields = []zapcore.Field{
 		zap.String("DB", db),
 		zap.String("User", user),
 		// zap.Uint64("ConnId", connId),
@@ -348,5 +346,14 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		zap.Int("WriteKeys", writeKeys),
 		zap.Int64("ResultRows", resultRows),
 		zap.String("SQL", origSql),
+	}
+
+	if len(zip) > 0 {
+		zap.Binary("Zip", zip)
+	}
+
+	mctech.F().Info(
+		"", // 忽略Message字段
+		fields...,
 	)
 }
