@@ -326,30 +326,29 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode) {
 	}
 
 	var fields = []zapcore.Field{
-		zap.String("DB", db),
-		zap.String("User", user),
-		// zap.Uint64("ConnId", connId),
-		zap.String("Type", sqlType),
-		zap.String("Start", timeStart.Format("2006-01-02 15:04:05.000")),
-		zap.Object("Time", &mctech.LobTimeObject{
-			Total:   time.Now().Sub(timeStart),
-			Query:   queryTime,
-			Parse:   parseTime,
-			Compile: compileTime,
-			Cop:     copTime,
-			Ready:   firstRowReadyTime,
-			Render:  writeSQLRespTotal,
+		zap.String("db", db),
+		zap.String("usr", user),
+		// zap.Uint64("conn", connId),
+		zap.String("tp", sqlType),
+		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
+		zap.Object("time", &mctech.LobTimeObject{
+			All:   queryTime,
+			Parse: parseTime,
+			Plan:  compileTime,
+			Cop:   copTime,
+			Ready: firstRowReadyTime,
+			Send:  writeSQLRespTotal,
 		}),
-		zap.Stringer("Digest", digest),
-		zap.Int64("MemMax", memMax),
-		zap.Int64("DiskMax", diskMax),
-		zap.Int("WriteKeys", writeKeys),
-		zap.Int64("ResultRows", resultRows),
-		zap.String("SQL", origSql),
+		zap.Stringer("digest", digest),
+		zap.Int64("mem", memMax),
+		zap.Int64("disk", diskMax),
+		zap.Int("keys", writeKeys),
+		zap.Int64("rows", resultRows),
+		zap.String("sql", origSql),
 	}
 
 	if len(zip) > 0 {
-		zap.Binary("Zip", zip)
+		fields = append(fields, zap.Binary("zip", zip))
 	}
 
 	mctech.F().Info(
