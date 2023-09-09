@@ -68,11 +68,11 @@ type Sequence struct {
 
 // DbChecker db isolation check used
 type DbChecker struct {
-	Enabled          bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
-	APIPrefix        string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
-	MutexAcrossDbs   []string `toml:"mutex" json:"mutex"`           //
-	ExcludeAcrossDbs []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
-	AcrossDbGroups   []string `toml:"across" json:"across"`
+	Enabled    bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
+	APIPrefix  string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
+	MutexDbs   []string `toml:"mutex" json:"mutex"`           //
+	ExcludeDbs []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
+	DbGroups   []string `toml:"across" json:"across"`
 }
 
 // Tenant append tenant condition used
@@ -116,9 +116,7 @@ const (
 
 	DefaultDDLVersionEnabled    = false
 	DefaultDDLVersionColumnName = "__version"
-	DefaultDDLVersionDbMatches  = ""
-
-	DefaultMPPValue = "allow"
+	DefaultMPPValue             = "allow"
 
 	DefaultMetricsSqlLogEnabled   = false
 	DefaultMetricsSqlLogMaxLength = 32 * 1024 // 默认最大记录32K
@@ -137,6 +135,26 @@ const (
 	DefaultMetricsSqlTraceFileMaxSize       = 1024 // 1024MB
 )
 
+var DefaultDbCheckerMutexDbs = []string{"public_*", "asset_*", "global_*"}
+
+var DefaultDbCheckerExcludeDbs = []string{
+	"global_platform",
+	"global_ipm",
+	"global_dw_*",
+	"global_dwb",
+}
+
+var DefaultDDLVersionDbMatches = []string{"global_*", "asset_*", "public_*", "*_custom"}
+
+var DefaultDbCheckerDbGroups = []string{"global_mtlp|global_ma"}
+
+var DefaultSqlTraceExcludeDbs = []string{
+	"test", "dp_stat",
+	"mysql", "information_schema", "metrics_schema", "performance_schema",
+}
+
+var AllAllowMetricsLargeQueryTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
+
 func newMCTech() MCTech {
 	return MCTech{
 		Sequence: Sequence{
@@ -152,11 +170,11 @@ func newMCTech() MCTech {
 			APIPrefix: "http://node-infra-encryption-service.mc/",
 		},
 		DbChecker: DbChecker{
-			Enabled:          DefaultDbCheckerEnabled,
-			APIPrefix:        "http://node-infra-dim-service.mc/",
-			MutexAcrossDbs:   []string{},
-			ExcludeAcrossDbs: []string{},
-			AcrossDbGroups:   []string{},
+			Enabled:    DefaultDbCheckerEnabled,
+			APIPrefix:  "http://node-infra-dim-service.mc/",
+			MutexDbs:   []string{},
+			ExcludeDbs: []string{},
+			DbGroups:   []string{},
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
@@ -166,7 +184,7 @@ func newMCTech() MCTech {
 			Version: VersionColumn{
 				Enabled:   DefaultDDLVersionEnabled,
 				Name:      DefaultDDLVersionColumnName,
-				DbMatches: StrToSlice(DefaultDDLVersionDbMatches, ","),
+				DbMatches: []string{},
 			},
 		},
 		MPP: MPP{
@@ -257,11 +275,13 @@ func storeMCTechConfig(config *Config) {
 	opts.Encryption.APIPrefix = formatURL(opts.Encryption.APIPrefix)
 	opts.DbChecker.APIPrefix = formatURL(opts.DbChecker.APIPrefix)
 
-	if len(opts.Metrics.Exclude) > 0 {
-		opts.Metrics.Exclude = append(DefaultSqlTraceExcludeDbs, opts.Metrics.Exclude...)
-	} else {
-		opts.Metrics.Exclude = DefaultSqlTraceExcludeDbs
-	}
+	opts.DDL.Version.DbMatches = DistinctSlices(MergeSlices(opts.DDL.Version.DbMatches, DefaultDDLVersionDbMatches))
+
+	opts.DbChecker.MutexDbs = DistinctSlices(MergeSlices(opts.DbChecker.MutexDbs, DefaultDbCheckerMutexDbs))
+	opts.DbChecker.ExcludeDbs = DistinctSlices(MergeSlices(opts.DbChecker.ExcludeDbs, DefaultDbCheckerExcludeDbs))
+	opts.DbChecker.DbGroups = DistinctSlices(MergeSlices(opts.DbChecker.DbGroups, DefaultDbCheckerDbGroups))
+
+	opts.Metrics.Exclude = DistinctSlices(MergeSlices(opts.Metrics.Exclude, DefaultSqlTraceExcludeDbs))
 
 	if opts.MPP.DefaultValue == "" {
 		opts.MPP.DefaultValue = "allow"
@@ -300,13 +320,6 @@ func storeMCTechConfig(config *Config) {
 	mctechConf.Store(opts)
 }
 
-var DefaultSqlTraceExcludeDbs = []string{
-	"test", "dp_stat",
-	"mysql", "information_schema", "metrics_schema", "performance_schema",
-}
-
-var AllMetricsLargeQueryTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
-
 func formatURL(str string) string {
 	u, err := url.Parse(str)
 	if err != nil {
@@ -333,6 +346,27 @@ func StrToSlice(s string, sep string) []string {
 	parts := strings.Split(s, sep)
 	var nonEmptyParts []string
 	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if len(part) == 0 || slices.Contains(nonEmptyParts, part) {
+			continue
+		}
+		nonEmptyParts = append(nonEmptyParts, part)
+	}
+	return nonEmptyParts
+}
+
+func MergeSlices(s1, s2 []string) []string {
+	if len(s1) > 0 {
+		s1 = append(s2, s1...)
+	} else {
+		s1 = s2
+	}
+	return s1
+}
+
+func DistinctSlices(s []string) []string {
+	var nonEmptyParts []string
+	for _, part := range s {
 		part = strings.TrimSpace(part)
 		if len(part) == 0 || slices.Contains(nonEmptyParts, part) {
 			continue
