@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/stretchr/testify/require"
 )
@@ -24,17 +25,16 @@ func (c *testStringFilterCase) Source() any {
 
 func TestStringFilter(t *testing.T) {
 	cases := []*testStringFilterCase{
-		{"starts-with:global_", "global_ipm", true},
-		{"starts-with:global_", "___trans_db_global_ipm", false},
+		{"global_*", "global_ipm", true},
+		{"global_*", "___trans_db_global_ipm", false},
 		{"global_platform", "global_platform", true},
 		{"global_platform", "global_dwb", false},
-		{"ends-with:_dw", "global_dw", true},
-		{"ends-with:_dw_1", "global_dw", false},
-		{"ends-with:_dw_1", "global_dw_1", true},
-		{"ends-with:_dw_1", "global_dw_2", false},
-		{"regex:.*_tenant_.*", "gslq_tenant_read", true},
-		{"regex:.*_tenant_.+", "gslq_tenant_", false},
-		{"contains:_tenant_", "gslq_tenant_write", true},
+		{"*_dw", "global_dw", true},
+		{"*_dw_1", "global_dw", false},
+		{"*_dw_1", "global_dw_1", true},
+		{"*_dw_1", "global_dw_2", false},
+		{"*_tenant_*", "gslq_tenant_read", true},
+		{"_tenant_", "gslq_tenant_write", true},
 	}
 
 	doRunTest(t, filterRunTestCase, cases)
@@ -87,14 +87,19 @@ func TestDatabaseChecker(t *testing.T) {
 }
 
 func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
-	checker := newMutexDatabaseCheckerWithParams(nil, nil, nil)
+	option := config.GetMCTechConfig()
+	checker := newMutexDatabaseCheckerWithParams(
+		option.DbChecker.MutexDbs,
+		option.DbChecker.ExcludeDbs,
+		option.DbChecker.DbGroups)
 
 	context, _ := newTestMCTechContext(c.tenant)
 	return checker.Check(context, c.dbs)
 }
 
 func filterRunTestCase(t *testing.T, c *testStringFilterCase) error {
-	p := mctech.NewStringFilter(c.pattern)
+	p, ok := mctech.NewStringFilter(c.pattern)
+	require.True(t, ok)
 	success, err := p.Match(c.target)
 	if err != nil {
 		return err
