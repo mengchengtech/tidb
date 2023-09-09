@@ -118,43 +118,33 @@ func getDatabaseChecker() DatabaseChecker {
 	dbCheckerInitOne.Do(func() {
 		option := config.GetMCTechConfig()
 		dbChecker = newMutexDatabaseCheckerWithParams(
-			option.DbChecker.MutexAcrossDbs,
-			option.DbChecker.ExcludeAcrossDbs,
-			option.DbChecker.AcrossDbGroups)
+			option.DbChecker.MutexDbs,
+			option.DbChecker.ExcludeDbs,
+			option.DbChecker.DbGroups)
 	})
 	return dbChecker
 }
 
-func newMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDbs []string) *mutexDatabaseChecker {
-	mutexAcrossDbs = append(
-		slices.Clone(mutexAcrossDbs),
-		mctech.PrefixFilterPattern(mctech.DbGlobalPrefix),
-		mctech.PrefixFilterPattern(mctech.DbAssetPrefix),
-		mctech.PrefixFilterPattern(mctech.DbPublicPrefix),
-	)
-	mutexFilters := make([]mctech.Filter, len(mutexAcrossDbs))
-	for i, t := range mutexAcrossDbs {
-		mutexFilters[i] = mctech.NewStringFilter(t)
+func newMutexDatabaseCheckerWithParams(mutexDbs, excludeDbs, groupDbs []string) *mutexDatabaseChecker {
+	var mutexFilters []mctech.Filter
+	for _, t := range mutexDbs {
+		if filter, ok := mctech.NewStringFilter(t); ok {
+			mutexFilters = append(mutexFilters, filter)
+		}
 	}
 
 	// 在mutex filters过滤结果中中可与其它数据库共同查询的表
-	excludeAcrossDbs = append(slices.Clone(excludeAcrossDbs),
-		"global_platform", "global_ipm", "starts-with:global_dw_", "global_dwb")
-	excludeFilters := make([]mctech.Filter, len(excludeAcrossDbs))
-	for i, t := range excludeAcrossDbs {
-		excludeFilters[i] = mctech.NewStringFilter(t)
-	}
-
-	// 数据库分组，组内的数据库可以互机访问
-	groups := []string{"global_mtlp|global_ma"}
-	if len(groupDbs) > 0 {
-		groups = append(groups, groupDbs...)
+	var excludeFilters []mctech.Filter
+	for _, t := range excludeDbs {
+		if filter, ok := mctech.NewStringFilter(t); ok {
+			excludeFilters = append(excludeFilters, filter)
+		}
 	}
 
 	return &mutexDatabaseChecker{
 		mutexFilters:   mutexFilters,
 		excludeFilters: excludeFilters,
-		grouper:        newDatabaseGrouper(groups),
+		grouper:        newDatabaseGrouper(groupDbs),
 	}
 }
 
