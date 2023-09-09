@@ -86,15 +86,12 @@ func getDDLExtension() *_ddlExtension {
 			e.visitor = newDDLExtensionVisitor(option.DDL.Version.Name)
 			matchTexts := append(
 				slices.Clone(option.DDL.Version.DbMatches),
-				mctech.PrefixFilterPattern(mctech.DbGlobalPrefix),
-				mctech.PrefixFilterPattern(mctech.DbAssetPrefix),
-				mctech.PrefixFilterPattern(mctech.DbPublicPrefix),
-				mctech.SuffixFilterPattern(mctech.DbCustomSuffix),
 			)
 
-			e.filters = make([]mctech.Filter, len(matchTexts))
-			for i, t := range matchTexts {
-				e.filters[i] = mctech.NewStringFilter(t)
+			for _, t := range matchTexts {
+				if filter, ok := mctech.NewStringFilter(t); ok {
+					e.filters = append(e.filters, filter)
+				}
 			}
 		}
 
