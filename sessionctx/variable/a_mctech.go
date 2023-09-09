@@ -52,6 +52,10 @@ const (
 
 	MCTechDbCheckerEnabled = "mctech_db_checker_enabled"
 
+	MCTechDbCheckerMutexDbs       = "mctech_checker_mutex_dbs"
+	MCTechDbCheckerExcludeDbs     = "mctech_checker_exclude_dbs"
+	MCTechDbCheckerAcrossDbGroups = "mctech_db_checker_db_groups"
+
 	MCTechTenantEnabled          = "mctech_tenant_enabled"
 	MCTechTenantForbiddenPrepare = "mctech_tenant_forbidden_prepare"
 
@@ -86,13 +90,16 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechSequenceBackend, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceBackend)},
 
 		{Scope: ScopeNone, Name: MCTechDbCheckerEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerEnabled)},
+		{Scope: ScopeNone, Name: MCTechDbCheckerMutexDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerMutexDbs, ",")},
+		{Scope: ScopeNone, Name: MCTechDbCheckerExcludeDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExcludeDbs, ",")},
+		{Scope: ScopeNone, Name: MCTechDbCheckerAcrossDbGroups, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerDbGroups, "|")},
 
 		{Scope: ScopeNone, Name: MCTechTenantEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantEnabled)},
 		{Scope: ScopeNone, Name: MCTechTenantForbiddenPrepare, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantForbiddenPrepare)},
 
 		{Scope: ScopeNone, Name: MCTechDDLVersionEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultDDLVersionEnabled)},
 		{Scope: ScopeNone, Name: MCTechDDLVersionName, skipInit: true, Type: TypeStr, Value: config.DefaultDDLVersionColumnName},
-		{Scope: ScopeNone, Name: MCTechDDLVersionDbMatches, skipInit: true, Type: TypeStr, Value: config.DefaultDDLVersionDbMatches},
+		{Scope: ScopeNone, Name: MCTechDDLVersionDbMatches, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDDLVersionDbMatches, ",")},
 
 		{Scope: ScopeGlobal, Name: MCTechMPPDefaultValue, skipInit: true, Type: TypeEnum, Value: config.DefaultMPPValue,
 			PossibleValues: []string{"allow", "force", "disable"},
@@ -118,7 +125,7 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFileMaxSize, skipInit: true, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeQueryFileMaxSize)},
 		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeQueryTypes,
 			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
-				return validateEnumSet(original, ",", config.AllMetricsLargeQueryTypes)
+				return validateEnumSet(original, ",", config.AllAllowMetricsLargeQueryTypes)
 			},
 			GetGlobal: func(s *SessionVars) (string, error) {
 				return strings.Join(config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes, ","), nil
