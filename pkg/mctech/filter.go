@@ -8,11 +8,12 @@ import (
 type stringFilter struct {
 	pattern string
 	action  string
+	regex   *regexp.Regexp
 }
 
 // Filter interface
 type Filter interface {
-	Match(text string) (bool, error)
+	Match(text string) bool
 }
 
 // NewStringFilter function
@@ -40,8 +41,12 @@ func NewStringFilter(pattern string) (Filter, bool) {
 		for _, tk := range tokens {
 			newTokens = append(newTokens, regexp.QuoteMeta(tk))
 		}
-		pattern = strings.Join(newTokens, ".*")
-		filter = &stringFilter{action: filterRegex, pattern: "(?i)" + pattern}
+		pattern = "(?i)" + strings.Join(newTokens, ".*")
+		filter = &stringFilter{
+			action:  filterRegex,
+			pattern: pattern,
+			regex:   regexp.MustCompile(pattern),
+		}
 	}
 	return filter, true
 }
@@ -53,11 +58,8 @@ const (
 	filterRegex      = "regex"
 )
 
-func (f *stringFilter) Match(text string) (bool, error) {
-	var (
-		matched bool
-		err     error
-	)
+func (f *stringFilter) Match(text string) bool {
+	var matched bool
 	switch f.action {
 	case filterStartsWith:
 		matched = strings.HasPrefix(text, f.pattern)
@@ -66,9 +68,9 @@ func (f *stringFilter) Match(text string) (bool, error) {
 	case filterContains:
 		matched = strings.Contains(text, f.pattern)
 	case filterRegex:
-		matched, err = regexp.MatchString(f.pattern, text)
+		matched = f.regex.MatchString(text)
 	default:
 		matched = f.pattern == text
 	}
-	return matched, err
+	return matched
 }
