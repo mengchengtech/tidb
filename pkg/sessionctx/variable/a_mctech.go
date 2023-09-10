@@ -40,14 +40,16 @@ const (
 	MCTechLargeQueryRewriteTimeStr  = "REWRITE_TIME"
 	MCTechLargeQueryOptimizeTimeStr = "OPTIMIZE_TIME"
 
-	MCTechLargeQueryDBStr      = "DB"
-	MCTechLargeQuerySQLStr     = "SQL"
-	MCTechLargeQuerySuccStr    = "SUCC"
-	MCTechLargeQueryMemMax     = "MEM_MAX"
-	MCTechLargeQueryDiskMax    = "DISK_MAX"
-	MCTechLargeQueryDigestStr  = "DIGEST"
-	MCTechLargeQueryResultRows = "RESULT_ROWS"
-	MCTechLargeQueryPlan       = "PLAN"
+	MCTechLargeQueryDBStr        = "DB"
+	MCTechLargeQuerySQLStr       = "SQL"
+	MCTechLargeQuerySuccStr      = "SUCC"
+	MCTechLargeQueryMemMax       = "MEM_MAX"
+	MCTechLargeQueryDiskMax      = "DISK_MAX"
+	MCTechLargeQueryDigestStr    = "DIGEST"
+	MCTechLargeQuerySQLLengthStr = "SQL_LENGTH"
+	MCTechLargeQueryServiceStr   = "SERVICE"
+	MCTechLargeQueryResultRows   = "RESULT_ROWS"
+	MCTechLargeQueryPlan         = "PLAN"
 )
 
 const (
@@ -309,6 +311,7 @@ type MCTechLargeQueryLogItems struct {
 	WriteSQLRespTotal time.Duration
 	ResultRows        int64
 	Succ              bool
+	Service           string
 	SQL               string
 }
 
@@ -369,6 +372,8 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (stri
 
 	writeSlowLogItem(&buf, MCTechLargeQueryResultRows, strconv.FormatInt(logItems.ResultRows, 10))
 	writeSlowLogItem(&buf, MCTechLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
+	writeSlowLogItem(&buf, MCTechLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
+	writeSlowLogItem(&buf, MCTechLargeQueryServiceStr, logItems.Service)
 
 	if len(logItems.Plan) != 0 {
 		writeSlowLogItem(&buf, MCTechLargeQueryPlan, logItems.Plan)

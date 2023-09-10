@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/mctech"
 
@@ -46,7 +47,7 @@ func TestMCTechStatementsSummary(t *testing.T) {
 }
 
 func TestForbiddenPrepare(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": true}),
 	)
 	store := testkit.CreateMockStore(t)
@@ -60,7 +61,7 @@ func TestForbiddenPrepare(t *testing.T) {
 	for _, c := range cases {
 		tk.MustContainErrMsg(c.source, c.failure)
 	}
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func TestIntegerAutoIncrement(t *testing.T) {
@@ -85,7 +86,7 @@ func TestIntegerAutoIncrement(t *testing.T) {
 }
 
 func TestPrepareByQuery(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
 	store := testkit.CreateMockStore(t)
@@ -119,11 +120,11 @@ func TestPrepareByQuery(t *testing.T) {
 		seqs1[row[0].(string)] = true
 	}
 
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func TestPrepareByCmd(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
 
@@ -141,18 +142,18 @@ func TestPrepareByCmd(t *testing.T) {
 	for _, row := range rows1 {
 		seqs1[row[0].(string)] = true
 	}
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func TestPrepareByCmdNoTenant(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false}),
 	)
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("select * from information_schema.statements_summary limit ?", 5)
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
@@ -236,4 +237,10 @@ org_type = ? AND ext_type = ? AND is_removed = FALSE
 		)
 )SELECT * FROM orgs`
 	return tk, sql
+}
+
+func TestGetSeriveFromSql(t *testing.T) {
+	const sql = "/* from:'tenant-service', host */ select 1"
+	service := executor.GetSeriveFromSql(sql)
+	require.Equal(t, "tenant-service", service)
 }
