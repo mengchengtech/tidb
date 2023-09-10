@@ -4,6 +4,8 @@ package variable
 
 import (
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -23,6 +25,7 @@ const (
 	// MCTechLargeQuerySpaceMarkStr is large query log space mark.
 	MCTechLargeQuerySpaceMarkStr   = ": "
 	MCTechLargeQuerySQLSuffixStr   = ";"
+	MCTechLargeQueryGzipPrefixStr  = "{gzip}"
 	MCTechLargeQueryStartPrefixStr = MCTechLargeQueryRowPrefixStr + MCTechLargeQueryTimeStr + MCTechLargeQuerySpaceMarkStr
 	// MCTechLargeQueryUserAndHostStr is the user and host field name, which is compatible with MySQL.
 	MCTechLargeQueryUserAndHostStr = "USER@HOST"
@@ -315,22 +318,17 @@ type MCTechLargeQueryLogItems struct {
 // # COMPILE_TIME: 0.000129729
 // # REWRITE_TIME: 0.000000003
 // # OPTIMIZE_TIME: 0.00000001
-// # PROCESS_TIME: 0.07
-// # TOTAL_KEYS: 131073
-// # WRITE_KEYS: 131072
-// # WRITE_SIZE: 3538944
+// # COP_TIME: 0.17 PROCESS_TIME: 0.07 WAIT_TIME: 0 WRITE_KEYS: 131072 WRITE_SIZE: 3538944 TOTAL_KEYS: 131073
 // # DB: test
 // # DIGEST: 42a1c8aae6f133e934d4bf0147491709a8812ea05ff8819ec522780fe657b772
-// # MEMORY_MAX: 4096
+// # MEM_MAX: 4096
 // # DISK_MAX: 65535
-// # Succ: true
-// # COP_TIME:
-// # WAIT_TIME: 0
+// # SUCC: true
 // # RESULT_ROWS: 1
 // # Plan: tidb_decode_plan('ZJAwCTMyXzcJMAkyMAlkYXRhOlRhYmxlU2Nhbl82CjEJMTBfNgkxAR0AdAEY1Dp0LCByYW5nZTpbLWluZiwraW5mXSwga2VlcCBvcmRlcjpmYWxzZSwgc3RhdHM6cHNldWRvCg==')
 // use test;
 // insert into t select * from t;
-func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) string {
+func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (string, error) {
 	var buf bytes.Buffer
 
 	if s.User != nil {
@@ -379,10 +377,23 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) strin
 		buf.WriteString(fmt.Sprintf("use %s;\n", strings.ToLower(s.CurrentDB)))
 		s.CurrentDBChanged = false
 	}
+	var b bytes.Buffer
+	encoder := base64.NewEncoder(base64.StdEncoding, &b)
+	gz := gzip.NewWriter(encoder)
 
-	buf.WriteString(logItems.SQL)
-	if len(logItems.SQL) == 0 || logItems.SQL[len(logItems.SQL)-1] != ';' {
-		buf.WriteString(";")
+	var err error
+	if _, err = gz.Write([]byte(logItems.SQL)); err == nil {
+		err = gz.Close()
 	}
-	return buf.String()
+
+	if err != nil {
+		return "", err
+	}
+
+	encoder.Close()
+
+	buf.WriteString(MCTechLargeQueryGzipPrefixStr)
+	buf.Write(b.Bytes())
+	buf.WriteString(MCTechLargeQuerySQLSuffixStr)
+	return buf.String(), nil
 }

@@ -166,13 +166,6 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		}
 	}
 
-	// 捕获后续执行的异常，不再向外抛出
-	defer func() {
-		if err := recover(); err != nil {
-			logutil.Logger(ctx).Warn("记录sql执行信息出错", zap.Error(err.(error)))
-		}
-	}()
-
 	if opts.Metrics.LargeQuery.Enabled {
 		cc.logLargeQuery(ctx, stmt, err == nil)
 	}
@@ -196,9 +189,16 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ
 		sqlType = "update"
 	}
 
+	// 捕获后续执行的异常，不再向外抛出
+	defer func() {
+		if err := recover(); err != nil {
+			logutil.Logger(ctx).Warn("[logLargeQuery] 记录大sql信息出错", zap.Error(err.(error)), zap.Stack("stack"))
+		}
+	}()
+
 	if slices.Contains(opts.Metrics.LargeQuery.SqlTypes, sqlType) {
 		execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
-		execStmt.SaveLargeQuery(succ)
+		execStmt.SaveLargeQuery(ctx, succ)
 	}
 }
 
@@ -238,6 +238,13 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	default:
 		return
 	}
+
+	// 捕获后续执行的异常，不再向外抛出
+	defer func() {
+		if err := recover(); err != nil {
+			logutil.Logger(ctx).Warn("[traceFullQuery] 记录sql执行信息出错", zap.Error(err.(error)), zap.Stack("stack"))
+		}
+	}()
 
 	execDetails := stmtCtx.GetExecDetails()
 
