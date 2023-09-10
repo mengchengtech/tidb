@@ -50,11 +50,12 @@ const (
 	MCTechSequenceMaxFetchCount = "mctech_sequence_max_fetch_count"
 	MCTechSequenceBackend       = "mctech_sequence_backend"
 
-	MCTechDbCheckerEnabled = "mctech_db_checker_enabled"
+	MCTechDbCheckerEnabled    = "mctech_db_checker_enabled"
+	MCTechDbCheckerCompatible = "mctech_db_checker_compatible"
 
-	MCTechDbCheckerMutexDbs       = "mctech_checker_mutex_dbs"
-	MCTechDbCheckerExcludeDbs     = "mctech_checker_exclude_dbs"
-	MCTechDbCheckerAcrossDbGroups = "mctech_db_checker_db_groups"
+	MCTechDbCheckerMutexDbs   = "mctech_checker_mutex_dbs"
+	MCTechDbCheckerExcludeDbs = "mctech_checker_exclude_dbs"
+	MCTechDbCheckerDbGroups   = "mctech_db_checker_db_groups"
 
 	MCTechTenantEnabled          = "mctech_tenant_enabled"
 	MCTechTenantForbiddenPrepare = "mctech_tenant_forbidden_prepare"
@@ -90,9 +91,18 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechSequenceBackend, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceBackend)},
 
 		{Scope: ScopeNone, Name: MCTechDbCheckerEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerEnabled)},
+		{Scope: ScopeGlobal, Name: MCTechDbCheckerCompatible, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerCompatible),
+			GetGlobal: func(s *SessionVars) (string, error) {
+				return BoolToOnOff(config.GetMCTechConfig().DbChecker.Compatible), nil
+			},
+			SetGlobal: func(s *SessionVars, val string) error {
+				config.GetMCTechConfig().DbChecker.Compatible = TiDBOptOn(val)
+				return nil
+			},
+		},
 		{Scope: ScopeNone, Name: MCTechDbCheckerMutexDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerMutexDbs, ",")},
 		{Scope: ScopeNone, Name: MCTechDbCheckerExcludeDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExcludeDbs, ",")},
-		{Scope: ScopeNone, Name: MCTechDbCheckerAcrossDbGroups, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerDbGroups, "|")},
+		{Scope: ScopeNone, Name: MCTechDbCheckerDbGroups, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerDbGroups, "|")},
 
 		{Scope: ScopeNone, Name: MCTechTenantEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantEnabled)},
 		{Scope: ScopeNone, Name: MCTechTenantForbiddenPrepare, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantForbiddenPrepare)},
@@ -247,6 +257,10 @@ func LoadMctechSysVars() {
 	SetSysVar(MCTechSequenceBackend, strconv.FormatInt(option.Sequence.Backend, 10))
 
 	SetSysVar(MCTechDbCheckerEnabled, BoolToOnOff(option.DbChecker.Enabled))
+	SetSysVar(MCTechDbCheckerCompatible, BoolToOnOff(option.DbChecker.Compatible))
+	SetSysVar(MCTechDbCheckerMutexDbs, strings.Join(option.DbChecker.MutexDbs, ","))
+	SetSysVar(MCTechDbCheckerExcludeDbs, strings.Join(option.DbChecker.ExcludeDbs, ","))
+	SetSysVar(MCTechDbCheckerDbGroups, strings.Join(option.DbChecker.DbGroups, ","))
 
 	SetSysVar(MCTechTenantEnabled, BoolToOnOff(option.Tenant.Enabled))
 	SetSysVar(MCTechTenantForbiddenPrepare, BoolToOnOff(option.Tenant.ForbiddenPrepare))

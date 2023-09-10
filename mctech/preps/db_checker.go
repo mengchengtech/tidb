@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"golang.org/x/exp/slices"
@@ -12,6 +13,7 @@ import (
 
 type dbGroup interface {
 	groupSet() // 无实际意义的接口方法，仅仅为了表示实现了DbGroup接口
+	String() string
 }
 
 type multiDbGroup struct {
@@ -150,7 +152,7 @@ func newMutexDatabaseCheckerWithParams(mutexDbs, excludeDbs, groupDbs []string) 
 
 func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 	result := mctx.PrepareResult()
-	if !result.TenantFromRole() {
+	if !result.TenantOnlyRole() {
 		return nil
 	}
 
@@ -172,6 +174,10 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 		return nil
 	}
 
+	if config.GetMCTechConfig().DbChecker.Compatible {
+		log.Warn(fmt.Sprintf("dbs not allow in the same statement. %s", groupDbs))
+		return nil
+	}
 	return fmt.Errorf("dbs not allow in the same statement.  %s", groupDbs)
 }
 

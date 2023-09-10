@@ -63,7 +63,7 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	if !global {
 		tenant = "gslq4dev"
 	}
-	result, err := mctech.NewPrepareResult(tenant, map[string]any{
+	result, err := mctech.NewPrepareResult(tenant, true, map[string]any{
 		"dbPrefix": "mock",
 		"global":   &mctech.GlobalValueInfo{Global: global, Excludes: excludes},
 	})
