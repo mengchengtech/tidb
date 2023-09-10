@@ -40,14 +40,16 @@ const (
 	MCLargeLogRewriteTimeStr  = "REWRITE_TIME"
 	MCLargeLogOptimizeTimeStr = "OPTIMIZE_TIME"
 
-	MCLargeLogDBStr      = "DB"
-	MCLargeLogSQLStr     = "SQL"
-	MCLargeLogSuccStr    = "SUCC"
-	MCLargeLogMemMax     = "MEM_MAX"
-	MCLargeLogDiskMax    = "DISK_MAX"
-	MCLargeLogDigestStr  = "DIGEST"
-	MCLargeLogResultRows = "RESULT_ROWS"
-	MCLargeLogPlan       = "PLAN"
+	MCLargeLogDBStr        = "DB"
+	MCLargeLogSQLStr       = "SQL"
+	MCLargeLogSuccStr      = "SUCC"
+	MCLargeLogMemMax       = "MEM_MAX"
+	MCLargeLogDiskMax      = "DISK_MAX"
+	MCLargeLogDigestStr    = "DIGEST"
+	MCLargeLogSQLLengthStr = "SQL_LENGTH"
+	MCLargeLogServiceStr   = "SERVICE"
+	MCLargeLogResultRows   = "RESULT_ROWS"
+	MCLargeLogPlan         = "PLAN"
 )
 
 const (
@@ -309,6 +311,7 @@ type MCLargeLogItems struct {
 	WriteSQLRespTotal time.Duration
 	ResultRows        int64
 	Succ              bool
+	Service           string
 	SQL               string
 }
 
@@ -369,6 +372,8 @@ func (s *SessionVars) LargeLogFormat(logItems *MCLargeLogItems) (string, error) 
 
 	writeSlowLogItem(&buf, MCLargeLogResultRows, strconv.FormatInt(logItems.ResultRows, 10))
 	writeSlowLogItem(&buf, MCLargeLogSuccStr, strconv.FormatBool(logItems.Succ))
+	writeSlowLogItem(&buf, MCLargeLogSQLLengthStr, strconv.Itoa(len(logItems.SQL)))
+	writeSlowLogItem(&buf, MCLargeLogServiceStr, logItems.Service)
 
 	if len(logItems.Plan) != 0 {
 		writeSlowLogItem(&buf, MCLargeLogPlan, logItems.Plan)
