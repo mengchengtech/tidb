@@ -105,10 +105,7 @@ func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
 func filterRunTestCase(t *testing.T, c *testStringFilterCase) error {
 	p, ok := mctech.NewStringFilter(c.pattern)
 	require.True(t, ok)
-	success, err := p.Match(c.target)
-	if err != nil {
-		return err
-	}
+	success := p.Match(c.target)
 	require.Equal(t, c.success, success, c.Source())
 	return nil
 }

@@ -159,10 +159,7 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 	logicNames := make([]string, 0, len(dbs))
 	for _, dbName := range dbs {
 		logicName := mctx.ToLogicDbName(dbName)
-		matched, err := c.dbPredicate(logicName)
-		if err != nil {
-			return err
-		}
+		matched := c.dbPredicate(logicName)
 
 		if matched {
 			logicNames = append(logicNames, logicName)
@@ -181,32 +178,24 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 	return fmt.Errorf("dbs not allow in the same statement.  %s", groupDbs)
 }
 
-func (c *mutexDatabaseChecker) dbPredicate(dbName string) (bool, error) {
+func (c *mutexDatabaseChecker) dbPredicate(dbName string) bool {
 	for _, deny := range c.mutexFilters {
-		matched, err := deny.Match(dbName)
-		if err != nil {
-			return false, err
-		}
-
+		matched := deny.Match(dbName)
 		if !matched {
 			continue
 		}
 
 		for _, f := range c.excludeFilters {
-			matched, err := f.Match(dbName)
-			if err != nil {
-				return false, err
-			}
-
+			matched := f.Match(dbName)
 			if matched {
 				// 需要排除，不当作互斥数据库处理
-				return false, nil
+				return false
 			}
 		}
 
 		// 符合互斥数据库
-		return true, nil
+		return true
 	}
 	// 不符合互斥数据库
-	return false, nil
+	return false
 }
