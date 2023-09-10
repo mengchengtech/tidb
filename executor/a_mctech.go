@@ -4,9 +4,12 @@ package executor
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -653,6 +656,14 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 					startFlag = false
 					continue
 				}
+
+				if strings.HasPrefix(line, variable.MCTechLargeQueryGzipPrefixStr) {
+					// 解压缩
+					if line, err = uncompress(ctx, line); err != nil {
+						return nil, err
+					}
+				}
+
 				// Get the sql string, and mark the start flag to false.
 				_ = e.setColumnValue(sctx, row, tz, variable.MCTechLargeQuerySQLStr, string(hack.Slice(line)), e.checker, fileLine)
 				e.setDefaultValue(row)
@@ -939,6 +950,30 @@ func (e *mctechLargeQueryRetriever) memConsume(bytes int64) {
 	}
 }
 
+func uncompress(ctx context.Context, line string) (string, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logutil.Logger(ctx).Warn("uncompress sql error", zap.Error(r.(error)), zap.Stack("stack"))
+		}
+	}()
+
+	// 去掉前面的'{gzip}'和末尾的';'
+	zip := line[len(variable.MCTechLargeQueryGzipPrefixStr) : len(line)-len(variable.MCTechLargeQuerySQLSuffixStr)]
+	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(zip))
+
+	if gz, err := gzip.NewReader(decoder); err == nil {
+		if raw, err := ioutil.ReadAll(gz); err == nil {
+			line = string(raw)
+		} else {
+			return line, err
+		}
+	} else {
+		return line, err
+	}
+
+	return line, nil
+}
+
 type mctechLargeQueryColumnValueFactory func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error)
 
 func getLargeQueryColumnValueFactoryByName(sctx sessionctx.Context, colName string, columnIdx int) (mctechLargeQueryColumnValueFactory, error) {
@@ -1021,7 +1056,7 @@ func getLargeQueryColumnValueFactoryByName(sctx sessionctx.Context, colName stri
 }
 
 // SaveLargeQuery is used to print the large query in the log files.
-func (a *ExecStmt) SaveLargeQuery(succ bool) {
+func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 	sessVars := a.Ctx.GetSessionVars()
 	cfg := config.GetMCTechConfig()
 	threshold := cfg.Metrics.LargeQuery.Threshold
@@ -1059,6 +1094,12 @@ func (a *ExecStmt) SaveLargeQuery(succ bool) {
 		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
 		ResultRows:        GetResultRowsCount(sessVars.StmtCtx, a.Plan),
 	}
-	slowLog := sessVars.LargeQueryFormat(largeItems)
+	slowLog, err := sessVars.LargeQueryFormat(largeItems)
+	if err != nil {
+		logutil.Logger(ctx).Error("record large query error", zap.Error(err), zap.Stack("stack"))
+		return
+	}
+
+	// 只在没有发生错误的时候才记录大SQL日志
 	mctech.L().Warn(slowLog)
 }
