@@ -427,6 +427,10 @@ const (
 	TpBasicCopRunTimeStats
 	// TpUpdateRuntimeStats is the tp for UpdateRuntimeStats
 	TpUpdateRuntimeStats
+	// add by zhangbing
+	// TpMCTechLargeQueryRuntimeStat is the tp for TpMCTechLargeQueryRuntimeStat
+	TpMCTechLargeQueryRuntimeStat
+	// add end
 )
 
 // RuntimeStats is used to express the executor runtime information.

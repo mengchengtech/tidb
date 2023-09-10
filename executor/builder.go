@@ -1868,6 +1868,21 @@ func (b *executorBuilder) buildMemTable(v *plannercore.PhysicalMemTable) Executo
 					memTracker: memTracker,
 				},
 			}
+		// add by zhangbing
+		case strings.ToLower(infoschema.TableMCTechLargeQuery), strings.ToLower(infoschema.ClusterTableMCTechLargeQuery):
+			memTracker := memory.NewTracker(v.ID(), -1)
+			memTracker.AttachTo(b.ctx.GetSessionVars().StmtCtx.MemTracker)
+			return &MemTableReaderExec{
+				baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ID()),
+				table:        v.Table,
+				retriever: &mctechLargeQueryRetriever{
+					table:      v.Table,
+					outputCols: v.Columns,
+					extractor:  v.Extractor.(*plannercore.MCTechLargeQueryExtractor),
+					memTracker: memTracker,
+				},
+			}
+		// add end
 		case strings.ToLower(infoschema.TableStorageStats):
 			return &MemTableReaderExec{
 				baseExecutor: newBaseExecutor(b.ctx, v.Schema(), v.ID()),

@@ -4740,6 +4740,10 @@ func (b *PlanBuilder) buildMemTable(_ context.Context, dbName model.CIStr, table
 			p.QueryTimeRange = b.timeRangeForSummaryTable()
 		case infoschema.TableSlowQuery:
 			p.Extractor = &SlowQueryExtractor{}
+			// add by zhangbing
+		case infoschema.TableMCTechLargeQuery:
+			p.Extractor = &MCTechLargeQueryExtractor{}
+			// add end
 		case infoschema.TableStorageStats:
 			p.Extractor = &TableStorageStatsExtractor{}
 		case infoschema.TableTiFlashTables, infoschema.TableTiFlashSegments:
