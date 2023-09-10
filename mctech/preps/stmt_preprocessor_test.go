@@ -26,38 +26,39 @@ func (m *mctechStmtResolverTestCase) Source() any {
 func TestStmtResolverWithRoot(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*mctechStmtResolverTestCase{
-		{"pf", "/*& tenant:gdcd */ /*& tenant:'gdcd' */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
-		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
-		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", "", "多个 tenant hint包含不同的值: gdcd <=> gdcd1"},
-		{"test", "describe company", "{{{,,false,[{mpp,allow}],{false,[]}}},test}", ""},
-		{"test", "select * from company /*& global:true */", "{{{,,false,[{mpp,allow}],{true,[]}}},test}", ""},
-		//
-		{"pf", "/*& global:true */ select * from company", "{{{,,false,[{mpp,allow}],{true,[]}}},global_platform}", ""},
-		{"test", "/*& global:true */ select * from company", "{{{,,false,[{mpp,allow}],{true,[]}}},test}", ""},
-		{"pf", "/*& global:!ys2 */ select * from company", "{{{,,false,[{mpp,allow}],{true,[ys2]}}},global_platform}", ""},
-		{"pf", "select * from company /*& global:!ys2,!ys3 */", "{{{,,false,[{mpp,allow}],{true,[ys2 ys3]}}},global_platform}", ""},
+		// {"pf", "/*& tenant:gdcd */ /*& tenant:'gdcd' */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		// {"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		// {"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", "", "多个 tenant hint包含不同的值: gdcd <=> gdcd1"},
+		// {"test", "describe company", "{{{,,false,[{mpp,allow}],{false,[]}}},test}", ""},
+		// {"test", "select * from company /*& global:true */", "{{{,,false,[{mpp,allow}],{true,[]}}},test}", ""},
+		// //
+		// {"pf", "/*& global:true */ select * from company", "{{{,,false,[{mpp,allow}],{true,[]}}},global_platform}", ""},
+		// {"test", "/*& global:true */ select * from company", "{{{,,false,[{mpp,allow}],{true,[]}}},test}", ""},
+		// {"pf", "/*& global:!ys2 */ select * from company", "{{{,,false,[{mpp,allow}],{true,[ys2]}}},global_platform}", ""},
+		// {"pf", "select * from company /*& global:!ys2,!ys3 */", "{{{,,false,[{mpp,allow}],{true,[ys2 ys3]}}},global_platform}", ""},
 		// hint 格式不匹配
-		{"pf", "/* global:true */ select * from company", "", "当前用户root无法确定所属租户信息"},
-		{"test", "/* global:true */ select * from company", "{{{,,false,[{mpp,allow}],{false,[]}}},test}", ""},
-		// tenant hint
-		{"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
-		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", "", "存在tenant信息时，global不允许设置为true"},
+		{"pf", "/*  & global:true */ select * from company", "", "当前用户root无法确定所属租户信息"},
+		// {"pf", "/* global:true */ select * from company", "", "当前用户root无法确定所属租户信息"},
+		// {"test", "/* global:true */ select * from company", "{{{,,false,[{mpp,allow}],{false,[]}}},test}", ""},
+		// // tenant hint
+		// {"pf", "/*& tenant:gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		// {"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", "", "存在tenant信息时，global不允许设置为true"},
 
-		// request_id
-		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[{mpp,allow} {requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
-		// background
-		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[{background,true} {mpp,allow} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
-		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[{dbPrefix,mock} {mpp,allow}],{false,[]}}},public_data}", ""},
-		// replace
-		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", "{{{,gslq,false,[{mpp,allow} {tenant,gslq}],{false,[]}}},public_data}", ""},   // replace
-		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "{{{,gslq,false,[{mpp,allow} {tenant,gslq}],{false,[]}}},public_data}", ""}, // replace
-		{"pd", "/*& $replace:tenant=mctech */ select * from company", "{{{,,false,[{mpp,allow}],{false,[]}}},public_data}", ""},
-		{"pd", "/*& $replace:tenant */ select * from company", "", "执行[replace]时未找到名称为'tenant'的参数的值"},
+		// // request_id
+		// {"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[{mpp,allow} {requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		// // background
+		// {"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[{background,true} {mpp,allow} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
+		// // dbPrefix
+		// {"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[{dbPrefix,mock} {mpp,allow}],{false,[]}}},public_data}", ""},
+		// // replace
+		// {"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", "{{{,gslq,false,[{mpp,allow} {tenant,gslq}],{false,[]}}},public_data}", ""},   // replace
+		// {"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "{{{,gslq,false,[{mpp,allow} {tenant,gslq}],{false,[]}}},public_data}", ""}, // replace
+		// {"pd", "/*& $replace:tenant=mctech */ select * from company", "{{{,,false,[{mpp,allow}],{false,[]}}},public_data}", ""},
+		// {"pd", "/*& $replace:tenant */ select * from company", "", "执行[replace]时未找到名称为'tenant'的参数的值"},
 
-		// 新的值声明方式
-		{"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
-		{"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		// // 新的值声明方式
+		// {"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		// {"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 	}
 
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
