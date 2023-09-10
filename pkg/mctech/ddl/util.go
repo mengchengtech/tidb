@@ -44,11 +44,7 @@ func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast
 
 	var matched bool
 	for _, filter := range r.filters {
-		result, err := filter.Match(db)
-		if err != nil {
-			return err
-		}
-
+		result := filter.Match(db)
 		if result {
 			matched = result
 			break
