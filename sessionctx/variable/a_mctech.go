@@ -424,7 +424,9 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (stri
 	writeSlowLogItem(&buf, MCTechLargeQueryResultRows, strconv.FormatInt(logItems.ResultRows, 10))
 	writeSlowLogItem(&buf, MCTechLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
 	writeSlowLogItem(&buf, MCTechLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
-	writeSlowLogItem(&buf, MCTechLargeQueryServiceStr, logItems.Service)
+	if len(logItems.Service) > 0 {
+		writeSlowLogItem(&buf, MCTechLargeQueryServiceStr, logItems.Service)
+	}
 
 	if len(logItems.Plan) != 0 {
 		writeSlowLogItem(&buf, MCTechLargeQueryPlan, logItems.Plan)

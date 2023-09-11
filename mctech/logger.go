@@ -16,29 +16,25 @@ import (
 var (
 	fullQueryLogger,
 	largeQueryLogger *zap.Logger
+	fqOnce = &sync.Once{}
+	lqOnce = &sync.Once{}
 )
 
 // F Get full sql trace logger
 func F() *zap.Logger {
-	if fullQueryLogger != nil {
-		return fullQueryLogger
-	}
-
 	// 只能懒加载，需要在启动时先加载 config模块
-	once := &sync.Once{}
-	once.Do(initFullQueryLogger)
+	fqOnce.Do(func() {
+		fullQueryLogger = initFullQueryLogger()
+	})
 	return fullQueryLogger
 }
 
 // L Get large query logger
 func L() *zap.Logger {
-	if largeQueryLogger != nil {
-		return largeQueryLogger
-	}
-
 	// 只能懒加载，需要在启动时先加载 config模块
-	once := &sync.Once{}
-	once.Do(initLargeQueryLogger)
+	lqOnce.Do(func() {
+		largeQueryLogger = initLargeQueryLogger()
+	})
 	return largeQueryLogger
 }
 
@@ -97,11 +93,7 @@ func (e *largeQueryEncoder) AddUintptr(string, uintptr)                      {}
 func (e *largeQueryEncoder) AddReflected(string, interface{}) error          { return nil }
 func (e *largeQueryEncoder) OpenNamespace(string)                            {}
 
-func initLargeQueryLogger() {
-	if largeQueryLogger != nil {
-		return
-	}
-
+func initLargeQueryLogger() *zap.Logger {
 	globalConfig := config.GetGlobalConfig()
 	largeQueryConfig := globalConfig.MCTech.Metrics.LargeQuery
 	cfg := globalConfig.Log.ToLogConfig()
@@ -123,14 +115,10 @@ func initLargeQueryLogger() {
 		return newCore
 	}))
 	prop.Core = newCore
-	largeQueryLogger = logger
+	return logger
 }
 
-func initFullQueryLogger() {
-	if fullQueryLogger != nil {
-		return
-	}
-
+func initFullQueryLogger() *zap.Logger {
 	globalConfig := config.GetGlobalConfig()
 	sqlTraceConfig := globalConfig.MCTech.Metrics.SQLTrace
 	cfg := globalConfig.Log.ToLogConfig()
@@ -157,7 +145,7 @@ func initFullQueryLogger() {
 		panic(errors.Trace(err))
 	}
 
-	fullQueryLogger = logger
+	return logger
 }
 
 // LogTimeObject time data struct whitch is used for trace log.
