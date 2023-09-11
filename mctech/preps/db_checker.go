@@ -161,7 +161,7 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 		logicName := mctx.ToLogicDbName(dbName)
 		matched := c.dbPredicate(logicName)
 
-		if matched {
+		if matched && !slices.Contains(logicNames, logicName) {
 			logicNames = append(logicNames, logicName)
 		}
 	}

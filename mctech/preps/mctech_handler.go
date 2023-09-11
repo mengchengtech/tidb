@@ -82,7 +82,7 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode)
 		if option.Tenant.Enabled {
 			modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 			modifyCtx.Reset()
-			
+
 			skipped := true // 是否需要跳过后续处理
 			// 启用租户隔离，改写SQL，添加租户隔离信息
 			if dbs, skipped, err = preprocessor.ResolveStmt(mctx, stmt, charset, collation); err != nil {
