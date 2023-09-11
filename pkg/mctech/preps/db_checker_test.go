@@ -71,9 +71,10 @@ func TestDatabaseChecker(t *testing.T) {
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	cases := []*testDatabaseCheckerCase{
-		// 当前账号属于tenant_only角色
+		// 当前账号不属于tenant_only角色
 		{false, []string{"global_cq3", "global_mtlp"}, ""},
-		// 当前租户信息来自账号所属角色
+		{false, []string{"global_mp", "global_mp"}, ""},
+		// 当前账号属于tenant_only角色
 		{true, []string{"global_platform", "global_ipm", "global_dw_1", "global_dw_2", "global_dwb"}, ""},     // 基础库，允许在一起使用
 		{true, []string{"global_platform", "global_cq3"}, ""},                                                 // 基础库，和一个普通库，允许在一起使用
 		{true, []string{"global_platform", "global_ipm", "global_cq3"}, ""},                                   // 基础库，和一个普通库，允许在一起使用
@@ -87,6 +88,7 @@ func TestDatabaseChecker(t *testing.T) {
 		{true, []string{"asset_component", "global_cq3"}, "dbs not allow in the same statement"},
 		{true, []string{"public_data", "global_cq3"}, "dbs not allow in the same statement"},
 		{true, []string{"public_XXXXX", "global_cq3"}, "dbs not allow in the same statement"},
+		{true, []string{"global_mp", "global_mp"}, ""},
 	}
 	doRunTest(t, checkRunTestCase, cases)
 }
