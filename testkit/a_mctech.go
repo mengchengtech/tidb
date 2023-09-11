@@ -9,7 +9,7 @@ import (
 	"github.com/pingcap/errors"
 )
 
-// Exec executes a sql statement using the prepared stmt API with Context
+// MustExecWithContext executes a sql statement using the prepared stmt API with Context
 func (tk *TestKit) MustExecWithContext(
 	ctx context.Context, sql string, args ...interface{}) {
 	res, err := tk.ExecWithContext(ctx, sql, args...)
@@ -21,7 +21,7 @@ func (tk *TestKit) MustExecWithContext(
 	}
 }
 
-// Exec executes a sql statement using the prepared stmt API with Context
+// MustQueryWithContext executes a sql statement using the prepared stmt API with Context
 func (tk *TestKit) MustQueryWithContext(
 	ctx context.Context, sql string, args ...interface{}) *Result {
 	comment := fmt.Sprintf("sql:%s, args:%v", sql, args)

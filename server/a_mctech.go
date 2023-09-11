@@ -3,8 +3,6 @@
 package server
 
 import (
-	// 强制初始化preps
-
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -15,6 +13,8 @@ import (
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/mctech"
+
+	// 强制初始化preps
 	_ "github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/sessionctx"
@@ -25,7 +25,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-func (cc *clientConn) beforeParseSql(ctx context.Context, sql string) (context.Context, mctech.Context, string, error) {
+func (cc *clientConn) beforeParseSQL(ctx context.Context, sql string) (context.Context, mctech.Context, string, error) {
 	handler := mctech.GetHandler()
 	subCtx, mctx, err := mctech.WithNewContext3(ctx, cc.ctx.Session, false)
 	if err != nil {
@@ -41,7 +41,7 @@ func (cc *clientConn) beforeParseSql(ctx context.Context, sql string) (context.C
 	return subCtx, mctx, sql, nil
 }
 
-func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sql string, stmts []ast.StmtNode) (err error) {
+func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sql string, stmts []ast.StmtNode) (err error) {
 	// 判断当前是否是查询语句
 	queryOnly := false
 	for _, stmt := range stmts {
@@ -85,13 +85,13 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 	if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
 		db, user, client := sessionctx.ResolveSession(cc.getCtx())
 		logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
-			zap.String("token", mctech.LogFilterToken),
+			zap.String("token", mctech.MCTechLogFilterToken),
 			zap.String("db", db), zap.String("user", user), zap.String("client", client),
 			zap.String("SQL", sql))
 		return err
 	}
 
-	if opts := config.GetMCTechConfig(); opts.Metrics.SqlLog.Enabled {
+	if opts := config.GetMCTechConfig(); opts.Metrics.QueryLog.Enabled {
 		exclude := opts.Metrics.Exclude
 		for _, stmt := range stmts {
 			dbs := mctx.GetDbs(stmt)
@@ -124,15 +124,15 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 				break
 			}
 
-			origSql := stmt.OriginalText()
-			if len(origSql) > opts.Metrics.SqlLog.MaxLength {
-				origSql = origSql[0:opts.Metrics.SqlLog.MaxLength]
+			origSQL := stmt.OriginalText()
+			if len(origSQL) > opts.Metrics.QueryLog.MaxLength {
+				origSQL = origSQL[0:opts.Metrics.QueryLog.MaxLength]
 			}
 			db, user, client := sessionctx.ResolveSession(cc.getCtx())
 			logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
-				zap.String("token", mctech.LogFilterToken),
+				zap.String("token", mctech.MCTechLogFilterToken),
 				zap.String("db", db), zap.String("user", user), zap.String("client", client),
-				zap.String("SQL", origSql))
+				zap.String("SQL", origSQL))
 		}
 	}
 
@@ -169,7 +169,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	if opts.Metrics.LargeQuery.Enabled {
 		cc.logLargeQuery(ctx, stmt, err == nil)
 	}
-	if opts.Metrics.SqlTrace.Enabled {
+	if opts.Metrics.SQLTrace.Enabled {
 		cc.traceFullQuery(ctx, stmt)
 	}
 }
@@ -196,7 +196,7 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ
 		}
 	}()
 
-	if slices.Contains(opts.Metrics.LargeQuery.SqlTypes, sqlType) {
+	if slices.Contains(opts.Metrics.LargeQuery.Types, sqlType) {
 		execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
 		execStmt.SaveLargeQuery(ctx, succ)
 	}
@@ -206,13 +206,13 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ
 func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
-	origSql := stmt.OriginalText()
+	origSQL := stmt.OriginalText()
 
 	// 是否为内部sql查询
 	internal := sessVars.InRestrictedSQL
 	if internal {
 		// FIXME: 仅调试代码
-		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", origSql))
+		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", origSQL))
 		return
 	}
 
@@ -278,15 +278,15 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	normalizedSQL, digest := stmtCtx.SQLDigest() //
 
 	var zip []byte
-	sqlLen := len(origSql)
-	if sqlLen > config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold {
+	sqlLen := len(origSQL)
+	if sqlLen > config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
-		if _, err := gz.Write([]byte(origSql)); err == nil {
+		if _, err := gz.Write([]byte(origSQL)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
 					zip = b.Bytes()
-					origSql = normalizedSQL[:128] + fmt.Sprintf("...len(%d)", sqlLen)
+					origSQL = normalizedSQL[:128] + fmt.Sprintf("...len(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}
@@ -302,7 +302,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 		// zap.Uint64("conn", connId),
 		zap.String("tp", sqlType),
 		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
-		zap.Object("time", &mctech.LobTimeObject{
+		zap.Object("time", &mctech.LogTimeObject{
 			All:   queryTime,
 			Parse: parseTime,
 			Plan:  compileTime,
@@ -315,7 +315,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 		zap.Int64("disk", diskMax),
 		zap.Int("keys", writeKeys),
 		zap.Int64("rows", resultRows),
-		zap.String("sql", origSql),
+		zap.String("sql", origSQL),
 	}
 
 	if len(zip) > 0 {

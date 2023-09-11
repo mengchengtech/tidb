@@ -21,73 +21,122 @@ import (
 )
 
 const (
+	// MCTechLargeQueryRowPrefixStr is slow log row prefix.
 	MCTechLargeQueryRowPrefixStr = "# "
 	// MCTechLargeQuerySpaceMarkStr is large query log space mark.
-	MCTechLargeQuerySpaceMarkStr   = ": "
-	MCTechLargeQuerySQLSuffixStr   = ";"
-	MCTechLargeQueryGzipPrefixStr  = "{gzip}"
+	MCTechLargeQuerySpaceMarkStr = ": "
+	// MCTechLargeQuerySQLSuffixStr is slow log suffix.
+	MCTechLargeQuerySQLSuffixStr = ";"
+	// MCTechLargeQueryGzipPrefixStr is compress sql prefix.
+	MCTechLargeQueryGzipPrefixStr = "{gzip}"
+	// MCTechLargeQueryStartPrefixStr is slow log start row prefix.
 	MCTechLargeQueryStartPrefixStr = MCTechLargeQueryRowPrefixStr + MCTechLargeQueryTimeStr + MCTechLargeQuerySpaceMarkStr
 	// MCTechLargeQueryUserAndHostStr is the user and host field name, which is compatible with MySQL.
 	MCTechLargeQueryUserAndHostStr = "USER@HOST"
 
-	MCTechLargeQueryTimeStr         = "TIME"
-	MCTechLargeQueryUserStr         = "USER"
-	MCTechLargeQueryHostStr         = "HOST"
-	MCTechLargeQueryQueryTimeStr    = "QUERY_TIME"
-	MCTechLargeQueryParseTimeStr    = "PARSE_TIME"
-	MCTechLargeQueryCompileTimeStr  = "COMPILE_TIME"
-	MCTechLargeQueryRewriteTimeStr  = "REWRITE_TIME"
+	// MCTechLargeQueryTimeStr is slow log field name.
+	MCTechLargeQueryTimeStr = "TIME"
+	// MCTechLargeQueryUserStr is slow log field name.
+	MCTechLargeQueryUserStr = "USER"
+	// MCTechLargeQueryHostStr only for slow_query table usage.
+	MCTechLargeQueryHostStr = "HOST"
+	// MCTechLargeQueryQueryTimeStr is slow log field name.
+	MCTechLargeQueryQueryTimeStr = "QUERY_TIME"
+	// MCTechLargeQueryParseTimeStr is the parse sql time.
+	MCTechLargeQueryParseTimeStr = "PARSE_TIME"
+	// MCTechLargeQueryCompileTimeStr is the compile plan time.
+	MCTechLargeQueryCompileTimeStr = "COMPILE_TIME"
+	// MCTechLargeQueryRewriteTimeStr is the rewrite time.
+	MCTechLargeQueryRewriteTimeStr = "REWRITE_TIME"
+	// MCTechLargeQueryOptimizeTimeStr is the optimization time.
 	MCTechLargeQueryOptimizeTimeStr = "OPTIMIZE_TIME"
 
-	MCTechLargeQueryDBStr        = "DB"
-	MCTechLargeQuerySQLStr       = "SQL"
-	MCTechLargeQuerySuccStr      = "SUCC"
-	MCTechLargeQueryMemMax       = "MEM_MAX"
-	MCTechLargeQueryDiskMax      = "DISK_MAX"
-	MCTechLargeQueryDigestStr    = "DIGEST"
+	// MCTechLargeQueryDBStr is slow log field name.
+	MCTechLargeQueryDBStr = "DB"
+	// MCTechLargeQuerySQLStr is slow log field name.
+	MCTechLargeQuerySQLStr = "Query"
+	// MCTechLargeQuerySuccStr is used to indicate whether this sql execute successfully.
+	MCTechLargeQuerySuccStr = "SUCC"
+	// MCTechLargeQueryMemMax is the max number bytes of memory used in this statement.
+	MCTechLargeQueryMemMax = "MEM_MAX"
+	// MCTechLargeQueryDiskMax is the nax number bytes of disk used in this statement.
+	MCTechLargeQueryDiskMax = "DISK_MAX"
+	// MCTechLargeQueryDigestStr is slow log field name.
+	MCTechLargeQueryDigestStr = "DIGEST"
+	// MCTechLargeQuerySQLLengthStr is large log length.
 	MCTechLargeQuerySQLLengthStr = "SQL_LENGTH"
-	MCTechLargeQueryServiceStr   = "SERVICE"
-	MCTechLargeQueryResultRows   = "RESULT_ROWS"
-	MCTechLargeQueryPlan         = "PLAN"
+	// MCTechLargeQueryServiceStr is the service that large log maybe from.
+	MCTechLargeQueryServiceStr = "SERVICE"
+	// MCTechLargeQueryResultRows is the row count of the SQL result.
+	MCTechLargeQueryResultRows = "RESULT_ROWS"
+	// MCTechLargeQueryPlan is used to record the query plan.
+	MCTechLargeQueryPlan = "PLAN"
 )
 
 const (
+	// MCTechSequenceMaxFetchCount is one of mctech config items
 	MCTechSequenceMaxFetchCount = "mctech_sequence_max_fetch_count"
-	MCTechSequenceBackend       = "mctech_sequence_backend"
+	// MCTechSequenceBackend is one of mctech config items
+	MCTechSequenceBackend = "mctech_sequence_backend"
 
-	MCTechDbCheckerEnabled    = "mctech_db_checker_enabled"
+	// MCTechDbCheckerEnabled is one of mctech config items
+	MCTechDbCheckerEnabled = "mctech_db_checker_enabled"
+	// MCTechDbCheckerCompatible is one of mctech config items
 	MCTechDbCheckerCompatible = "mctech_db_checker_compatible"
 
-	MCTechDbCheckerMutexDbs   = "mctech_checker_mutex_dbs"
-	MCTechDbCheckerExcludeDbs = "mctech_checker_exclude_dbs"
-	MCTechDbCheckerDbGroups   = "mctech_db_checker_db_groups"
+	// MCTechDbCheckerMutex is one of mctech config items
+	MCTechDbCheckerMutex = "mctech_checker_mutex"
+	// MCTechDbCheckerExclude is one of mctech config items
+	MCTechDbCheckerExclude = "mctech_checker_exclude"
+	// MCTechDbCheckerAcross is one of mctech config items
+	MCTechDbCheckerAcross = "mctech_db_checker_across"
 
-	MCTechTenantEnabled          = "mctech_tenant_enabled"
+	// MCTechTenantEnabled is one of mctech config items
+	MCTechTenantEnabled = "mctech_tenant_enabled"
+	// MCTechTenantForbiddenPrepare is one of mctech config items
 	MCTechTenantForbiddenPrepare = "mctech_tenant_forbidden_prepare"
 
-	MCTechDDLVersionEnabled   = "mctech_ddl_version_enabled"
-	MCTechDDLVersionName      = "mctech_ddl_version_name"
+	// MCTechDDLVersionEnabled is one of mctech config items
+	MCTechDDLVersionEnabled = "mctech_ddl_version_enabled"
+	// MCTechDDLVersionName is one of mctech config items
+	MCTechDDLVersionName = "mctech_ddl_version_name"
+	// MCTechDDLVersionDbMatches is one of mctech config items
 	MCTechDDLVersionDbMatches = "mctech_ddl_version_db_matches"
 
+	// MCTechMPPDefaultValue is one of mctech config items
 	MCTechMPPDefaultValue = "mctech_mpp_default_value"
 
-	MCTechMetricsLargeQueryEnabled     = "mctech_metrics_large_query_enabled"
-	MCTechMetricsLargeQueryFilename    = "mctech_metrics_large_query_file"
+	// MCTechMetricsLargeQueryEnabled is one of mctech config items
+	MCTechMetricsLargeQueryEnabled = "mctech_metrics_large_query_enabled"
+	// MCTechMetricsLargeQueryFilename is one of mctech config items
+	MCTechMetricsLargeQueryFilename = "mctech_metrics_large_query_file"
+	// MCTechMetricsLargeQueryFileMaxDays is one of mctech config items
 	MCTechMetricsLargeQueryFileMaxDays = "mctech_metrics_large_query_file_max_days"
+	// MCTechMetricsLargeQueryFileMaxSize is one of mctech config items
 	MCTechMetricsLargeQueryFileMaxSize = "mctech_metrics_large_query_file_max_size"
-	MCTechMetricsLargeQueryTypes       = "mctech_metrics_large_query_types"
-	MCTechMetricsLargeQueryThreshold   = "mctech_metrics_large_query_threshold"
+	// MCTechMetricsLargeQueryTypes is one of mctech config items
+	MCTechMetricsLargeQueryTypes = "mctech_metrics_large_query_types"
+	// MCTechMetricsLargeQueryThreshold is one of mctech config items
+	MCTechMetricsLargeQueryThreshold = "mctech_metrics_large_query_threshold"
 
-	MCTechMetricsSqlLogEnabled   = "mctech_metrics_sql_log_enabled"
-	MCTechMetricsSqlLogMaxLength = "mctech_metrics_sql_log_max_length"
+	// MCTechMetricsSQLLogEnabled is one of mctech config items
+	MCTechMetricsSQLLogEnabled = "mctech_metrics_sql_log_enabled"
+	// MCTechMetricsSQLLogMaxLength is one of mctech config items
+	MCTechMetricsSQLLogMaxLength = "mctech_metrics_sql_log_max_length"
 
-	MCTechMetricsSqlTraceEnabled           = "mctech_metrics_sql_trace_enabled"
-	MCTechMetricsSqlTraceFilename          = "mctech_metrics_sql_trace_file"
-	MCTechMetricsSqlTraceFileMaxSize       = "mctech_metrics_sql_trace_file_max_size"
-	MCTechMetricsSqlTraceFileMaxDays       = "mctech_metrics_sql_trace_file_max_days"
-	MCTechMetricsSqlTraceCompressThreshold = "mctech_metrics_sql_trace_compress_threshold"
+	// MCTechMetricsSQLTraceEnabled is one of mctech config items
+	MCTechMetricsSQLTraceEnabled = "mctech_metrics_sql_trace_enabled"
+	// MCTechMetricsSQLTraceFilename is one of mctech config items
+	MCTechMetricsSQLTraceFilename = "mctech_metrics_sql_trace_file"
+	// MCTechMetricsSQLTraceFileMaxSize is one of mctech config items
+	MCTechMetricsSQLTraceFileMaxSize = "mctech_metrics_sql_trace_file_max_size"
+	// MCTechMetricsSQLTraceFileMaxDays is one of mctech config items
+	MCTechMetricsSQLTraceFileMaxDays = "mctech_metrics_sql_trace_file_max_days"
+	// MCTechMetricsSQLTraceCompressThreshold is one of mctech config items
+	MCTechMetricsSQLTraceCompressThreshold = "mctech_metrics_sql_trace_compress_threshold"
 
-	MCTechMetricsExcludeDbs = "mctech_metrics_exclude_dbs"
+	// MCTechMetricsExclude is one of mctech config items
+	MCTechMetricsExclude = "mctech_metrics_exclude"
 )
 
 func init() {
@@ -105,9 +154,9 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechDbCheckerMutexDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerMutexDbs, ",")},
-		{Scope: ScopeNone, Name: MCTechDbCheckerExcludeDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExcludeDbs, ",")},
-		{Scope: ScopeNone, Name: MCTechDbCheckerDbGroups, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerDbGroups, "|")},
+		{Scope: ScopeNone, Name: MCTechDbCheckerMutex, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerMutex, ",")},
+		{Scope: ScopeNone, Name: MCTechDbCheckerExclude, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExclude, ",")},
+		{Scope: ScopeNone, Name: MCTechDbCheckerAcross, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerAcross, "|")},
 
 		{Scope: ScopeNone, Name: MCTechTenantEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantEnabled)},
 		{Scope: ScopeNone, Name: MCTechTenantForbiddenPrepare, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantForbiddenPrepare)},
@@ -138,15 +187,15 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFilename, skipInit: true, Type: TypeBool, Value: config.DefaultMetricsLargeQueryFilename},
 		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFileMaxDays, skipInit: true, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeQueryFileMaxDays)},
 		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFileMaxSize, skipInit: true, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeQueryFileMaxSize)},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeQueryTypes,
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, skipInit: true, Type: TypeStr, Value: strings.Join(config.AllAllowMetricsLargeQueryTypes, ","),
 			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
 				return validateEnumSet(original, ",", config.AllAllowMetricsLargeQueryTypes)
 			},
 			GetGlobal: func(s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes, ","), nil
+				return strings.Join(config.GetMCTechConfig().Metrics.LargeQuery.Types, ","), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes = config.StrToSlice(val, ",")
+				config.GetMCTechConfig().Metrics.LargeQuery.Types = config.StrToSlice(val, ",")
 				return nil
 			},
 		},
@@ -164,45 +213,45 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSqlLogEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSqlLogEnabled),
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLLogEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSQLLogEnabled),
 			GetGlobal: func(s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.SqlLog.Enabled), nil
+				return BoolToOnOff(config.GetMCTechConfig().Metrics.QueryLog.Enabled), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.SqlLog.Enabled = TiDBOptOn(val)
+				config.GetMCTechConfig().Metrics.QueryLog.Enabled = TiDBOptOn(val)
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSqlLogMaxLength, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSqlLogMaxLength),
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLLogMaxLength, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLLogMaxLength),
 			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.SqlLog.MaxLength), nil
+				return strconv.Itoa(config.GetMCTechConfig().Metrics.QueryLog.MaxLength), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
 				num, err := strconv.Atoi(val)
 				if err != nil {
 					return err
 				}
-				config.GetMCTechConfig().Metrics.SqlLog.MaxLength = num
+				config.GetMCTechConfig().Metrics.QueryLog.MaxLength = num
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSqlTraceEnabled),
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSQLTraceEnabled),
 			GetGlobal: func(s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.SqlTrace.Enabled), nil
+				return BoolToOnOff(config.GetMCTechConfig().Metrics.SQLTrace.Enabled), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.SqlTrace.Enabled = TiDBOptOn(val)
+				config.GetMCTechConfig().Metrics.SQLTrace.Enabled = TiDBOptOn(val)
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFilename, skipInit: true, Type: TypeBool, Value: config.DefaultMetricsSqlTraceFilename},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSqlTraceFileMaxSize)},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: strconv.Itoa(config.DefaultMetricsSqlTraceFileMaxDays)},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSqlTraceCompressThreshold),
+		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFilename, skipInit: true, Type: TypeBool, Value: config.DefaultMetricsSQLTraceFilename},
+		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLTraceFileMaxSize)},
+		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: strconv.Itoa(config.DefaultMetricsSQLTraceFileMaxDays)},
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLTraceCompressThreshold),
 			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold), nil
+				return strconv.Itoa(config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold), nil
 			},
 			SetGlobal: func(s *SessionVars, val string) error {
 				num, err := strconv.Atoi(val)
@@ -210,11 +259,11 @@ func init() {
 					return err
 				}
 
-				config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold = num
+				config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold = num
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsExcludeDbs, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultSqlTraceExcludeDbs, ","),
+		{Scope: ScopeGlobal, Name: MCTechMetricsExclude, skipInit: true, Type: TypeStr, Value: strings.Join(config.DefaultSQLTraceExclude, ","),
 			GetGlobal: func(s *SessionVars) (string, error) {
 				return strings.Join(config.GetMCTechConfig().Metrics.Exclude, ","), nil
 			},
@@ -234,8 +283,8 @@ func validateEnumSet(input string, sep string, possibleValues []string) (string,
 		return "", nil
 	}
 
-	var result []string
 	parts := strings.Split(s, sep)
+	result := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if len(part) == 0 || slices.Contains(result, part) {
@@ -250,7 +299,8 @@ func validateEnumSet(input string, sep string, possibleValues []string) (string,
 	return strings.Join(result, sep), nil
 }
 
-func LoadMctechSysVars() {
+// LoadMCTechSysVars init mctech custom global variables
+func LoadMCTechSysVars() {
 	option := config.GetMCTechConfig()
 	bytes, err := json.Marshal(option)
 	if err != nil {
@@ -263,9 +313,9 @@ func LoadMctechSysVars() {
 
 	SetSysVar(MCTechDbCheckerEnabled, BoolToOnOff(option.DbChecker.Enabled))
 	SetSysVar(MCTechDbCheckerCompatible, BoolToOnOff(option.DbChecker.Compatible))
-	SetSysVar(MCTechDbCheckerMutexDbs, strings.Join(option.DbChecker.MutexDbs, ","))
-	SetSysVar(MCTechDbCheckerExcludeDbs, strings.Join(option.DbChecker.ExcludeDbs, ","))
-	SetSysVar(MCTechDbCheckerDbGroups, strings.Join(option.DbChecker.DbGroups, ","))
+	SetSysVar(MCTechDbCheckerMutex, strings.Join(option.DbChecker.Mutex, ","))
+	SetSysVar(MCTechDbCheckerExclude, strings.Join(option.DbChecker.Exclude, ","))
+	SetSysVar(MCTechDbCheckerAcross, strings.Join(option.DbChecker.Across, ","))
 
 	SetSysVar(MCTechTenantEnabled, BoolToOnOff(option.Tenant.Enabled))
 	SetSysVar(MCTechTenantForbiddenPrepare, BoolToOnOff(option.Tenant.ForbiddenPrepare))
@@ -276,23 +326,23 @@ func LoadMctechSysVars() {
 
 	SetSysVar(MCTechMPPDefaultValue, option.MPP.DefaultValue)
 
-	SetSysVar(MCTechMetricsSqlLogEnabled, BoolToOnOff(option.Metrics.SqlLog.Enabled))
-	SetSysVar(MCTechMetricsSqlLogMaxLength, strconv.Itoa(option.Metrics.SqlLog.MaxLength))
+	SetSysVar(MCTechMetricsSQLLogEnabled, BoolToOnOff(option.Metrics.QueryLog.Enabled))
+	SetSysVar(MCTechMetricsSQLLogMaxLength, strconv.Itoa(option.Metrics.QueryLog.MaxLength))
 
 	SetSysVar(MCTechMetricsLargeQueryEnabled, BoolToOnOff(option.Metrics.LargeQuery.Enabled))
-	SetSysVar(MCTechMetricsLargeQueryTypes, strings.Join(option.Metrics.LargeQuery.SqlTypes, ","))
+	SetSysVar(MCTechMetricsLargeQueryTypes, strings.Join(option.Metrics.LargeQuery.Types, ","))
 	SetSysVar(MCTechMetricsLargeQueryThreshold, strconv.Itoa(option.Metrics.LargeQuery.Threshold))
 	SetSysVar(MCTechMetricsLargeQueryFilename, option.Metrics.LargeQuery.Filename)
 	SetSysVar(MCTechMetricsLargeQueryFileMaxDays, strconv.Itoa(option.Metrics.LargeQuery.FileMaxDays))
 	SetSysVar(MCTechMetricsLargeQueryFileMaxSize, strconv.Itoa(option.Metrics.LargeQuery.FileMaxSize))
 
-	SetSysVar(MCTechMetricsSqlTraceEnabled, BoolToOnOff(option.Metrics.SqlTrace.Enabled))
-	SetSysVar(MCTechMetricsSqlTraceFilename, option.Metrics.SqlTrace.Filename)
-	SetSysVar(MCTechMetricsSqlTraceFileMaxSize, strconv.Itoa(option.Metrics.SqlTrace.FileMaxSize))
-	SetSysVar(MCTechMetricsSqlTraceFileMaxDays, strconv.Itoa(option.Metrics.SqlTrace.FileMaxDays))
-	SetSysVar(MCTechMetricsSqlTraceCompressThreshold, strconv.Itoa(option.Metrics.SqlTrace.CompressThreshold))
+	SetSysVar(MCTechMetricsSQLTraceEnabled, BoolToOnOff(option.Metrics.SQLTrace.Enabled))
+	SetSysVar(MCTechMetricsSQLTraceFilename, option.Metrics.SQLTrace.Filename)
+	SetSysVar(MCTechMetricsSQLTraceFileMaxSize, strconv.Itoa(option.Metrics.SQLTrace.FileMaxSize))
+	SetSysVar(MCTechMetricsSQLTraceFileMaxDays, strconv.Itoa(option.Metrics.SQLTrace.FileMaxDays))
+	SetSysVar(MCTechMetricsSQLTraceCompressThreshold, strconv.Itoa(option.Metrics.SQLTrace.CompressThreshold))
 
-	SetSysVar(MCTechMetricsExcludeDbs, strings.Join(option.Metrics.Exclude, ","))
+	SetSysVar(MCTechMetricsExclude, strings.Join(option.Metrics.Exclude, ","))
 }
 
 // MCTechLargeQueryLogItems is a collection of items that should be included in the
@@ -331,6 +381,8 @@ type MCTechLargeQueryLogItems struct {
 // # Plan: tidb_decode_plan('ZJAwCTMyXzcJMAkyMAlkYXRhOlRhYmxlU2Nhbl82CjEJMTBfNgkxAR0AdAEY1Dp0LCByYW5nZTpbLWluZiwraW5mXSwga2VlcCBvcmRlcjpmYWxzZSwgc3RhdHM6cHNldWRvCg==')
 // use test;
 // insert into t select * from t;
+
+// LargeQueryFormat uses for formatting large query log.
 func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (string, error) {
 	var buf bytes.Buffer
 

@@ -655,7 +655,7 @@ func setGlobalVars() {
 	variable.SetSysVar(variable.TiDBEnforceMPPExecution, variable.BoolToOnOff(config.GetGlobalConfig().Performance.EnforceMPP))
 	variable.MemoryUsageAlarmRatio.Store(cfg.Instance.MemoryUsageAlarmRatio)
 	// add by zhangbing
-	variable.LoadMctechSysVars()
+	variable.LoadMCTechSysVars()
 	// add end
 	if hostname, err := os.Hostname(); err == nil {
 		variable.SetSysVar(variable.Hostname, hostname)

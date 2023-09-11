@@ -1283,7 +1283,7 @@ func processDefaultValue(c *table.Column, hasDefaultValue bool, setOnUpdateNow b
 	setTimestampDefaultValue(c, hasDefaultValue, setOnUpdateNow)
 	// add by zhangbing
 	setMCTechSequenceDefaultValue(c, hasDefaultValue, setOnUpdateNow)
-  // add end
+	// add end
 
 	setYearDefaultValue(c, hasDefaultValue)
 

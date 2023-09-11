@@ -224,7 +224,7 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 	return tk.ExecWithContext(ctx, sql, args...)
 }
 
-// Exec executes a sql statement using the prepared stmt API with Context
+// ExecWithContext executes a sql statement using the prepared stmt API with Context
 func (tk *TestKit) ExecWithContext(
 	ctx context.Context, sql string, args ...interface{}) (sqlexec.RecordSet, error) {
 	// modify end

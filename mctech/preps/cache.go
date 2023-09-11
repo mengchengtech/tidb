@@ -7,6 +7,7 @@ import (
 	"github.com/pingcap/tidb/util/intest"
 )
 
+// MCTechCache cache interface
 type MCTechCache interface {
 	Get(key string) (any, bool)
 	Set(key string, value any)
@@ -42,6 +43,7 @@ func (goc *goCacheCache) Init(expiration time.Duration, cleanup time.Duration) {
 	goc.rawCache = goCache.New(expiration, cleanup)
 }
 
+// NewCache create Cache instance whitch implements MCTechCache interface.
 func NewCache(expiration time.Duration, cleanup time.Duration) MCTechCache {
 	if intest.InTest {
 		return &simpleMapCache{rawCache: make(map[string]any)}

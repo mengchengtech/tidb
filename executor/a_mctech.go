@@ -123,7 +123,7 @@ func (e *PrepareExec) beforePrepare(ctx context.Context) error {
 	return nil
 }
 
-func (e *PrepareExec) afterParseSql(ctx context.Context, stmts []ast.StmtNode) (err error) {
+func (e *PrepareExec) afterParseSQL(ctx context.Context, stmts []ast.StmtNode) (err error) {
 	handler := mctech.GetHandler()
 	var mctx mctech.Context
 	mctx, err = mctech.GetContext(ctx)
@@ -1078,7 +1078,7 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 	memMax := sessVars.StmtCtx.MemTracker.MaxConsumed()
 	diskMax := sessVars.StmtCtx.DiskTracker.MaxConsumed()
 	sql := a.GetTextToLog()
-	service := GetSeriveFromSql(sql)
+	service := GetSeriveFromSQL(sql)
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCTechLargeQueryLogItems{
 		SQL:               sql,
@@ -1109,8 +1109,8 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 
 var pattern = regexp.MustCompile(`(?i)/*\s*from:\s*'([^']+)'`)
 
-// GetSeriveFromSql 尝试从sql中提取服务名称
-func GetSeriveFromSql(sql string) string {
+// GetSeriveFromSQL 尝试从sql中提取服务名称
+func GetSeriveFromSQL(sql string) string {
 	sub := sql
 	if len(sql) > 200 {
 		sub = sql[:200]
