@@ -121,9 +121,9 @@ const (
 	MCTechMetricsLargeQueryThreshold = "mctech_metrics_large_query_threshold"
 
 	// MCTechMetricsQueryLogEnabled is one of mctech config items
-	MCTechMetricsQueryLogEnabled = "mctech_metrics_sql_log_enabled"
+	MCTechMetricsQueryLogEnabled = "mctech_metrics_query_log_enabled"
 	// MCTechMetricsQueryLogMaxLength is one of mctech config items
-	MCTechMetricsQueryLogMaxLength = "mctech_metrics_sql_log_max_length"
+	MCTechMetricsQueryLogMaxLength = "mctech_metrics_query_log_max_length"
 
 	// MCTechMetricsSQLTraceEnabled is one of mctech config items
 	MCTechMetricsSQLTraceEnabled = "mctech_metrics_sql_trace_enabled"
@@ -224,7 +224,7 @@ func init() {
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsQueryLogMaxLength, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsQueryLogMaxLength),
-			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
+			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.QueryLog.MaxLength), nil
 			},
