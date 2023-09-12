@@ -113,7 +113,7 @@ const (
 	// DefaultSequenceMaxFetchCount one of config default value
 	DefaultSequenceMaxFetchCount = 1000
 	// DefaultSequenceBackend one of config default value
-	DefaultSequenceBackend = 3
+	DefaultSequenceBackend = 5
 
 	// DefaultDbCheckerEnabled one of config default value
 	DefaultDbCheckerEnabled = false
@@ -132,32 +132,32 @@ const (
 	// DefaultMPPValue one of config default value
 	DefaultMPPValue = "allow"
 
-	// DefaultMetricsSQLLogEnabled one of config default value
-	DefaultMetricsSQLLogEnabled = false
-	// DefaultMetricsSQLLogMaxLength one of config default value
-	DefaultMetricsSQLLogMaxLength = 32 * 1024 // 默认最大记录32K
+	// DefaultMetricsQueryLogEnabled one of config default value
+	DefaultMetricsQueryLogEnabled = false
+	// DefaultMetricsQueryLogMaxLength one of config default value
+	DefaultMetricsQueryLogMaxLength = 4 * 1024 // 默认最大记录4K
 
 	// DefaultMetricsLargeLogEnabled one of config default value
 	DefaultMetricsLargeLogEnabled = false
 	// DefaultMetricsLargeLogFilename one of config default value
 	DefaultMetricsLargeLogFilename = "mctech_large_query_log.log"
 	// DefaultMetricsLargeLogFileMaxDays one of config default value
-	DefaultMetricsLargeLogFileMaxDays = 1
+	DefaultMetricsLargeLogFileMaxDays = 3
 	// DefaultMetricsLargeLogFileMaxSize one of config default value
-	DefaultMetricsLargeLogFileMaxSize = 1 * 1024 * 1024
+	DefaultMetricsLargeLogFileMaxSize = 512 // 512MB
 	// DefaultMetricsLargeLogThreshold one of config default value
-	DefaultMetricsLargeLogThreshold = 1 * 1024 * 1024
+	DefaultMetricsLargeLogThreshold = 4 * 1024 * 1024
 
 	// DefaultMetricsSQLTraceEnabled one of config default value
 	DefaultMetricsSQLTraceEnabled = false
 	// DefaultMetricsSQLTraceFilename one of config default value
 	DefaultMetricsSQLTraceFilename = "mctech_tidb_full_sql.log"
 	// DefaultMetricsSQLTraceCompressThreshold one of config default value
-	DefaultMetricsSQLTraceCompressThreshold = 16 * 1024
+	DefaultMetricsSQLTraceCompressThreshold = 64 * 1024
 	// DefaultMetricsSQLTraceFileMaxDays one of config default value
-	DefaultMetricsSQLTraceFileMaxDays = 1
+	DefaultMetricsSQLTraceFileMaxDays = 3
 	// DefaultMetricsSQLTraceFileMaxSize one of config default value
-	DefaultMetricsSQLTraceFileMaxSize = 1024 // 1024MB
+	DefaultMetricsSQLTraceFileMaxSize = 512 // 512MB
 )
 
 var (
@@ -196,7 +196,7 @@ func newMCTech() MCTech {
 			APIPrefix:     "http://node-infra-sequence-service.mc/",
 		},
 		Encryption: Encryption{
-			Mock:      true,
+			Mock:      false,
 			AccessID:  "oJEKJh1wvqncJYASxp1Iiw",
 			APIPrefix: "http://node-infra-encryption-service.mc/",
 		},
@@ -225,8 +225,8 @@ func newMCTech() MCTech {
 		Metrics: MctechMetrics{
 			Exclude: []string{},
 			QueryLog: QueryLog{
-				Enabled:   DefaultMetricsSQLLogEnabled,
-				MaxLength: DefaultMetricsSQLLogMaxLength,
+				Enabled:   DefaultMetricsQueryLogEnabled,
+				MaxLength: DefaultMetricsQueryLogMaxLength,
 			},
 			LargeLog: LargeLog{
 				Enabled:     DefaultMetricsLargeLogEnabled,
@@ -292,8 +292,8 @@ func GetMCTechConfig() *MCTech {
 				opts.DbChecker.Enabled = v.(bool)
 			case "DDL.Version.Enabled":
 				opts.DDL.Version.Enabled = v.(bool)
-			case "Metrics.LargeQuery.Filename":
-				opts.Metrics.LargeQuery.Filename = v.(string)
+			case "Metrics.LargeLog.Filename":
+				opts.Metrics.LargeLog.Filename = v.(string)
 			}
 		}
 		failpoint.Return(&opts)
