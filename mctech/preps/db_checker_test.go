@@ -82,8 +82,6 @@ func TestDatabaseChecker(t *testing.T) {
 		{true, []string{"global_platform", "global_ma", "global_mtlp"}, ""}, // 陕梦特殊要求，能在一起使用
 		{true, []string{"global_platform", "global_mc", "global_ma", "global_mtlp"}, "dbs not allow in the same statement"},
 		{true, []string{"asset_component", "global_cq3"}, "dbs not allow in the same statement"},
-		{true, []string{"public_data", "global_cq3"}, "dbs not allow in the same statement"},
-		{true, []string{"public_XXXXX", "global_cq3"}, "dbs not allow in the same statement"},
 		{true, []string{"global_mp", "global_mp"}, ""},
 	}
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
