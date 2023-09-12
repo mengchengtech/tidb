@@ -100,8 +100,8 @@ func initLargeQueryLogger() *zap.Logger {
 
 	sqConfig := cfg.Config
 	sqConfig.Level = ""
-	sqConfig.File.MaxDays = largeQueryConfig.FileMaxDays // default 1 days
-	sqConfig.File.MaxSize = largeQueryConfig.FileMaxSize // 1024MB
+	sqConfig.File.MaxDays = largeQueryConfig.FileMaxDays
+	sqConfig.File.MaxSize = largeQueryConfig.FileMaxSize
 	sqConfig.File.Filename = largeQueryConfig.Filename
 
 	// create the large query logger
@@ -129,8 +129,8 @@ func initFullQueryLogger() *zap.Logger {
 	fsConfig.DisableTimestamp = true
 	fsConfig.DisableStacktrace = true
 	fsConfig.DisableCaller = true
-	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays // default 1 days
-	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize // 1024MB
+	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays
+	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize
 	fsConfig.File.Filename = sqlTraceConfig.Filename
 
 	logger, prop, err := log.InitLogger(&fsConfig)
