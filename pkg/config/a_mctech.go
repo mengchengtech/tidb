@@ -165,7 +165,7 @@ var (
 	DefaultDDLVersionDbMatches = []string{"global_*", "asset_*", "public_*", "*_custom"}
 
 	// DefaultDbCheckerMutex default value of config.DbChecker.Mutex
-	DefaultDbCheckerMutex = []string{"public_*", "asset_*", "global_*"}
+	DefaultDbCheckerMutex = []string{"asset_*", "global_*"}
 	// DefaultDbCheckerExclude default value of config.DbChecker.Exclude
 	DefaultDbCheckerExclude = []string{
 		"global_platform",
