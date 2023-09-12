@@ -120,10 +120,10 @@ const (
 	// MCTechMetricsLargeQueryThreshold is one of mctech config items
 	MCTechMetricsLargeQueryThreshold = "mctech_metrics_large_query_threshold"
 
-	// MCTechMetricsSQLLogEnabled is one of mctech config items
-	MCTechMetricsSQLLogEnabled = "mctech_metrics_sql_log_enabled"
-	// MCTechMetricsSQLLogMaxLength is one of mctech config items
-	MCTechMetricsSQLLogMaxLength = "mctech_metrics_sql_log_max_length"
+	// MCTechMetricsQueryLogEnabled is one of mctech config items
+	MCTechMetricsQueryLogEnabled = "mctech_metrics_query_log_enabled"
+	// MCTechMetricsQueryLogMaxLength is one of mctech config items
+	MCTechMetricsQueryLogMaxLength = "mctech_metrics_query_log_max_length"
 
 	// MCTechMetricsSQLTraceEnabled is one of mctech config items
 	MCTechMetricsSQLTraceEnabled = "mctech_metrics_sql_trace_enabled"
@@ -214,7 +214,7 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSQLLogEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSQLLogEnabled),
+		{Scope: ScopeGlobal, Name: MCTechMetricsQueryLogEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsQueryLogEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return BoolToOnOff(config.GetMCTechConfig().Metrics.QueryLog.Enabled), nil
 			},
@@ -223,8 +223,8 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSQLLogMaxLength, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLLogMaxLength),
-			MinValue: 16 * 1024, MaxValue: math.MaxInt64,
+		{Scope: ScopeGlobal, Name: MCTechMetricsQueryLogMaxLength, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsQueryLogMaxLength),
+			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.QueryLog.MaxLength), nil
 			},
@@ -327,8 +327,8 @@ func LoadMCTechSysVars() {
 
 	SetSysVar(MCTechMPPDefaultValue, option.MPP.DefaultValue)
 
-	SetSysVar(MCTechMetricsSQLLogEnabled, BoolToOnOff(option.Metrics.QueryLog.Enabled))
-	SetSysVar(MCTechMetricsSQLLogMaxLength, strconv.Itoa(option.Metrics.QueryLog.MaxLength))
+	SetSysVar(MCTechMetricsQueryLogEnabled, BoolToOnOff(option.Metrics.QueryLog.Enabled))
+	SetSysVar(MCTechMetricsQueryLogMaxLength, strconv.Itoa(option.Metrics.QueryLog.MaxLength))
 
 	SetSysVar(MCTechMetricsLargeQueryEnabled, BoolToOnOff(option.Metrics.LargeQuery.Enabled))
 	SetSysVar(MCTechMetricsLargeQueryTypes, strings.Join(option.Metrics.LargeQuery.Types, ","))
