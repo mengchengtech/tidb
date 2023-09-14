@@ -148,7 +148,7 @@ func (e *PrepareExec) afterParseSQL(ctx context.Context, stmts []ast.StmtNode) (
 // ---------------------------------------------- large sql query -----------------------------------------------
 
 // ParseLargeQueryBatchSize is the batch size of large-query-log lines for a worker to parse, exported for testing.
-var ParseLargeQueryBatchSize = 64
+const ParseLargeQueryBatchSize = 64
 
 // mctechLargeQueryRetriever is used to read large query log data.
 type mctechLargeQueryRetriever struct {
