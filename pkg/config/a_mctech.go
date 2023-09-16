@@ -365,8 +365,6 @@ func formatURL(str string) string {
 		u.Path += "/"
 	}
 	apiPrefix := u.String()
-
-	log.Info("api prefix: " + apiPrefix)
 	return apiPrefix
 }
 
