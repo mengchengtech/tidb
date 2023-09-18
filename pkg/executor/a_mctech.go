@@ -230,7 +230,12 @@ func (e *mctechLargeLogRetriever) initialize(ctx context.Context, sctx sessionct
 		e.extractor = &plannercore.MCTechLargeLogExtractor{}
 	}
 	e.initialized = true
-	e.files, err = e.getAllFiles(ctx, sctx, config.GetMCTechConfig().Metrics.LargeLog.Filename)
+	realFilename := config.GetMCTechConfig().Metrics.LargeLog.Filename
+	if realFilename, err = config.GetRealLogFile(realFilename); err != nil {
+		return err
+	}
+
+	e.files, err = e.getAllFiles(ctx, sctx, realFilename)
 	if e.extractor.Desc {
 		slices.Reverse(e.files)
 	}
