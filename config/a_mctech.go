@@ -4,14 +4,19 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
 
+	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
+	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
@@ -425,4 +430,45 @@ func StrToPossibleValueSlice(s string, sep string, possibleValues []string) ([]s
 		result = append(result, part)
 	}
 	return result, "", true
+}
+
+var pattern = regexp.MustCompile("(?i){([^}]+)}")
+
+func getHostName() string {
+	failpoint.Inject("GetHostName", func() {
+		failpoint.Return("tidb01")
+	})
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	return hostname
+}
+
+// GetRealLogFile get real log filename
+func GetRealLogFile(filename string) (ret string, err error) {
+	matches := pattern.FindStringSubmatch(filename)
+	if matches == nil {
+		return filename, nil
+	}
+
+	hostname := getHostName()
+	defer func() {
+		if r := recover(); r != nil {
+			err, _ = r.(error)
+		}
+	}()
+	realFileName := pattern.ReplaceAllStringFunc(filename, func(sub string) string {
+		switch strings.ToLower(sub) {
+		case "{hostname}":
+			return hostname
+		default:
+			errMsg := fmt.Sprintf("metrics log filename template DO NOT support '%s' only allow '%s'。", matches[1], "hostname")
+			logutil.BgLogger().Error(errMsg)
+			panic(errors.New(errMsg))
+		}
+	})
+
+	return realFileName, nil
 }
