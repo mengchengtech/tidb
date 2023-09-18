@@ -2,12 +2,17 @@ package mctech
 
 import (
 	"fmt"
+	"os"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
@@ -93,6 +98,46 @@ func (e *largeQueryEncoder) AddUintptr(string, uintptr)                      {}
 func (e *largeQueryEncoder) AddReflected(string, interface{}) error          { return nil }
 func (e *largeQueryEncoder) OpenNamespace(string)                            {}
 
+var pattern = regexp.MustCompile("(?i){([^}]+)}")
+
+func getHostName() string {
+	failpoint.Inject("GetHostName", func() {
+		failpoint.Return("tidb01")
+	})
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		panic(err)
+	}
+	return hostname
+}
+
+func getRealLogFile(filename string) (ret string, err error) {
+	matches := pattern.FindStringSubmatch(filename)
+	if matches == nil {
+		return filename, nil
+	}
+
+	hostname := getHostName()
+	defer func() {
+		if r := recover(); r != nil {
+			err, _ = r.(error)
+		}
+	}()
+	realFileName := pattern.ReplaceAllStringFunc(filename, func(sub string) string {
+		switch strings.ToLower(sub) {
+		case "{hostname}":
+			return hostname
+		default:
+			errMsg := fmt.Sprintf("metrics log filename template DO NOT support '%s' only allow '%s'。", matches[1], "hostname")
+			logutil.BgLogger().Error(errMsg)
+			panic(errors.New(errMsg))
+		}
+	})
+
+	return realFileName, nil
+}
+
 func initLargeQueryLogger() *zap.Logger {
 	globalConfig := config.GetGlobalConfig()
 	largeQueryConfig := globalConfig.MCTech.Metrics.LargeQuery
@@ -102,7 +147,12 @@ func initLargeQueryLogger() *zap.Logger {
 	sqConfig.Level = ""
 	sqConfig.File.MaxDays = largeQueryConfig.FileMaxDays
 	sqConfig.File.MaxSize = largeQueryConfig.FileMaxSize
-	sqConfig.File.Filename = largeQueryConfig.Filename
+
+	if realFilename, err := getRealLogFile(largeQueryConfig.Filename); err == nil {
+		sqConfig.File.Filename = realFilename
+	} else {
+		panic(err)
+	}
 
 	// create the large query logger
 	logger, prop, err := log.InitLogger(&sqConfig)
@@ -131,7 +181,11 @@ func initFullQueryLogger() *zap.Logger {
 	fsConfig.DisableCaller = true
 	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays
 	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize
-	fsConfig.File.Filename = sqlTraceConfig.Filename
+	if realFilename, err := getRealLogFile(sqlTraceConfig.Filename); err == nil {
+		fsConfig.File.Filename = realFilename
+	} else {
+		panic(err)
+	}
 
 	logger, prop, err := log.InitLogger(&fsConfig)
 	newEncoder := newZapEncoder(&cfg.Config)
