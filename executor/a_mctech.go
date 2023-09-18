@@ -229,7 +229,12 @@ func (e *mctechLargeQueryRetriever) initialize(ctx context.Context, sctx session
 		e.extractor = &plannercore.MCTechLargeQueryExtractor{}
 	}
 	e.initialized = true
-	e.files, err = e.getAllFiles(ctx, sctx, config.GetMCTechConfig().Metrics.LargeQuery.Filename)
+	realFilename := config.GetMCTechConfig().Metrics.LargeQuery.Filename
+	if realFilename, err = config.GetRealLogFile(realFilename); err != nil {
+		return err
+	}
+
+	e.files, err = e.getAllFiles(ctx, sctx, realFilename)
 	if e.extractor.Desc {
 		e.reverseLogFiles()
 	}
