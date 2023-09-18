@@ -257,8 +257,7 @@ func TestGetSeriveFromSql(t *testing.T) {
 }
 
 func TestLargeQueryWithoutLogFile(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),
@@ -272,8 +271,7 @@ func TestLargeQueryWithoutLogFile(t *testing.T) {
 }
 
 func TestLargeQuery(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 
 	f, err := os.CreateTemp("", "mctech-large-query-*.log")
