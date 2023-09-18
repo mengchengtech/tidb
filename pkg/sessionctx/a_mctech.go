@@ -3,7 +3,7 @@ package sessionctx
 import (
 	"strings"
 
-	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"go.uber.org/zap/zapcore"
 )
 
