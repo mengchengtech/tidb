@@ -313,10 +313,10 @@ func TestLargeQuery(t *testing.T) {
 	_, err = f.WriteString(strings.Join(resultFields, "\n"))
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
-	batchSize := executor.ParseSlowLogBatchSize
-	executor.ParseSlowLogBatchSize = 1
+	batchSize := executor.ParseLargeQueryBatchSize
+	executor.ParseLargeQueryBatchSize = 1
 	defer func() {
-		executor.ParseSlowLogBatchSize = batchSize
+		executor.ParseLargeQueryBatchSize = batchSize
 		require.NoError(t, os.Remove(f.Name()))
 	}()
 
