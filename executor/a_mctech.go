@@ -1074,15 +1074,16 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, sqlType string, succ bool
 		return
 	}
 
-	_, digest := sessVars.StmtCtx.SQLDigest()
+	stmtCtx := sessVars.StmtCtx
+	_, digest := stmtCtx.SQLDigest()
 	var stmtDetail execdetails.StmtExecDetails
 	stmtDetailRaw := a.GoCtx.Value(execdetails.StmtExecDetailKey)
 	if stmtDetailRaw != nil {
 		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
 	}
-	execDetail := sessVars.StmtCtx.GetExecDetails()
-	memMax := sessVars.StmtCtx.MemTracker.MaxConsumed()
-	diskMax := sessVars.StmtCtx.DiskTracker.MaxConsumed()
+	execDetail := stmtCtx.GetExecDetails()
+	memMax := stmtCtx.MemTracker.MaxConsumed()
+	diskMax := stmtCtx.DiskTracker.MaxConsumed()
 	sql := a.GetTextToLog()
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCTechLargeQueryLogItems{
