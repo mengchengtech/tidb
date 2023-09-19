@@ -2290,6 +2290,9 @@ func runStmt(ctx context.Context, se *session, s sqlexec.Statement) (rs sqlexec.
 	}
 
 	sessVars.TxnCtx.StatementCount++
+	// add by zhangbing
+	se.SetValue(sessionctx.MCTechExecStmtVarKey, s.(*executor.ExecStmt))
+	// add end
 	if rs != nil {
 		if se.GetSessionVars().StmtCtx.IsExplainAnalyzeDML {
 			if !sessVars.InTxn() {
@@ -2307,9 +2310,6 @@ func runStmt(ctx context.Context, se *session, s sqlexec.Statement) (rs sqlexec.
 	}
 
 	err = finishStmt(ctx, se, err, s)
-	// add by zhangbing
-	se.SetValue(sessionctx.MCTechExecStmtVarKey, s.(*executor.ExecStmt))
-	// add end
 	if se.hasFileTransInConn() {
 		// The query will be handled later in handleFileTransInConn,
 		// then should call the ExecStmt.FinishExecuteStmt to finish this statement.
