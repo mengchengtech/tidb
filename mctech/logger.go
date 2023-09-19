@@ -143,16 +143,16 @@ func initFullQueryLogger() *zap.Logger {
 	}
 
 	logger, prop, err := log.InitLogger(&fsConfig)
+	if err != nil {
+		panic(errors.Trace(err))
+	}
+
 	newEncoder := newZapEncoder(&cfg.Config)
 	newCore := log.NewTextCore(newEncoder, prop.Syncer, prop.Level)
 	logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 		return newCore
 	}))
 	prop.Core = newCore
-
-	if err != nil {
-		panic(errors.Trace(err))
-	}
 
 	return logger
 }
