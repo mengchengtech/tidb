@@ -1074,15 +1074,16 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, sqlType string, succ bool
 		return
 	}
 
-	_, digest := sessVars.StmtCtx.SQLDigest()
+	stmtCtx := sessVars.StmtCtx
+	_, digest := stmtCtx.SQLDigest()
 	var stmtDetail execdetails.StmtExecDetails
 	stmtDetailRaw := a.GoCtx.Value(execdetails.StmtExecDetailKey)
 	if stmtDetailRaw != nil {
 		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
 	}
-	execDetail := sessVars.StmtCtx.GetExecDetails()
-	memMax := sessVars.StmtCtx.MemTracker.MaxConsumed()
-	diskMax := sessVars.StmtCtx.DiskTracker.MaxConsumed()
+	execDetail := stmtCtx.GetExecDetails()
+	memMax := stmtCtx.MemTracker.MaxConsumed()
+	diskMax := stmtCtx.DiskTracker.MaxConsumed()
 	sql := a.GetTextToLog(true)
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCTechLargeQueryLogItems{
@@ -1099,9 +1100,9 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, sqlType string, succ bool
 		MemMax:            memMax,
 		DiskMax:           diskMax,
 		Succ:              succ,
-		Plan:              getPlanTree(sessVars.StmtCtx),
+		Plan:              getPlanTree(stmtCtx),
 		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
-		ResultRows:        GetResultRowsCount(sessVars.StmtCtx, a.Plan),
+		ResultRows:        GetResultRowsCount(stmtCtx, a.Plan),
 	}
 	largeLog, err := sessVars.LargeQueryFormat(largeItems)
 	if err != nil {
