@@ -132,8 +132,8 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sq
 }
 
 func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, err error) {
-	if err != nil {
-		// 只记录执行成功的sql
+	if sessVars := cc.ctx.GetSessionVars(); sessVars.InRestrictedSQL {
+		// 不记录内部sql
 		return
 	}
 
@@ -161,8 +161,12 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	if opts.Metrics.LargeQuery.Enabled {
 		cc.logLargeQuery(ctx, stmt, err == nil)
 	}
-	if opts.Metrics.SQLTrace.Enabled {
-		cc.traceFullQuery(ctx, stmt)
+
+	if err == nil {
+		// 全量sql只记录执行成功的sql
+		if opts.Metrics.SQLTrace.Enabled {
+			cc.traceFullQuery(ctx)
+		}
 	}
 }
 
@@ -195,21 +199,14 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ
 }
 
 // 记录全量sql
-func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
+func (cc *clientConn) traceFullQuery(ctx context.Context) {
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
-	origSQL := stmt.OriginalText()
+	origSQL := stmtCtx.OriginalSQL
 
-	// 是否为内部sql查询
-	internal := sessVars.InRestrictedSQL
-	if internal {
-		// FIXME: 仅调试代码
-		logutil.Logger(ctx).Warn("内部sql查询", zap.String("SQL", origSQL))
-		return
-	}
-
+	execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
 	var sqlType string // sql语句类型
-	switch stmt.(type) {
+	switch execStmt.StmtNode.(type) {
 	case *ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt: // execute
 		sqlType = "exec"
 	case *ast.BeginStmt, *ast.RollbackStmt, *ast.CommitStmt: // transaction
@@ -222,6 +219,10 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 		sqlType = "insert"
 	case *ast.UpdateStmt: // update
 		sqlType = "update"
+	case *ast.LoadDataStmt:
+		sqlType = "load"
+	case *ast.SetStmt:
+		sqlType = "set"
 	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, // lock/unlock table
 		// *ast.UseStmt,  // use
 		*ast.CallStmt, // precedure
@@ -241,7 +242,6 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	execDetails := stmtCtx.GetExecDetails()
 
 	var stmtDetail execdetails.StmtExecDetails
-	execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
 	stmtDetailRaw := execStmt.GoCtx.Value(execdetails.StmtExecDetailKey)
 	if stmtDetailRaw != nil {
 		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
