@@ -360,6 +360,10 @@ func (p *LogicalMemTable) PruneColumns(parentUsedCols []*expression.Column, opt 
 	case infoschema.TableStatementsSummary,
 		infoschema.TableStatementsSummaryHistory,
 		infoschema.TableSlowQuery,
+		// add by zhangbing
+		infoschema.TableMCTechLargeQuery,
+		infoschema.ClusterTableMCTechLargeQuery,
+		// add end
 		infoschema.ClusterTableStatementsSummary,
 		infoschema.ClusterTableStatementsSummaryHistory,
 		infoschema.ClusterTableSlowLog,
