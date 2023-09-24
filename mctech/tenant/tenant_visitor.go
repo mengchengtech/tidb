@@ -3,8 +3,8 @@ package tenant
 import (
 	"container/list"
 	"fmt"
-	"strings"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/parser/opcode"
@@ -53,8 +53,8 @@ func (s NodeScope[T]) Entries() *list.List {
 }
 
 type DatabaseNameVisitor struct {
-	dbPrefix string
-	dwIndex  int
+	context mctech.MCTechContext
+	dbNames map[string]bool // sql中用到的数据库名称
 }
 
 type cteScopeItem struct {
@@ -89,68 +89,27 @@ func (v *DatabaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) {
 	}
 
 	// database.table.column
-	if physicalDbName, ok := v.getPhysicalDbName(dbName); ok {
+	physicalDbName := v.context.ToPhysicalDbName(dbName)
+	if physicalDbName != dbName {
 		node.Name.Schema = model.NewCIStr(physicalDbName)
 	}
 }
 
 func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) {
 	dbName := node.Schema.L
-	if physicalDbName, ok := v.getPhysicalDbName(dbName); ok {
-		node.Schema = model.NewCIStr(physicalDbName)
-	}
-}
-
-func (v *DatabaseNameVisitor) getPhysicalDbName(dbName string) (string, bool) {
-	if v.isGlobalDb(dbName) && strings.HasSuffix(dbName, "_dw") {
-		// 处理global_dw
-		dwIndex := v.dwIndex
-		if dwIndex == 0 {
-			v.dwIndex = 1
+	if dbName != "" {
+		physicalDbName := v.context.ToPhysicalDbName(dbName)
+		if physicalDbName != dbName {
+			node.Schema = model.NewCIStr(physicalDbName)
 		}
-		dbName = fmt.Sprintf("%s_%d", dbName, v.dwIndex)
 	}
-
-	prefixAvaliable := false
-	if strings.HasPrefix(dbName, DB_GLOBAL_PREFIX) || // global_*是租户相关的
-		DB_PUBLIC_DATA == dbName || // public_data给将来留的，不花钱的
-		strings.HasPrefix(dbName, DB_ASSET_PREFIX) { // asset_* 是花钱的
-		prefixAvaliable = true
-	}
-
-	if !prefixAvaliable {
-		// 数据库不支持添加前缀
-		return "", false
-	}
-
-	dbPrefix := v.dbPrefix
-	if dbPrefix != "" {
-		dbName = fmt.Sprintf("%s_%s", dbPrefix, dbName)
-	}
-	return dbName, true
-}
-
-/**
- * 是否匹配 'global_'或者 '$dbPrefix_global_'
- */
-func (v *DatabaseNameVisitor) isGlobalDb(dbName string) bool {
-	if strings.HasPrefix(dbName, DB_GLOBAL_PREFIX) {
-		return true
-	}
-
-	if v.dbPrefix != "" {
-		return strings.HasPrefix(dbName, v.dbPrefix+"_"+DB_GLOBAL_PREFIX)
-	}
-
-	return false
+	v.dbNames[node.Schema.L] = true
 }
 
 type TenantVisitor struct {
 	*DatabaseNameVisitor
 	tenant              ast.ValueExpr
-	global              bool
-	excludes            []string
-	sessionDb           string
+	enabled             bool // 是否启用追加租户条件
 	withClauseScope     *NodeScope[*cteScopeItem]
 	columnModifiedScope *NodeScope[bool]
 }
@@ -158,40 +117,42 @@ type TenantVisitor struct {
 const TENANT_FIELD_NAME = "tenant"
 
 func NewTenantVisitor(
-	dbPrefix string, dwIndex int,
-	global bool, excludes []string, sessionDb string, tenant string,
-	charset string, collation string) ast.Visitor {
+	context mctech.MCTechContext,
+	charset string, collation string) *TenantVisitor {
 	visitor := &TenantVisitor{
 		DatabaseNameVisitor: &DatabaseNameVisitor{
-			dbPrefix: dbPrefix,
-			dwIndex:  dwIndex,
+			context: context,
+			dbNames: map[string]bool{},
 		},
-		global:              global,
-		excludes:            excludes,
-		sessionDb:           sessionDb,
 		withClauseScope:     NewNodeScope[*cteScopeItem](),
 		columnModifiedScope: NewNodeScope[bool](),
 	}
-
-	visitor.tenant = ast.NewValueExpr(tenant, charset, collation)
+	result := context.ResolveResult()
+	if result.Tenant() != "" {
+		visitor.enabled = true
+		visitor.tenant = ast.NewValueExpr(result.Tenant(), charset, collation)
+	}
 	return visitor
 }
 
 func (v *TenantVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	v.DatabaseNameVisitor.Enter(n)
-	switch node := n.(type) {
-	case
-		*ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt,
-		*ast.SetOprSelectList, *ast.SetOprStmt: // InsertStmt不支持With
-		v.enterWithScope(node)
-	case *ast.WithClause:
-		v.setWithClause(node)
-	case *ast.InsertStmt: // include replace / insert .... duplicate
-		v.enterInsertStatement(node)
-	case *ast.SubqueryExpr: // subquery
-		v.enterSubquery(node)
-	case *ast.TableSource:
-		v.enterTableSource(node)
+
+	if v.enabled {
+		switch node := n.(type) {
+		case
+			*ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt,
+			*ast.SetOprSelectList, *ast.SetOprStmt: // InsertStmt不支持With
+			v.enterWithScope(node)
+		case *ast.WithClause:
+			v.setWithClause(node)
+		case *ast.InsertStmt: // include replace / insert .... duplicate
+			v.enterInsertStatement(node)
+		case *ast.SubqueryExpr: // subquery
+			v.enterSubquery(node)
+		case *ast.TableSource:
+			v.enterTableSource(node)
+		}
 	}
 
 	return n, false
@@ -199,26 +160,28 @@ func (v *TenantVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 
 func (v *TenantVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	v.DatabaseNameVisitor.Leave(n)
-	switch node := n.(type) {
-	case
-		*ast.SetOprSelectList, *ast.SetOprStmt:
-		v.leaveWithScope(node)
-	case *ast.DeleteStmt:
-		v.leaveDeleteStatement(node)
-		v.leaveWithScope(node)
-	case *ast.UpdateStmt:
-		v.leaveUpdateStatement(node)
-		v.leaveWithScope(node)
-	case *ast.InsertStmt: // include replace / insert .... duplicate
-		v.leaveInsertStatement(node)
-	case *ast.SelectStmt:
-		v.leaveSelectStatement(node)
-		v.leaveWithScope(node)
-	case *ast.ValuesExpr: // values ()
-	case *ast.SubqueryExpr: // subquery
-		v.leaveSubquery(node)
-	case *ast.TableSource:
-		v.leaveTableSource(node)
+	if v.enabled {
+		switch node := n.(type) {
+		case
+			*ast.SetOprSelectList, *ast.SetOprStmt:
+			v.leaveWithScope(node)
+		case *ast.DeleteStmt:
+			v.leaveDeleteStatement(node)
+			v.leaveWithScope(node)
+		case *ast.UpdateStmt:
+			v.leaveUpdateStatement(node)
+			v.leaveWithScope(node)
+		case *ast.InsertStmt: // include replace / insert .... duplicate
+			v.leaveInsertStatement(node)
+		case *ast.SelectStmt:
+			v.leaveSelectStatement(node)
+			v.leaveWithScope(node)
+		case *ast.ValuesExpr: // values ()
+		case *ast.SubqueryExpr: // subquery
+			v.leaveSubquery(node)
+		case *ast.TableSource:
+			v.leaveTableSource(node)
+		}
 	}
 
 	return n, true
@@ -253,12 +216,14 @@ func (v *TenantVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	source := node.Table.TableRefs.Left.(*ast.TableSource)
 	tableName := source.Source.(*ast.TableName)
 	dbName := tableName.Schema.L
+
+	sd := v.context
 	if dbName == "" {
-		dbName = v.sessionDb
+		dbName = sd.CurrentDB()
 	}
 
 	// 只处理global_xxxx的表
-	if v.global || !v.isGlobalDb(dbName) {
+	if sd.ResolveResult().Global() || !sd.IsGlobalDb(dbName) {
 		return
 	}
 
@@ -440,6 +405,8 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 	table *ast.TableName, alias model.CIStr) ast.ExprNode {
 	dbName := table.Schema.O
 	tableName := table.Name.L
+
+	sd := v.context
 	if dbName == "" {
 		// dbName为空时，有可能是视图的引用
 		if v.withClauseScope.Size() > 0 {
@@ -456,10 +423,10 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 				el = el.Next()
 			}
 		}
-		dbName = v.sessionDb
+		dbName = sd.CurrentDB()
 	}
 
-	if !v.isGlobalDb(dbName) {
+	if !sd.IsGlobalDb(dbName) {
 		// 只处理global_xxxx的表
 		return nil
 	}
@@ -475,14 +442,15 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 	}
 
 	var condition ast.ExprNode
-	if v.global {
-		length := len(v.excludes)
+	rt := sd.ResolveResult()
+	if rt.Global() {
+		length := len(rt.Excludes())
 		if length > 0 {
 			exprList := make([]ast.ExprNode, length)
 			t := v.tenant.GetType()
 			charset := t.GetCharset()
 			collate := t.GetCollate()
-			for _, str := range v.excludes {
+			for _, str := range rt.Excludes() {
 				exprList = append(exprList, ast.NewValueExpr(str, charset, collate))
 			}
 			condition = &ast.PatternInExpr{
