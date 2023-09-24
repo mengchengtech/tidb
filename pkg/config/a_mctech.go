@@ -49,9 +49,12 @@ type SqlLog struct {
 }
 
 type LargeQuery struct {
-	Enabled   bool     `toml:"enabled" json:"enabled"`     // 是否启用large sql跟踪
-	Threshold int      `toml:"threshold" json:"threshold"` // 超出该长度的sql会记录到数据库某个位置
-	SqlTypes  []string `toml:"sql-types" json:"sql-types"` // 记录的sql类型
+	Enabled     bool     `toml:"enabled" json:"enabled"`             // 是否启用large sql跟踪
+	Filename    string   `toml:"file-name" json:"file-name"`         // 日志文件名称
+	FileMaxDays int      `toml:"file-max-days" json:"file-max-days"` // 日志最长保存天数
+	FileMaxSize int      `toml:"file-max-size" json:"file-max-size"` // 单个文件最大长度
+	Threshold   int      `toml:"threshold" json:"threshold"`         // 超出该长度的sql会记录到数据库某个位置
+	SqlTypes    []string `toml:"sql-types" json:"sql-types"`         // 记录的sql类型
 }
 
 // Sequence mctech_sequence functions used
@@ -120,10 +123,12 @@ const (
 	DefaultMetricsSqlLogEnabled   = false
 	DefaultMetricsSqlLogMaxLength = 32 * 1024 // 默认最大记录32K
 
-	DefaultMetricsLargeQueryEnabled   = false
-	DefaultMetricsLargeQueryFilename  = "mctech_large_query_log.log"
-	DefaultMetricsLargeQueryThreshold = 1 * 1024 * 1024
-	DefaultMetricsLargeQueryTypes     = "delete,insert,update,select"
+	DefaultMetricsLargeQueryEnabled     = false
+	DefaultMetricsLargeQueryFilename    = "mctech_large_query_log.log"
+	DefaultMetricsLargeQueryFileMaxDays = 1
+	DefaultMetricsLargeQueryFileMaxSize = 1 * 1024 * 1024
+	DefaultMetricsLargeQueryThreshold   = 1 * 1024 * 1024
+	DefaultMetricsLargeQueryTypes       = "delete,insert,update,select"
 
 	DefaultMetricsSqlTraceEnabled           = false
 	DefaultMetricsSqlTraceFilename          = "mctech_tidb_full_sql.log"
@@ -174,9 +179,12 @@ func newMCTech() MCTech {
 				MaxLength: DefaultMetricsSqlLogMaxLength,
 			},
 			LargeQuery: LargeQuery{
-				Enabled:   DefaultMetricsLargeQueryEnabled,
-				Threshold: DefaultMetricsLargeQueryThreshold,
-				SqlTypes:  StrToSlice(DefaultMetricsLargeQueryTypes, ","),
+				Enabled:     DefaultMetricsLargeQueryEnabled,
+				Filename:    DefaultMetricsLargeQueryFilename,
+				FileMaxDays: DefaultMetricsLargeQueryFileMaxDays,
+				FileMaxSize: DefaultMetricsLargeQueryFileMaxSize,
+				Threshold:   DefaultMetricsLargeQueryThreshold,
+				SqlTypes:    StrToSlice(DefaultMetricsLargeQueryTypes, ","),
 			},
 			SqlTrace: SqlTrace{
 				Enabled:           DefaultMetricsSqlTraceEnabled,
@@ -261,18 +269,31 @@ func storeMCTechConfig(config *Config) {
 
 	sqlTrace := &opts.Metrics.SqlTrace
 	if len(sqlTrace.Filename) == 0 {
-
-	}
-
-	if len(sqlTrace.Filename) == 0 {
+		// 设置sqlTrace 日志文件的默认路径
 		sqlTrace.Filename = DefaultMetricsSqlTraceFilename
 	}
 
-	if !filepath.IsAbs(sqlTrace.Filename) {
-		logFile := config.Log.File.Filename
-		if len(logFile) > 0 {
-			logDir := filepath.Dir(logFile)
-			sqlTrace.Filename = filepath.Join(logDir, DefaultMetricsSqlTraceFilename)
+	largeQuery := &opts.Metrics.LargeQuery
+	if len(largeQuery.Filename) == 0 {
+		// 设置large query 日志文件的路径
+		sqlTrace.Filename = DefaultMetricsLargeQueryFilename
+	}
+
+	// 当前方法会多次运行，在第一次运行时 config.Log.File.Filename 不一定有值。
+	// 需要保证在多次运行的情况下路径设置的正确性
+	logFile := config.Log.File.Filename
+	var logDir string
+	if len(logFile) > 0 {
+		logDir = filepath.Dir(logFile)
+	}
+
+	if len(logDir) > 0 {
+		if !filepath.IsAbs(sqlTrace.Filename) {
+			sqlTrace.Filename = filepath.Join(logDir, sqlTrace.Filename)
+		}
+
+		if !filepath.IsAbs(largeQuery.Filename) {
+			largeQuery.Filename = filepath.Join(logDir, largeQuery.Filename)
 		}
 	}
 
