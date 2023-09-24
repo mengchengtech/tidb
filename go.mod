@@ -2,6 +2,8 @@ module github.com/pingcap/tidb
 
 go 1.21
 
+require github.com/patrickmn/go-cache v2.1.0+incompatible
+
 require (
 	cloud.google.com/go/storage v1.30.1
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.6.0
