@@ -16,7 +16,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb/util/logutil"
+	"github.com/pingcap/tidb/pkg/util/logutil"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
@@ -187,7 +187,7 @@ var (
 		"mysql", "information_schema", "metrics_schema", "performance_schema",
 	}
 
-	// DefaultAllowMetricsLargeLogTypes default value of config.Metrics.LargeQuery.Types
+	// DefaultAllowMetricsLargeLogTypes default value of config.Metrics.LargeLog.Types
 	DefaultAllowMetricsLargeLogTypes = []string{"delete", "insert", "update", "select"}
 )
 

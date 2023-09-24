@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/kv"
-	"github.com/pingcap/tidb/mctech"
 
 	// 强制调用preps包里的init方法
 	"github.com/pingcap/failpoint"
@@ -256,21 +256,21 @@ func TestGetSeriveFromSql(t *testing.T) {
 	}
 }
 
-func TestLargeQueryWithoutLogFile(t *testing.T) {
+func TestLargeLogWithoutLogFile(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
-		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),
+		mock.M(t, map[string]any{"Metrics.LargeLog.Filename": "mctech-large-log-exist.log"}),
 	)
 	// cfg := config.GetMCTechConfig()
 	tk := testkit.NewTestKit(t, store)
-	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_query_file='%v'", cfg.Metrics.LargeQuery.Filename))
+	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_log_file='%v'", cfg.Metrics.LargeLog.Filename))
 	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
 	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())
 	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
-func TestLargeQuery(t *testing.T) {
+func TestLargeLog(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 
@@ -305,15 +305,15 @@ func TestLargeQuery(t *testing.T) {
 	_, err = f.WriteString(strings.Join(resultFields, "\n"))
 	require.NoError(t, err)
 	require.NoError(t, f.Close())
-	batchSize := executor.ParseSlowLogBatchSize
-	executor.ParseSlowLogBatchSize = 1
+	batchSize := executor.ParseLargeLogBatchSize
+	executor.ParseLargeLogBatchSize = 1
 	defer func() {
-		executor.ParseSlowLogBatchSize = batchSize
+		executor.ParseLargeLogBatchSize = batchSize
 		require.NoError(t, os.Remove(f.Name()))
 	}()
 
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
-		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": f.Name()}),
+		mock.M(t, map[string]any{"Metrics.LargeLog.Filename": f.Name()}),
 	)
 
 	tk.MustQuery("select count(*) from `information_schema`.`mctech_large_query` where time > '2020-10-16 20:08:13' and time < '2020-10-16 21:08:13'").Check(testkit.Rows("1"))

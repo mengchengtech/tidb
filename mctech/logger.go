@@ -15,7 +15,7 @@ import (
 
 var (
 	fullQueryLogger,
-	largeQueryLogger *zap.Logger
+	largeLogLogger *zap.Logger
 	fqOnce = &sync.Once{}
 	lqOnce = &sync.Once{}
 )
@@ -33,9 +33,9 @@ func F() *zap.Logger {
 func L() *zap.Logger {
 	// 只能懒加载，需要在启动时先加载 config模块
 	lqOnce.Do(func() {
-		largeQueryLogger = initLargeQueryLogger()
+		largeLogLogger = initLargeLogLogger()
 	})
-	return largeQueryLogger
+	return largeLogLogger
 }
 
 func newZapEncoder(cfg *log.Config) zapcore.Encoder {
@@ -93,7 +93,7 @@ func (e *largeLogEncoder) AddUintptr(string, uintptr)                      {}
 func (e *largeLogEncoder) AddReflected(string, interface{}) error          { return nil }
 func (e *largeLogEncoder) OpenNamespace(string)                            {}
 
-func initLargeQueryLogger() *zap.Logger {
+func initLargeLogLogger() *zap.Logger {
 	globalConfig := config.GetGlobalConfig()
 	largeLogConfig := globalConfig.MCTech.Metrics.LargeLog
 	cfg := globalConfig.Log.ToLogConfig()

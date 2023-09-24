@@ -1151,7 +1151,7 @@ func (a *ExecStmt) SaveLargeLog(ctx context.Context, succ bool) {
 	}
 	largeLog, err := sessVars.LargeLogFormat(largeItems)
 	if err != nil {
-		logutil.Logger(ctx).Error("record large query error", zap.Error(err), zap.Stack("stack"))
+		logutil.Logger(ctx).Error("record large log error", zap.Error(err), zap.Stack("stack"))
 		return
 	}
 

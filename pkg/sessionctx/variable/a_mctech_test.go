@@ -16,7 +16,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-func TestLargeQueryFormat(t *testing.T) {
+func TestLargeLogFormat(t *testing.T) {
 	ctx := mock.NewContext()
 
 	seVar := ctx.GetSessionVars()
