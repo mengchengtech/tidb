@@ -9,7 +9,6 @@ import (
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/auth"
-	_ "github.com/pingcap/tidb/parser/test_driver"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/stretchr/testify/require"
 )
@@ -48,7 +47,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 		"  `b` int(11) DEFAULT NULL,",
 		"  `c` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),",
 		"  `__version` bigint(20) NOT NULL DEFAULT MCTECH_SEQUENCE ON UPDATE MCTECH_SEQUENCE,",
-		"  PRIMARY KEY (`a`) /*T![clustered_index] NONCLUSTERED */",
+		"  PRIMARY KEY (`a`) /*T![clustered_index] CLUSTERED */",
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"}, "\n")
 	require.Equal(t, expected, createSQL)
 	res = tk.MustQuery("show columns from version_table")
