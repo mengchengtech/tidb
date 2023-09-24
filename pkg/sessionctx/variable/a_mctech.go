@@ -30,9 +30,9 @@ const (
 
 	MCTechMPPDefaultValue = "mctech_mpp_default_value"
 
-	MCTechMetricsLargeSqlEnabled   = "mctech_metrics_large_sql_enabled"
-	MCTechMetricsLargeSqlTypes     = "mctech_metrics_large_sql_types"
-	MCTechMetricsLargeSqlThreshold = "mctech_metrics_large_sql_threshold"
+	MCTechMetricsLargeQueryEnabled   = "mctech_metrics_large_query_enabled"
+	MCTechMetricsLargeQueryTypes     = "mctech_metrics_large_query_types"
+	MCTechMetricsLargeQueryThreshold = "mctech_metrics_large_query_threshold"
 
 	MCTechMetricsSqlLogEnabled   = "mctech_metrics_sql_log_enabled"
 	MCTechMetricsSqlLogMaxLength = "mctech_metrics_sql_log_max_length"
@@ -70,38 +70,38 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeSqlEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsLargeSqlEnabled),
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsLargeQueryEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.LargeSql.Enabled), nil
+				return BoolToOnOff(config.GetMCTechConfig().Metrics.LargeQuery.Enabled), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeSql.Enabled = TiDBOptOn(val)
+				config.GetMCTechConfig().Metrics.LargeQuery.Enabled = TiDBOptOn(val)
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeSqlTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeSqlTypes,
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeQueryTypes,
 			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
-				return validateEnumSet(original, ",", config.AllMetricsLargeSqlTypes)
+				return validateEnumSet(original, ",", config.AllMetricsLargeQueryTypes)
 			},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.LargeSql.SqlTypes, ","), nil
+				return strings.Join(config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeSql.SqlTypes = config.StrToSlice(val, ",")
+				config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes = config.StrToSlice(val, ",")
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeSqlThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsLargeSqlThreshold),
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsLargeQueryThreshold),
 			MinValue: 4 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.LargeSql.Threshold), nil
+				return strconv.Itoa(config.GetMCTechConfig().Metrics.LargeQuery.Threshold), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
 				num, err := strconv.Atoi(val)
 				if err != nil {
 					return err
 				}
-				config.GetMCTechConfig().Metrics.LargeSql.Threshold = num
+				config.GetMCTechConfig().Metrics.LargeQuery.Threshold = num
 				return nil
 			},
 		},
@@ -128,7 +128,7 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultSqlTraceEnabled),
+		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSqlTraceEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return BoolToOnOff(config.GetMCTechConfig().Metrics.SqlTrace.Enabled), nil
 			},
@@ -137,10 +137,10 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFilename, skipInit: true, Type: TypeBool, Value: config.DefaultSqlTraceFilename},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceFileMaxSize)},
-		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: strconv.Itoa(config.DefaultSqlTraceFileMaxDays)},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultSqlTraceCompressThreshold),
+		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFilename, skipInit: true, Type: TypeBool, Value: config.DefaultMetricsSqlTraceFilename},
+		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxSize, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSqlTraceFileMaxSize)},
+		{Scope: ScopeNone, Name: MCTechMetricsSqlTraceFileMaxDays, skipInit: true, Type: TypeStr, Value: strconv.Itoa(config.DefaultMetricsSqlTraceFileMaxDays)},
+		{Scope: ScopeGlobal, Name: MCTechMetricsSqlTraceCompressThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSqlTraceCompressThreshold),
 			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return strconv.Itoa(config.GetMCTechConfig().Metrics.SqlTrace.CompressThreshold), nil
@@ -183,7 +183,7 @@ func validateEnumSet(input string, sep string, possibleValues []string) (string,
 			continue
 		}
 		if !slices.Contains(possibleValues, part) {
-			return input, ErrWrongValueForVar.GenWithStackByArgs(MCTechMetricsLargeSqlTypes, input)
+			return input, ErrWrongValueForVar.GenWithStackByArgs(MCTechMetricsLargeQueryTypes, input)
 		}
 
 		result = append(result, part)
@@ -213,18 +213,18 @@ func LoadMctechSysVars() {
 
 	SetSysVar(MCTechMPPDefaultValue, option.MPP.DefaultValue)
 
-	SetSysVar(MCTechMetricsLargeSqlEnabled, BoolToOnOff(option.Metrics.LargeSql.Enabled))
-	SetSysVar(MCTechMetricsLargeSqlTypes, strings.Join(option.Metrics.LargeSql.SqlTypes, ","))
-	SetSysVar(MCTechMetricsLargeSqlThreshold, strconv.Itoa(option.Metrics.LargeSql.Threshold))
 	SetSysVar(MCTechMetricsSqlLogEnabled, BoolToOnOff(option.Metrics.SqlLog.Enabled))
 	SetSysVar(MCTechMetricsSqlLogMaxLength, strconv.Itoa(option.Metrics.SqlLog.MaxLength))
 
+	SetSysVar(MCTechMetricsLargeQueryEnabled, BoolToOnOff(option.Metrics.LargeQuery.Enabled))
+	SetSysVar(MCTechMetricsLargeQueryTypes, strings.Join(option.Metrics.LargeQuery.SqlTypes, ","))
+	SetSysVar(MCTechMetricsLargeQueryThreshold, strconv.Itoa(option.Metrics.LargeQuery.Threshold))
+
 	SetSysVar(MCTechMetricsSqlTraceEnabled, BoolToOnOff(option.Metrics.SqlTrace.Enabled))
 	SetSysVar(MCTechMetricsSqlTraceFilename, option.Metrics.SqlTrace.Filename)
-
 	SetSysVar(MCTechMetricsSqlTraceFileMaxSize, strconv.Itoa(option.Metrics.SqlTrace.FileMaxSize))
 	SetSysVar(MCTechMetricsSqlTraceFileMaxDays, strconv.Itoa(option.Metrics.SqlTrace.FileMaxDays))
-
 	SetSysVar(MCTechMetricsSqlTraceCompressThreshold, strconv.Itoa(option.Metrics.SqlTrace.CompressThreshold))
+
 	SetSysVar(MCTechMetricsExcludeDbs, strings.Join(option.Metrics.Exclude, ","))
 }

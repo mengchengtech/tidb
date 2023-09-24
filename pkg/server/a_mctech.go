@@ -173,16 +173,16 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		}
 	}()
 
-	if opts.Metrics.LargeSql.Enabled {
-		cc.logLargeSql(ctx, stmt)
+	if opts.Metrics.LargeQuery.Enabled {
+		cc.logLargeQuery(ctx, stmt)
 	}
 	if opts.Metrics.SqlTrace.Enabled {
-		cc.traceFullSql(ctx, stmt)
+		cc.traceFullQuery(ctx, stmt)
 	}
 }
 
 // 记录超长sql
-func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
+func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode) {
 	opts := config.GetMCTechConfig()
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
@@ -198,10 +198,10 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
 		sqlType = "update"
 	}
 
-	if slices.Contains(opts.Metrics.LargeSql.SqlTypes, sqlType) {
+	if slices.Contains(opts.Metrics.LargeQuery.SqlTypes, sqlType) {
 		origSql := stmt.OriginalText()
 		sqlLength := len(origSql)
-		if sqlLength > opts.Metrics.LargeSql.Threshold {
+		if sqlLength > opts.Metrics.LargeQuery.Threshold {
 			_, digest := stmtCtx.SQLDigest() //
 			db, user, _ := sessionctx.ResolveSession(cc.getCtx())
 
@@ -239,7 +239,7 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
 }
 
 // 记录全量sql
-func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode) {
+func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	origSql := stmt.OriginalText()
