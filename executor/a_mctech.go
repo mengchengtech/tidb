@@ -1078,11 +1078,10 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 	memMax := sessVars.StmtCtx.MemTracker.MaxConsumed()
 	diskMax := sessVars.StmtCtx.DiskTracker.MaxConsumed()
 	sql := a.GetTextToLog(true)
-	service := GetSeriveFromSQL(sql)
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCTechLargeQueryLogItems{
 		SQL:               sql,
-		Service:           service,
+		Service:           GetSeriveFromSQL(sql),
 		Digest:            digest.String(),
 		TimeTotal:         costTime,
 		TimeParse:         sessVars.DurationParse,
