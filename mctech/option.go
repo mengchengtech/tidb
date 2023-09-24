@@ -57,6 +57,16 @@ type Option struct {
 
 	// 是否支持dbPrefix hint
 	MsicDbPrefixEnabled bool
+
+	LargeSqlEnabled   bool
+	LargeSqlTypes     []string
+	LargeSqlThreshold int
+
+	SqlTraceEnabled           bool
+	SqlTraceCompressThreshold int
+
+	SqlLogEnabled   bool
+	SqlLogMaxLength int
 }
 
 var mctechOpts *Option
@@ -129,6 +139,16 @@ func initMCTechOption() {
 		DDLVersionColumnEnabled: opts.DDL.Version.Enabled,
 		DDLVersionColumnName:    opts.DDL.Version.Name,
 		DDLVersionFilters:       opts.DDL.Version.DbMatches,
+
+		LargeSqlEnabled:   opts.Metrics.LargeSql.Enabled,
+		LargeSqlThreshold: opts.Metrics.LargeSql.Threshold,
+		LargeSqlTypes:     strings.Split(strings.TrimSpace(opts.Metrics.LargeSql.SqlTypes), ","),
+
+		SqlTraceEnabled:           opts.SqlTrace.Enabled,
+		SqlTraceCompressThreshold: opts.SqlTrace.CompressThreshold,
+
+		SqlLogEnabled:   opts.Metrics.SqlLog.Enabled,
+		SqlLogMaxLength: opts.Metrics.SqlLog.MaxLength,
 	}
 
 	if option.DefaultMPPValue == "" {
