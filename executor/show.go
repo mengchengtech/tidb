@@ -684,6 +684,17 @@ func (e *ShowExec) fetchShowColumns(ctx context.Context) error {
 				}
 				defaultValStr = timeValue.GetMysqlTime().String()
 			}
+
+			// add by zhangbing
+			if col.GetType() == mysql.TypeLonglong && defaultValStr != "0" && !strings.HasPrefix(strings.ToUpper(defaultValStr), strings.ToUpper(ast.MCTechSequence)) {
+				longValue, err := table.GetColDefaultValue(e.ctx, col.ToInfo())
+				if err != nil {
+					return errors.Trace(err)
+				}
+				defaultValStr = strconv.FormatInt(longValue.GetInt64(), 10)
+			}
+			// add end
+
 			if col.GetType() == mysql.TypeBit {
 				defaultValBinaryLiteral := types.BinaryLiteral(defaultValStr)
 				columnDefault = defaultValBinaryLiteral.ToBitLiteralString(true)
@@ -1050,6 +1061,10 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 					if col.GetDecimal() > 0 {
 						buf.WriteString(fmt.Sprintf("(%d)", col.GetDecimal()))
 					}
+				// add by zhangbing
+				case "MCTECH_SEQUENCE":
+					buf.WriteString(" DEFAULT MCTECH_SEQUENCE")
+				// add end
 				default:
 					defaultValStr := fmt.Sprintf("%v", defaultValue)
 					// If column is timestamp, and default value is not current_timestamp, should convert the default value to the current session time zone.
@@ -1074,7 +1089,13 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 				}
 			}
 			if mysql.HasOnUpdateNowFlag(col.GetFlag()) {
-				buf.WriteString(" ON UPDATE CURRENT_TIMESTAMP")
+				// modify by zhangbing
+				if col.FieldType.GetType() == mysql.TypeLonglong {
+					buf.WriteString(" ON UPDATE MCTECH_SEQUENCE")
+				} else {
+					buf.WriteString(" ON UPDATE CURRENT_TIMESTAMP")
+				}
+				// modify end
 				buf.WriteString(table.OptionalFsp(&col.FieldType))
 			}
 		}
