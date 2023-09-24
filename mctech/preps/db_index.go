@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"time"
 
-	goCache "github.com/patrickmn/go-cache"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pkg/errors"
 )
@@ -17,8 +16,8 @@ const paramRequestIDKey = "requestId"
 // 整体切换前后台库的参数值KEY
 const localCacheKey = "$$global"
 
-var ticketMap = goCache.New(60*time.Second, 20*time.Second)
-var currentMap = goCache.New(15*time.Second, 10*time.Second)
+var ticketMap = NewCache(60*time.Second, 20*time.Second)
+var currentMap = NewCache(15*time.Second, 10*time.Second)
 
 type dbSelector struct {
 	// private final static URI BASE_URI;
@@ -89,7 +88,7 @@ func (d *dbSelector) getDbIndexByTicket(env string, requestID string) (mctech.Db
 	if err != nil {
 		return -1, err
 	}
-	ticketMap.Set(requestID, value, 0)
+	ticketMap.Set(requestID, value)
 	return value, nil
 }
 
@@ -107,7 +106,7 @@ func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) 
 		return -1, err
 	}
 
-	currentMap.Set(localCacheKey, index, 0)
+	currentMap.Set(localCacheKey, index)
 	return index, nil
 }
 
