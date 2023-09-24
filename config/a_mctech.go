@@ -28,10 +28,10 @@ type MCTech struct {
 }
 
 type MctechMetrics struct {
-	Exclude  []string `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
-	SqlLog   SqlLog   `toml:"sql-log" json:"sql-log"`
-	LargeSql LargeSql `toml:"large-sql" json:"large-sql"`
-	SqlTrace SqlTrace `toml:"sql-trace" json:"sql-trace"`
+	Exclude    []string   `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
+	SqlLog     SqlLog     `toml:"sql-log" json:"sql-log"`
+	LargeQuery LargeQuery `toml:"large-query" json:"large-query"`
+	SqlTrace   SqlTrace   `toml:"sql-trace" json:"sql-trace"`
 }
 
 type SqlTrace struct {
@@ -48,7 +48,7 @@ type SqlLog struct {
 	MaxLength int  `toml:"max-length" json:"max-length"` // 日志里记录的sql最大值
 }
 
-type LargeSql struct {
+type LargeQuery struct {
 	Enabled   bool     `toml:"enabled" json:"enabled"`     // 是否启用large sql跟踪
 	Threshold int      `toml:"threshold" json:"threshold"` // 超出该长度的sql会记录到数据库某个位置
 	SqlTypes  []string `toml:"sql-types" json:"sql-types"` // 记录的sql类型
@@ -103,25 +103,33 @@ type VersionColumn struct {
 }
 
 const (
-	DefaultSequenceMaxFetchCount     = 1000
-	DefaultSequenceBackend           = 3
-	DefaultDbCheckerEnabled          = false
-	DefaultTenantEnabled             = false
-	DefaultTenantForbiddenPrepare    = false
-	DefaultDDLVersionEnabled         = false
-	DefaultDDLVersionColumnName      = "__version"
-	DefaultDDLVersionDbMatches       = ""
-	DefaultMPPValue                  = "allow"
-	DefaultMetricsSqlLogEnabled      = false
-	DefaultMetricsSqlLogMaxLength    = 32 * 1024 // 默认最大记录32K
-	DefaultMetricsLargeSqlEnabled    = false
-	DefaultMetricsLargeSqlThreshold  = 1 * 1024 * 1024
-	DefaultSqlTraceEnabled           = false
-	DefaultSqlTraceFilename          = "mctech_tidb_full_sql.log"
-	DefaultSqlTraceFileMaxDays       = 1
-	DefaultSqlTraceFileMaxSize       = 1024 // 1024MB
-	DefaultSqlTraceCompressThreshold = 16 * 1024
-	DefaultMetricsLargeSqlTypes      = "delete,insert,update,select"
+	DefaultSequenceMaxFetchCount = 1000
+	DefaultSequenceBackend       = 3
+
+	DefaultDbCheckerEnabled = false
+
+	DefaultTenantEnabled          = false
+	DefaultTenantForbiddenPrepare = false
+
+	DefaultDDLVersionEnabled    = false
+	DefaultDDLVersionColumnName = "__version"
+	DefaultDDLVersionDbMatches  = ""
+
+	DefaultMPPValue = "allow"
+
+	DefaultMetricsSqlLogEnabled   = false
+	DefaultMetricsSqlLogMaxLength = 32 * 1024 // 默认最大记录32K
+
+	DefaultMetricsLargeQueryEnabled   = false
+	DefaultMetricsLargeQueryFilename  = "mctech_large_query_log.log"
+	DefaultMetricsLargeQueryThreshold = 1 * 1024 * 1024
+	DefaultMetricsLargeQueryTypes     = "delete,insert,update,select"
+
+	DefaultMetricsSqlTraceEnabled           = false
+	DefaultMetricsSqlTraceFilename          = "mctech_tidb_full_sql.log"
+	DefaultMetricsSqlTraceCompressThreshold = 16 * 1024
+	DefaultMetricsSqlTraceFileMaxDays       = 1
+	DefaultMetricsSqlTraceFileMaxSize       = 1024 // 1024MB
 )
 
 func newMCTech() MCTech {
@@ -165,16 +173,17 @@ func newMCTech() MCTech {
 				Enabled:   DefaultMetricsSqlLogEnabled,
 				MaxLength: DefaultMetricsSqlLogMaxLength,
 			},
-			LargeSql: LargeSql{
-				Enabled:   DefaultMetricsLargeSqlEnabled,
-				Threshold: DefaultMetricsLargeSqlThreshold,
-				SqlTypes:  StrToSlice(DefaultMetricsLargeSqlTypes, ","),
+			LargeQuery: LargeQuery{
+				Enabled:   DefaultMetricsLargeQueryEnabled,
+				Threshold: DefaultMetricsLargeQueryThreshold,
+				SqlTypes:  StrToSlice(DefaultMetricsLargeQueryTypes, ","),
 			},
 			SqlTrace: SqlTrace{
-				Enabled:           DefaultSqlTraceEnabled,
-				FileMaxDays:       DefaultSqlTraceFileMaxDays,
-				FileMaxSize:       DefaultSqlTraceFileMaxSize,
-				CompressThreshold: DefaultSqlTraceCompressThreshold,
+				Enabled:           DefaultMetricsSqlTraceEnabled,
+				Filename:          DefaultMetricsSqlTraceFilename,
+				FileMaxDays:       DefaultMetricsSqlTraceFileMaxDays,
+				FileMaxSize:       DefaultMetricsSqlTraceFileMaxSize,
+				CompressThreshold: DefaultMetricsSqlTraceCompressThreshold,
 			},
 		},
 	}
@@ -256,14 +265,14 @@ func storeMCTechConfig(config *Config) {
 	}
 
 	if len(sqlTrace.Filename) == 0 {
-		sqlTrace.Filename = DefaultSqlTraceFilename
+		sqlTrace.Filename = DefaultMetricsSqlTraceFilename
 	}
 
 	if !filepath.IsAbs(sqlTrace.Filename) {
 		logFile := config.Log.File.Filename
 		if len(logFile) > 0 {
 			logDir := filepath.Dir(logFile)
-			sqlTrace.Filename = filepath.Join(logDir, DefaultSqlTraceFilename)
+			sqlTrace.Filename = filepath.Join(logDir, DefaultMetricsSqlTraceFilename)
 		}
 	}
 
@@ -275,7 +284,7 @@ var DefaultSqlTraceExcludeDbs = []string{
 	"mysql", "information_schema", "metrics_schema", "performance_schema",
 }
 
-var AllMetricsLargeSqlTypes = strings.Split(DefaultMetricsLargeSqlTypes, ",")
+var AllMetricsLargeQueryTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
 
 func formatURL(str string) string {
 	u, err := url.Parse(str)
