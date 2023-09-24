@@ -533,6 +533,11 @@ func OptimizeExecStmt(ctx context.Context, sctx sessionctx.Context,
 	if !ok {
 		return nil, nil, errors.Errorf("invalid result plan type, should be Execute")
 	}
+
+	// add by zhangbing
+	exec.AppendVarExprs(ctx, exec.PrepStmt.PreparedAst)
+	// add end
+
 	plan, names, err := core.GetPlanFromSessionPlanCache(ctx, sctx, false, is, exec.PrepStmt, exec.Params)
 	if err != nil {
 		return nil, nil, err
@@ -540,16 +545,6 @@ func OptimizeExecStmt(ctx context.Context, sctx sessionctx.Context,
 	exec.Plan = plan
 	exec.SetOutputNames(names)
 	exec.Stmt = exec.PrepStmt.PreparedAst.Stmt
-
-	// add by zhangbing
-	// 获取租户扩展参数
-	extParams, tenantCode, err := exec.GetExtensionParams(ctx, exec.PrepStmt.PreparedAst)
-	if err != nil {
-		return nil, nil, err
-	}
-	exec.InitSessionVars(sctx, len(exec.Params) > 0, tenantCode)
-	exec.AppendVarExprs(sctx, extParams, tenantCode)
-	// add by zhangbing
 
 	return exec, names, nil
 }
