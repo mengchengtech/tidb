@@ -1863,7 +1863,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 			// log.Warn("mppValue: " + mppValue)
 			if mppValue != "allow" && mppValue != "" {
 				mppVarCtx := mctechCtx.(mctech.SessionMPPVarsContext)
-				if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
+				if err = mppVarCtx.StoreSessionMPPVars(ctx, mppValue); err != nil {
 					return err
 				}
 				defer mppVarCtx.ReloadSessionMPPVars()

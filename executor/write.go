@@ -162,7 +162,7 @@ func updateRecord(
 			var err error
 			switch col.GetType() {
 			case mysql.TypeTimestamp:
-				v, err = expression.GetTimeValue(sctx, strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal())
+				v, err = expression.GetTimeValue(sctx, strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
 			case mysql.TypeLonglong:
 				v, err = expression.GetBigIntValue(sctx, strings.ToUpper(ast.MCTechSequence), col.GetType(), col.GetDecimal())
 			default:

@@ -30,8 +30,7 @@ func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 }
 
 func TestJoinAndWhere(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 	tk.MustExec(strings.Join([]string{
 		"SELECT * FROM unit_test",

@@ -92,7 +92,7 @@ type ModifyContext interface {
 
 // SessionMPPVarsContext interface
 type SessionMPPVarsContext interface {
-	StoreSessionMPPVars(mpp string) (err error)
+	StoreSessionMPPVars(ctx context.Context, mpp string) (err error)
 
 	ReloadSessionMPPVars() (err error)
 
@@ -282,7 +282,7 @@ func (d *baseContext) Session() sessionctx.Context {
 
 // ------------------------------------------------
 
-func (d *baseContext) StoreSessionMPPVars(mpp string) (err error) {
+func (d *baseContext) StoreSessionMPPVars(ctx context.Context, mpp string) (err error) {
 	log.Error("Session: " + string(debug.Stack()))
 	panic(errors.New("[StoreSessionMPPVars] not implemented"))
 }

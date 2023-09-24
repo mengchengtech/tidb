@@ -78,8 +78,7 @@ func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], c
 }
 
 func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T, user string, roles ...string) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 	session := createSession(t, tk, user, roles...)
 

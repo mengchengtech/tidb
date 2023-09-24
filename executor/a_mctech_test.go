@@ -27,8 +27,7 @@ type mctechStmtCases struct {
 // }
 
 func TestMCTechStatementsSummary(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
 
@@ -50,8 +49,7 @@ func TestForbiddenPrepare(t *testing.T) {
 		option.ForbiddenPrepare = forbidden
 	}()
 
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
 
@@ -65,8 +63,7 @@ func TestForbiddenPrepare(t *testing.T) {
 }
 
 func TestIntegerAutoIncrement(t *testing.T) {
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 	// Check for warning in case we can't set the auto_increment to the desired value
 	tk.MustExec("create table t(a bigint primary key auto_increment)")
@@ -94,8 +91,7 @@ func TestPrepareByQuery(t *testing.T) {
 		option.ForbiddenPrepare = forbidden
 	}()
 
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store, option)
 
 	session := tk.Session()
@@ -132,8 +128,7 @@ func TestPrepareByCmd(t *testing.T) {
 		option.ForbiddenPrepare = forbidden
 	}()
 
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store, option)
 
 	session := tk.Session()
@@ -157,8 +152,7 @@ func TestPrepareByCmdNoTenant(t *testing.T) {
 		option.ForbiddenPrepare = forbidden
 	}()
 
-	store, clean := testkit.CreateMockStore(t)
-	defer clean()
+	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("select * from information_schema.statements_summary limit ?", 5,)
 }
