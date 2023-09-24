@@ -646,9 +646,9 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 				if !valid {
 					startFlag = false
 				}
-			} else if strings.HasSuffix(line, variable.SlowLogSQLSuffixStr) {
+			} else if strings.HasSuffix(line, variable.MCTechLargeQuerySQLSuffixStr) {
 				if strings.HasPrefix(line, "use") {
-					// `use DB` statements in the slow log is used to keep it be compatible with MySQL,
+					// `use DB` statements in the large log is used to keep it be compatible with MySQL,
 					// since we already get the current DB from the `# DB` field, we can ignore it here,
 					// please see https://github.com/pingcap/tidb/issues/17846 for more details.
 					continue
@@ -682,11 +682,11 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 func (e *mctechLargeQueryRetriever) setColumnValue(sctx sessionctx.Context, row []types.Datum, tz *time.Location, field, value string, checker *mctechLargeQueryChecker, lineNum int) bool {
 	factory := e.columnValueFactoryMap[field]
 	if factory == nil {
-		// Fix issue 34320, when slow log time is not in the output columns, the time filter condition is mistakenly discard.
+		// Fix issue 34320, when large log time is not in the output columns, the time filter condition is mistakenly discard.
 		if field == variable.MCTechLargeQueryTimeStr && checker != nil {
 			t, err := ParseTime(value)
 			if err != nil {
-				err = fmt.Errorf("Parse slow log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
+				err = fmt.Errorf("Parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
 				sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 				return false
 			}
@@ -697,7 +697,7 @@ func (e *mctechLargeQueryRetriever) setColumnValue(sctx sessionctx.Context, row 
 	}
 	valid, err := factory(row, value, tz, checker)
 	if err != nil {
-		err = fmt.Errorf("Parse slow log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
+		err = fmt.Errorf("Parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
 		sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 		return true
 	}
@@ -713,7 +713,7 @@ func (e *mctechLargeQueryRetriever) setDefaultValue(row []types.Datum) {
 	}
 }
 
-// getAllFiles is used to get all slow-log needed to parse, it is exported for test.
+// getAllFiles is used to get all large-log needed to parse, it is exported for test.
 func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessionctx.Context, logFilePath string) ([]logFile, error) {
 	totalFileNum := 0
 	if e.stats != nil {
@@ -854,7 +854,7 @@ func (e *mctechLargeQueryRetriever) getFileStartTime(ctx context.Context, file *
 			return t, ctx.Err()
 		}
 	}
-	return t, errors.Errorf("malform slow query file %v", file.Name())
+	return t, errors.Errorf("malform large query file %v", file.Name())
 }
 
 func (e *mctechLargeQueryRetriever) getRuntimeStats() execdetails.RuntimeStats {
@@ -936,7 +936,7 @@ func (e *mctechLargeQueryRetriever) getFileEndTime(ctx context.Context, file *os
 			return t, ctx.Err()
 		}
 	}
-	return t, errors.Errorf("invalid slow query file %v", file.Name())
+	return t, errors.Errorf("invalid large query file %v", file.Name())
 }
 
 func (e *mctechLargeQueryRetriever) initializeAsyncParsing(ctx context.Context, sctx sessionctx.Context) {
@@ -1096,14 +1096,14 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
 		ResultRows:        GetResultRowsCount(sessVars.StmtCtx, a.Plan),
 	}
-	slowLog, err := sessVars.LargeQueryFormat(largeItems)
+	largeLog, err := sessVars.LargeQueryFormat(largeItems)
 	if err != nil {
 		logutil.Logger(ctx).Error("record large query error", zap.Error(err), zap.Stack("stack"))
 		return
 	}
 
 	// 只在没有发生错误的时候才记录大SQL日志
-	mctech.L().Warn(slowLog)
+	mctech.L().Warn(largeLog)
 }
 
 var pattern = regexp.MustCompile(`(?i)/*\s*from:\s*'([^']+)'`)
