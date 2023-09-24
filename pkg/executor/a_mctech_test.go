@@ -5,6 +5,7 @@ package executor_test
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -239,8 +240,97 @@ org_type = ? AND ext_type = ? AND is_removed = FALSE
 	return tk, sql
 }
 
+type getServiceCase struct {
+	sql     string
+	service string
+}
+
 func TestGetSeriveFromSql(t *testing.T) {
-	const sql = "/* from:'tenant-service', host */ select 1"
-	service := executor.GetSeriveFromSQL(sql)
-	require.Equal(t, "tenant-service", service)
+	cases := []*getServiceCase{
+		{"/* from:'tenant-service', host */ select 1", "tenant-service"},
+		{"select 1", ""},
+	}
+	for _, c := range cases {
+		service := executor.GetSeriveFromSQL(c.sql)
+		require.Equal(t, c.service, service)
+	}
+}
+
+func TestLargeQueryWithoutLogFile(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),
+	)
+	// cfg := config.GetMCTechConfig()
+	tk := testkit.NewTestKit(t, store)
+	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_query_file='%v'", cfg.Metrics.LargeQuery.Filename))
+	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
+	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+}
+
+func TestLargeQuery(t *testing.T) {
+	store, clean := testkit.CreateMockStore(t)
+	defer clean()
+	tk := testkit.NewTestKit(t, store)
+
+	f, err := os.CreateTemp("", "mctech-large-query-*.log")
+	require.NoError(t, err)
+
+	resultFields := []string{
+		"# TIME: 2020-10-13T20:08:13.970563+08:00",
+		"# DIGEST: 0368dd12858f813df842c17bcb37ca0e8858b554479bebcd78da1f8c14ad12d0",
+		"select * from t0;",
+		"# TIME: 2020-10-16T20:08:13.970563+08:00",
+		"# DIGEST: 0368dd12858f813df842c17bcb37ca0e8858b554479bebcd78da1f8c14ad12d0",
+		"select * from t2;",
+		"# TIME: 2022-04-21T14:44:54.103041447+08:00",
+		"# USER@HOST: root[root] @ 192.168.0.1 [192.168.0.1]",
+		"# QUERY_TIME: 1",
+		"# PARSE_TIME: 0.00000001",
+		"# COMPILE_TIME: 0.00000001",
+		"# REWRITE_TIME: 0.000000003",
+		"# OPTIMIZE_TIME: 0.00000001",
+		"# PROCESS_TIME: 2 WAIT_TIME: 60 TOTAL_KEYS: 10000",
+		"# DB: test",
+		"# DIGEST: 01d00e6e93b28184beae487ac05841145d2a2f6a7b16de32a763bed27967e83d",
+		"# MEM_MAX: 2333",
+		"# DISK_MAX: 6666",
+		"# RESULT_ROWS: 12345",
+		"# SUCC: true",
+		"# SQL_LENGTH: 16",
+		"{gzip}H4sIAAAAAAAA/ypOzUlNLlHQUkgrys9VKLEGBAAA///MPyzQEAAAAA==;",
+	}
+
+	_, err = f.WriteString(strings.Join(resultFields, "\n"))
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	batchSize := executor.ParseSlowLogBatchSize
+	executor.ParseSlowLogBatchSize = 1
+	defer func() {
+		executor.ParseSlowLogBatchSize = batchSize
+		require.NoError(t, os.Remove(f.Name()))
+	}()
+
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": f.Name()}),
+	)
+
+	tk.MustQuery("select count(*) from `information_schema`.`mctech_large_query` where time > '2020-10-16 20:08:13' and time < '2020-10-16 21:08:13'").Check(testkit.Rows("1"))
+	tk.MustQuery("select count(*) from `information_schema`.`mctech_large_query` where time > '2019-10-13 20:08:13' and time < '2020-10-16 21:08:13'").Check(testkit.Rows("2"))
+	// Cover tidb issue 34320
+	tk.MustQuery("select count(digest) from `information_schema`.`mctech_large_query` where time > '2019-10-13 20:08:13' and time < now();").Check(testkit.Rows("3"))
+	tk.MustQuery("select count(digest) from `information_schema`.`mctech_large_query` where time > '2022-04-29 17:50:00'").Check(testkit.Rows("0"))
+	tk.MustQuery("select count(*) from `information_schema`.`mctech_large_query` where time < '2010-01-02 15:04:05'").Check(testkit.Rows("0"))
+
+	tk.MustQuery("select query from `information_schema`.`mctech_large_query`").Check(
+		testkit.Rows(
+			"select * from t0;",
+			"select * from t2;",
+			"select * from t;",
+		))
+
+	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
