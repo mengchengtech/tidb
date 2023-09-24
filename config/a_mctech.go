@@ -69,6 +69,7 @@ type Sequence struct {
 // DbChecker db isolation check used
 type DbChecker struct {
 	Enabled    bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
+	Compatible bool     `toml:"compatible" json:"compatible"` // 临时开关
 	APIPrefix  string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
 	MutexDbs   []string `toml:"mutex" json:"mutex"`           //
 	ExcludeDbs []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
@@ -109,7 +110,8 @@ const (
 	DefaultSequenceMaxFetchCount = 1000
 	DefaultSequenceBackend       = 3
 
-	DefaultDbCheckerEnabled = false
+	DefaultDbCheckerEnabled    = false
+	DefaultDbCheckerCompatible = true
 
 	DefaultTenantEnabled          = false
 	DefaultTenantForbiddenPrepare = false
@@ -171,6 +173,7 @@ func newMCTech() MCTech {
 		},
 		DbChecker: DbChecker{
 			Enabled:    DefaultDbCheckerEnabled,
+			Compatible: DefaultDbCheckerCompatible,
 			APIPrefix:  "http://node-infra-dim-service.mc/",
 			MutexDbs:   []string{},
 			ExcludeDbs: []string{},
@@ -245,6 +248,9 @@ func GetMCTechConfig() *MCTech {
 		}
 		if v, ok := values["Sequence.Mock"]; ok {
 			opts.Sequence.Mock = v
+		}
+		if v, ok := values["DbChecker.Compatible"]; ok {
+			opts.DbChecker.Compatible = v
 		}
 
 		if v, ok := values["Encryption.Mock"]; ok {

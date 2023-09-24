@@ -40,6 +40,9 @@ func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCod
 	// }
 
 	if tenantFromRolesLength > 0 {
+		// 角色上有租户信息，也当作仅允许租户账号访问模式
+		tenantOnly = true
+
 		// 存在code_{tenant}角色，忽略global参数
 		// 2. 如果是单一code_{tenant}角色，按自动补条件处理，tenant来自角色名
 		tenantCode = tenantFromRoles[0]
@@ -114,7 +117,7 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context,
 		return nil, err
 	}
 
-	result, err := mctech.NewPrepareResult(tenantCode, params)
+	result, err := mctech.NewPrepareResult(tenantCode, tenantOnly, params)
 	if err != nil {
 		return nil, err
 	}
