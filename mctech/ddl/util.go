@@ -85,7 +85,7 @@ func getDDLExtension() *_ddlExtension {
 		if e.versionEnabled {
 			e.visitor = newDDLExtensionVisitor(option.DDLVersionColumnName)
 			matchTexts := append(
-				slices.Clone(option.DDLVersionFilters),
+				slices.Clone(option.DDLVersionDbMatches),
 				mctech.PrefixFilterPattern(mctech.DbGlobalPrefix),
 				mctech.PrefixFilterPattern(mctech.DbAssetPrefix),
 				mctech.PrefixFilterPattern(mctech.DbPublicPrefix),
