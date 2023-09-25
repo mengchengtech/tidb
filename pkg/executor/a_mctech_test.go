@@ -241,6 +241,6 @@ org_type = ? AND ext_type = ? AND is_removed = FALSE
 
 func TestGetSeriveFromSql(t *testing.T) {
 	const sql = "/* from:'tenant-service', host */ select 1"
-	service := executor.GetSeriveFromSql(sql)
+	service := executor.GetSeriveFromSQL(sql)
 	require.Equal(t, "tenant-service", service)
 }
