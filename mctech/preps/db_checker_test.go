@@ -94,9 +94,9 @@ func TestDatabaseChecker(t *testing.T) {
 func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
 	option := config.GetMCTechConfig()
 	checker := newMutexDatabaseCheckerWithParams(
-		option.DbChecker.MutexDbs,
-		option.DbChecker.ExcludeDbs,
-		option.DbChecker.DbGroups)
+		option.DbChecker.Mutex,
+		option.DbChecker.Exclude,
+		option.DbChecker.Across)
 
 	context, _ := newTestMCTechContext(c.tenantOnly)
 	return checker.Check(context, c.dbs)

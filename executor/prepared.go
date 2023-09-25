@@ -116,7 +116,7 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	}
 
 	// add by zhangbing
-	if err = e.afterParseSql(ctx, stmts); err != nil {
+	if err = e.afterParseSQL(ctx, stmts); err != nil {
 		return err
 	}
 	// add end

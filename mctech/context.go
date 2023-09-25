@@ -119,7 +119,7 @@ const (
 	ParamDbPrefix = "dbPrefix"
 	// ParamGlobal custom hint param "global"
 	ParamGlobal = "global"
-	// ParamGlobal custom hint param "mpp"
+	// ParamMPP custom hint param "mpp"
 	ParamMPP = "mpp"
 )
 
@@ -482,13 +482,13 @@ var customContextKey = contextKey{}
 // NewContext function callback
 var NewContext func(session sessionctx.Context, usingTenantParam bool) Context
 
-// WithContext
+// WithNewContext create mctech.Context
 // @Param session sessionctx.Context -
 func WithNewContext(session sessionctx.Context) (context.Context, Context, error) {
 	return WithNewContext3(context.Background(), session, false)
 }
 
-// WithContext3
+// WithNewContext3 create mctech.Context
 // @Param parent context.Context -
 // @Param session sessionctx.Context -
 // @Param usingTenantParam bool 添加租户条件时，是否使用参数占位符方式
@@ -522,5 +522,5 @@ func GetContext(ctx context.Context) (Context, error) {
 	return nil, err
 }
 
-// 添加的租户条件假的文本位置偏移量
+// ExtensionParamMarkerOffset 添加的租户条件假的文本位置偏移量
 const ExtensionParamMarkerOffset = math.MaxInt - 1

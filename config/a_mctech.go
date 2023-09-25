@@ -27,14 +27,16 @@ type MCTech struct {
 	Metrics    MctechMetrics `toml:"metrics" json:"metrics"`
 }
 
+// MctechMetrics metrics record used
 type MctechMetrics struct {
 	Exclude    []string   `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
-	SqlLog     SqlLog     `toml:"sql-log" json:"sql-log"`
+	QueryLog   QueryLog   `toml:"query-log" json:"query-log"`
 	LargeQuery LargeQuery `toml:"large-query" json:"large-query"`
-	SqlTrace   SqlTrace   `toml:"sql-trace" json:"sql-trace"`
+	SQLTrace   SQLTrace   `toml:"sql-trace" json:"sql-trace"`
 }
 
-type SqlTrace struct {
+// SQLTrace full sql trace record used
+type SQLTrace struct {
 	Enabled           bool   `toml:"enabled" json:"enabled"`                       // 是否记录所有sql执行结果到独立文件中
 	Filename          string `toml:"file-name" json:"file-name"`                   // 日志文件名称
 	FileMaxDays       int    `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
@@ -42,19 +44,20 @@ type SqlTrace struct {
 	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
 }
 
-// SqlLog sql log record used
-type SqlLog struct {
+// QueryLog sql log record used
+type QueryLog struct {
 	Enabled   bool `toml:"enabled" json:"enabled"`       // 是否启用日志里记录sql片断
 	MaxLength int  `toml:"max-length" json:"max-length"` // 日志里记录的sql最大值
 }
 
+// LargeQuery large query log record used
 type LargeQuery struct {
 	Enabled     bool     `toml:"enabled" json:"enabled"`             // 是否启用large sql跟踪
 	Filename    string   `toml:"file-name" json:"file-name"`         // 日志文件名称
 	FileMaxDays int      `toml:"file-max-days" json:"file-max-days"` // 日志最长保存天数
 	FileMaxSize int      `toml:"file-max-size" json:"file-max-size"` // 单个文件最大长度
 	Threshold   int      `toml:"threshold" json:"threshold"`         // 超出该长度的sql会记录到数据库某个位置
-	SqlTypes    []string `toml:"sql-types" json:"sql-types"`         // 记录的sql类型
+	Types       []string `toml:"types" json:"types"`                 // 记录的sql类型
 }
 
 // Sequence mctech_sequence functions used
@@ -71,9 +74,9 @@ type DbChecker struct {
 	Enabled    bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
 	Compatible bool     `toml:"compatible" json:"compatible"` // 临时开关
 	APIPrefix  string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
-	MutexDbs   []string `toml:"mutex" json:"mutex"`           //
-	ExcludeDbs []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
-	DbGroups   []string `toml:"across" json:"across"`
+	Mutex      []string `toml:"mutex" json:"mutex"`           //
+	Exclude    []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
+	Across     []string `toml:"across" json:"across"`
 }
 
 // Tenant append tenant condition used
@@ -103,59 +106,85 @@ type MPP struct {
 type VersionColumn struct {
 	Enabled   bool     `toml:"enabled" json:"enabled"`       // 是否开启 create table自动插入特定的version列的特性
 	Name      string   `toml:"name" json:"name"`             // version列的名称
-	DbMatches []string `toml:"db-matches" json:"db-matches"` // 插入version的表需要满足的条件
+	DbMatches []string `toml:"db-matches" json:"db-matches"` // 插入version的表所属的数据库名需要满足的条件
 }
 
 const (
+	// DefaultSequenceMaxFetchCount one of config default value
 	DefaultSequenceMaxFetchCount = 1000
-	DefaultSequenceBackend       = 3
+	// DefaultSequenceBackend one of config default value
+	DefaultSequenceBackend = 3
 
-	DefaultDbCheckerEnabled    = false
+	// DefaultDbCheckerEnabled one of config default value
+	DefaultDbCheckerEnabled = false
+	// DefaultDbCheckerCompatible one of config default value
 	DefaultDbCheckerCompatible = true
 
-	DefaultTenantEnabled          = false
+	// DefaultTenantEnabled one of config default value
+	DefaultTenantEnabled = false
+	// DefaultTenantForbiddenPrepare one of config default value
 	DefaultTenantForbiddenPrepare = false
 
-	DefaultDDLVersionEnabled    = false
+	// DefaultDDLVersionEnabled one of config default value
+	DefaultDDLVersionEnabled = false
+	// DefaultDDLVersionColumnName one of config default value
 	DefaultDDLVersionColumnName = "__version"
-	DefaultMPPValue             = "allow"
+	// DefaultMPPValue one of config default value
+	DefaultMPPValue = "allow"
 
-	DefaultMetricsSqlLogEnabled   = false
-	DefaultMetricsSqlLogMaxLength = 32 * 1024 // 默认最大记录32K
+	// DefaultMetricsSQLLogEnabled one of config default value
+	DefaultMetricsSQLLogEnabled = false
+	// DefaultMetricsSQLLogMaxLength one of config default value
+	DefaultMetricsSQLLogMaxLength = 32 * 1024 // 默认最大记录32K
 
-	DefaultMetricsLargeQueryEnabled     = false
-	DefaultMetricsLargeQueryFilename    = "mctech_large_query_log.log"
+	// DefaultMetricsLargeQueryEnabled one of config default value
+	DefaultMetricsLargeQueryEnabled = false
+	// DefaultMetricsLargeQueryFilename one of config default value
+	DefaultMetricsLargeQueryFilename = "mctech_large_query_log.log"
+	// DefaultMetricsLargeQueryFileMaxDays one of config default value
 	DefaultMetricsLargeQueryFileMaxDays = 1
+	// DefaultMetricsLargeQueryFileMaxSize one of config default value
 	DefaultMetricsLargeQueryFileMaxSize = 1 * 1024 * 1024
-	DefaultMetricsLargeQueryThreshold   = 1 * 1024 * 1024
-	DefaultMetricsLargeQueryTypes       = "delete,insert,update,select"
+	// DefaultMetricsLargeQueryThreshold one of config default value
+	DefaultMetricsLargeQueryThreshold = 1 * 1024 * 1024
 
-	DefaultMetricsSqlTraceEnabled           = false
-	DefaultMetricsSqlTraceFilename          = "mctech_tidb_full_sql.log"
-	DefaultMetricsSqlTraceCompressThreshold = 16 * 1024
-	DefaultMetricsSqlTraceFileMaxDays       = 1
-	DefaultMetricsSqlTraceFileMaxSize       = 1024 // 1024MB
+	// DefaultMetricsSQLTraceEnabled one of config default value
+	DefaultMetricsSQLTraceEnabled = false
+	// DefaultMetricsSQLTraceFilename one of config default value
+	DefaultMetricsSQLTraceFilename = "mctech_tidb_full_sql.log"
+	// DefaultMetricsSQLTraceCompressThreshold one of config default value
+	DefaultMetricsSQLTraceCompressThreshold = 16 * 1024
+	// DefaultMetricsSQLTraceFileMaxDays one of config default value
+	DefaultMetricsSQLTraceFileMaxDays = 1
+	// DefaultMetricsSQLTraceFileMaxSize one of config default value
+	DefaultMetricsSQLTraceFileMaxSize = 1024 // 1024MB
 )
 
-var DefaultDbCheckerMutexDbs = []string{"public_*", "asset_*", "global_*"}
+var (
+	// DefaultDDLVersionDbMatches default value of config.DDL.Version.DbMatches
+	DefaultDDLVersionDbMatches = []string{"global_*", "asset_*", "public_*", "*_custom"}
 
-var DefaultDbCheckerExcludeDbs = []string{
-	"global_platform",
-	"global_ipm",
-	"global_dw_*",
-	"global_dwb",
-}
+	// DefaultDbCheckerMutex default value of config.DbChecker.Mutex
+	DefaultDbCheckerMutex = []string{"public_*", "asset_*", "global_*"}
+	// DefaultDbCheckerExclude default value of config.DbChecker.Exclude
+	DefaultDbCheckerExclude = []string{
+		"global_platform",
+		"global_ipm",
+		"global_dw_*",
+		"global_dwb",
+	}
+	// DefaultDbCheckerAcross default value of config.DbChecker.Mutex
+	DefaultDbCheckerAcross = []string{"global_mtlp|global_ma"}
 
-var DefaultDDLVersionDbMatches = []string{"global_*", "asset_*", "public_*", "*_custom"}
+	// DefaultSQLTraceExclude default value of config.Metrics.SQLTrace.Exclude
+	DefaultSQLTraceExclude = []string{
+		"test", "dp_stat",
+		"mysql", "information_schema", "metrics_schema", "performance_schema",
+	}
 
-var DefaultDbCheckerDbGroups = []string{"global_mtlp|global_ma"}
-
-var DefaultSqlTraceExcludeDbs = []string{
-	"test", "dp_stat",
-	"mysql", "information_schema", "metrics_schema", "performance_schema",
-}
-
-var AllAllowMetricsLargeQueryTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
+	// AllAllowMetricsLargeQueryTypes default value of config.Metrics.LargeQuery.Types
+	AllAllowMetricsLargeQueryTypes = []string{"delete", "insert", "update", "select"}
+)
 
 func newMCTech() MCTech {
 	return MCTech{
@@ -175,9 +204,9 @@ func newMCTech() MCTech {
 			Enabled:    DefaultDbCheckerEnabled,
 			Compatible: DefaultDbCheckerCompatible,
 			APIPrefix:  "http://node-infra-dim-service.mc/",
-			MutexDbs:   []string{},
-			ExcludeDbs: []string{},
-			DbGroups:   []string{},
+			Mutex:      []string{},
+			Exclude:    []string{},
+			Across:     []string{},
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
@@ -195,9 +224,9 @@ func newMCTech() MCTech {
 		},
 		Metrics: MctechMetrics{
 			Exclude: []string{},
-			SqlLog: SqlLog{
-				Enabled:   DefaultMetricsSqlLogEnabled,
-				MaxLength: DefaultMetricsSqlLogMaxLength,
+			QueryLog: QueryLog{
+				Enabled:   DefaultMetricsSQLLogEnabled,
+				MaxLength: DefaultMetricsSQLLogMaxLength,
 			},
 			LargeQuery: LargeQuery{
 				Enabled:     DefaultMetricsLargeQueryEnabled,
@@ -205,14 +234,14 @@ func newMCTech() MCTech {
 				FileMaxDays: DefaultMetricsLargeQueryFileMaxDays,
 				FileMaxSize: DefaultMetricsLargeQueryFileMaxSize,
 				Threshold:   DefaultMetricsLargeQueryThreshold,
-				SqlTypes:    StrToSlice(DefaultMetricsLargeQueryTypes, ","),
+				Types:       AllAllowMetricsLargeQueryTypes,
 			},
-			SqlTrace: SqlTrace{
-				Enabled:           DefaultMetricsSqlTraceEnabled,
-				Filename:          DefaultMetricsSqlTraceFilename,
-				FileMaxDays:       DefaultMetricsSqlTraceFileMaxDays,
-				FileMaxSize:       DefaultMetricsSqlTraceFileMaxSize,
-				CompressThreshold: DefaultMetricsSqlTraceCompressThreshold,
+			SQLTrace: SQLTrace{
+				Enabled:           DefaultMetricsSQLTraceEnabled,
+				Filename:          DefaultMetricsSQLTraceFilename,
+				FileMaxDays:       DefaultMetricsSQLTraceFileMaxDays,
+				FileMaxSize:       DefaultMetricsSQLTraceFileMaxSize,
+				CompressThreshold: DefaultMetricsSQLTraceCompressThreshold,
 			},
 		},
 	}
@@ -225,7 +254,7 @@ var (
 	mctechConfigLock sync.Mutex
 )
 
-// GetOption get mctech option
+// GetMCTechConfig get mctech option
 func GetMCTechConfig() *MCTech {
 	mctechOpts := mctechConf.Load().(*MCTech)
 
@@ -281,22 +310,22 @@ func storeMCTechConfig(config *Config) {
 	opts.Encryption.APIPrefix = formatURL(opts.Encryption.APIPrefix)
 	opts.DbChecker.APIPrefix = formatURL(opts.DbChecker.APIPrefix)
 
-	opts.DDL.Version.DbMatches = DistinctSlices(MergeSlices(opts.DDL.Version.DbMatches, DefaultDDLVersionDbMatches))
+	opts.DDL.Version.DbMatches = DistinctSlice(append(opts.DDL.Version.DbMatches, DefaultDDLVersionDbMatches...))
 
-	opts.DbChecker.MutexDbs = DistinctSlices(MergeSlices(opts.DbChecker.MutexDbs, DefaultDbCheckerMutexDbs))
-	opts.DbChecker.ExcludeDbs = DistinctSlices(MergeSlices(opts.DbChecker.ExcludeDbs, DefaultDbCheckerExcludeDbs))
-	opts.DbChecker.DbGroups = DistinctSlices(MergeSlices(opts.DbChecker.DbGroups, DefaultDbCheckerDbGroups))
+	opts.DbChecker.Mutex = DistinctSlice(append(opts.DbChecker.Mutex, DefaultDbCheckerMutex...))
+	opts.DbChecker.Exclude = DistinctSlice(append(opts.DbChecker.Exclude, DefaultDbCheckerExclude...))
+	opts.DbChecker.Across = DistinctSlice(append(opts.DbChecker.Across, DefaultDbCheckerAcross...))
 
-	opts.Metrics.Exclude = DistinctSlices(MergeSlices(opts.Metrics.Exclude, DefaultSqlTraceExcludeDbs))
+	opts.Metrics.Exclude = DistinctSlice(append(opts.Metrics.Exclude, DefaultSQLTraceExclude...))
 
 	if opts.MPP.DefaultValue == "" {
 		opts.MPP.DefaultValue = "allow"
 	}
 
-	sqlTrace := &opts.Metrics.SqlTrace
+	sqlTrace := &opts.Metrics.SQLTrace
 	if len(sqlTrace.Filename) == 0 {
 		// 设置sqlTrace 日志文件的默认路径
-		sqlTrace.Filename = DefaultMetricsSqlTraceFilename
+		sqlTrace.Filename = DefaultMetricsSQLTraceFilename
 	}
 
 	largeQuery := &opts.Metrics.LargeQuery
@@ -342,7 +371,7 @@ func formatURL(str string) string {
 	return apiPrefix
 }
 
-// StrToSlice
+// StrToSlice convert string to slice. remove empty string
 func StrToSlice(s string, sep string) []string {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
@@ -350,7 +379,7 @@ func StrToSlice(s string, sep string) []string {
 	}
 
 	parts := strings.Split(s, sep)
-	var nonEmptyParts []string
+	nonEmptyParts := make([]string, 0, len(parts))
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if len(part) == 0 || slices.Contains(nonEmptyParts, part) {
@@ -361,17 +390,9 @@ func StrToSlice(s string, sep string) []string {
 	return nonEmptyParts
 }
 
-func MergeSlices(s1, s2 []string) []string {
-	if len(s1) > 0 {
-		s1 = append(s2, s1...)
-	} else {
-		s1 = s2
-	}
-	return s1
-}
-
-func DistinctSlices(s []string) []string {
-	var nonEmptyParts []string
+// DistinctSlice distinct slice. remove empty string
+func DistinctSlice(s []string) []string {
+	nonEmptyParts := make([]string, 0, len(s))
 	for _, part := range s {
 		part = strings.TrimSpace(part)
 		if len(part) == 0 || slices.Contains(nonEmptyParts, part) {
@@ -382,18 +403,18 @@ func DistinctSlices(s []string) []string {
 	return nonEmptyParts
 }
 
-// StrToPossibleValueSlice
+// StrToPossibleValueSlice convert string to slice. all item must be in possibleValues
 func StrToPossibleValueSlice(s string, sep string, possibleValues []string) ([]string, string, bool) {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return []string{}, "", true
 	}
+	parts := strings.Split(s, sep)
 
 	var (
-		result  []string
+		result  = make([]string, 0, len(parts))
 		illegal string
 	)
-	parts := strings.Split(s, sep)
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
 		if len(part) == 0 || slices.Contains(result, part) {
