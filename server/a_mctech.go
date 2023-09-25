@@ -247,8 +247,8 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
 	}
 
-	timeStart := sessVars.StartTime // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-	// connId := sessVars.ConnectionID                                          // SQL 查询客户端连接 ID
+	timeStart := sessVars.StartTime                                          // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
+	connID := sessVars.ConnectionID                                          // SQL 查询客户端连接 ID
 	queryTime := time.Since(sessVars.StartTime) + sessVars.DurationParse     // 执行 SQL 耗费的自然时间
 	parseTime := sessVars.DurationParse                                      // 解析耗时
 	compileTime := sessVars.DurationCompile                                  // 生成执行计划耗时
@@ -288,7 +288,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	var fields = []zapcore.Field{
 		zap.String("db", si.GetDB()),
 		zap.String("usr", si.GetUser()),
-		// zap.Uint64("conn", connId),
+		zap.String("conn", encode(connID)),
 		zap.String("tp", sqlType),
 		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
 		zap.Object("time", &mctech.LogTimeObject{
@@ -315,4 +315,20 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 		"", // 忽略Message字段
 		fields...,
 	)
+}
+
+const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+func encode(num uint64) string {
+	bytes := []byte{}
+	for num > 0 {
+		bytes = append(bytes, chars[num%62])
+		num = num / 62
+	}
+
+	for left, right := 0, len(bytes)-1; left < right; left, right = left+1, right-1 {
+		bytes[left], bytes[right] = bytes[right], bytes[left]
+	}
+
+	return string(bytes)
 }
