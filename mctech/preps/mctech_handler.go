@@ -95,7 +95,7 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode)
 
 			if option.DbChecker.Enabled && len(dbs) > 0 {
 				// 启用数据库联合查询规则检查
-				if err = getDatabaseChecker().Check(mctx, dbs); err != nil {
+				if err = getDatabaseChecker().Check(mctx, stmt, dbs); err != nil {
 					return changed, err
 				}
 			}
