@@ -25,6 +25,7 @@ var mctechLargeQueryCols = []columnInfo{
 	{name: variable.MCTechLargeQueryDigestStr, tp: mysql.TypeVarchar, size: 64},
 	{name: variable.MCTechLargeQuerySQLLengthStr, tp: mysql.TypeLonglong, size: 20},
 	{name: variable.MCTechLargeQueryServiceStr, tp: mysql.TypeVarchar, size: 128},
+	{name: variable.MCTechLargeQuerySQLTypeStr, tp: mysql.TypeVarchar, size: 64},
 	{name: variable.MCTechLargeQuerySQLStr, tp: mysql.TypeLongBlob, size: types.UnspecifiedLength},
 	{name: variable.MCTechLargeQuerySuccStr, tp: mysql.TypeTiny, size: 1},
 	{name: variable.MCTechLargeQueryMemMax, tp: mysql.TypeLonglong, size: 20},
