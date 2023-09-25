@@ -2,7 +2,7 @@
 
 //go:build !intest
 
-package mctech
+package mock
 
 import (
 	"errors"
