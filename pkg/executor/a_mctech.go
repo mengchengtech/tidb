@@ -1086,7 +1086,8 @@ func getLargeLogColumnValueFactoryByName(sctx sessionctx.Context, colName string
 		}, nil
 	case variable.MCLargeLogUserStr, variable.MCLargeLogHostStr,
 		variable.MCLargeLogDBStr, variable.MCLargeLogDigestStr,
-		variable.MCLargeLogServiceStr, variable.MCLargeLogSQLStr:
+		variable.MCLargeLogServiceStr, variable.MCLargeLogSQLTypeStr,
+		variable.MCLargeLogSQLStr:
 		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeLogChecker) (valid bool, err error) {
 			row[columnIdx] = types.NewStringDatum(value)
 			return true, nil
@@ -1115,7 +1116,7 @@ func getLargeLogColumnValueFactoryByName(sctx sessionctx.Context, colName string
 }
 
 // SaveLargeLog is used to print the large log in the log files.
-func (a *ExecStmt) SaveLargeLog(ctx context.Context, succ bool) {
+func (a *ExecStmt) SaveLargeLog(ctx context.Context, sqlType string, succ bool) {
 	sessVars := a.Ctx.GetSessionVars()
 	cfg := config.GetMCTechConfig()
 	threshold := cfg.Metrics.LargeLog.Threshold
@@ -1139,6 +1140,7 @@ func (a *ExecStmt) SaveLargeLog(ctx context.Context, succ bool) {
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCLargeLogItems{
 		SQL:               sql,
+		SQLType:           sqlType,
 		Service:           GetSeriveFromSQL(sql),
 		Digest:            digest.String(),
 		TimeTotal:         costTime,

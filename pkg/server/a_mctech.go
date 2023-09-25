@@ -190,7 +190,7 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ
 
 	if slices.Contains(opts.Metrics.LargeLog.Types, sqlType) {
 		execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
-		execStmt.SaveLargeLog(ctx, succ)
+		execStmt.SaveLargeLog(ctx, sqlType, succ)
 	}
 }
 

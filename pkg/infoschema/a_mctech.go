@@ -25,6 +25,7 @@ var mctechLargeQueryCols = []columnInfo{
 	{name: variable.MCLargeLogDigestStr, tp: mysql.TypeVarchar, size: 64},
 	{name: variable.MCLargeLogSQLLengthStr, tp: mysql.TypeLonglong, size: 20},
 	{name: variable.MCLargeLogServiceStr, tp: mysql.TypeVarchar, size: 128},
+	{name: variable.MCLargeLogSQLTypeStr, tp: mysql.TypeVarchar, size: 64},
 	{name: variable.MCLargeLogSQLStr, tp: mysql.TypeLongBlob, size: types.UnspecifiedLength},
 	{name: variable.MCLargeLogSuccStr, tp: mysql.TypeTiny, size: 1},
 	{name: variable.MCLargeLogMemMax, tp: mysql.TypeLonglong, size: 20},
