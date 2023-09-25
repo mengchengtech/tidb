@@ -93,6 +93,12 @@ func TestDatabaseChecker(t *testing.T) {
 	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
+type mockStmtTextAware struct{}
+
+func (a *mockStmtTextAware) OriginalText() string {
+	return "mock original text"
+}
+
 func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
 	option := config.GetMCTechConfig()
 	checker := newMutexDatabaseCheckerWithParams(
@@ -101,7 +107,7 @@ func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
 		option.DbChecker.Across)
 
 	context, _ := newTestMCTechContext(c.tenantOnly)
-	return checker.Check(context, c.dbs)
+	return checker.Check(context, &mockStmtTextAware{}, c.dbs)
 }
 
 func filterRunTestCase(t *testing.T, c *testStringFilterCase) error {

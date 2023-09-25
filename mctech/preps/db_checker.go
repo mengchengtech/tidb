@@ -8,6 +8,7 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
+	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
 )
 
@@ -91,9 +92,14 @@ func (g *databaseGrouper) GroupBy(dbNames []string) []dbGroup {
 	return results
 }
 
+// StmtTextAware stmt aware
+type StmtTextAware interface {
+	OriginalText() string
+}
+
 // DatabaseChecker interface
 type DatabaseChecker interface {
-	Check(mctx mctech.Context, dbs []string) error
+	Check(mctx mctech.Context, aware StmtTextAware, dbs []string) error
 }
 
 // mutexDatabaseChecker 检查sql中用到的数据库是否存在互斥的库名
@@ -150,7 +156,7 @@ func newMutexDatabaseCheckerWithParams(mutex, exclude, across []string) *mutexDa
 	}
 }
 
-func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
+func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, dbs []string) error {
 	result := mctx.PrepareResult()
 	if !result.TenantOnlyRole() {
 		return nil
@@ -172,7 +178,13 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 	}
 
 	if config.GetMCTechConfig().DbChecker.Compatible {
-		log.Warn(fmt.Sprintf("dbs not allow in the same statement. %s", groupDbs))
+		sql := aware.OriginalText()
+		maxQueryLen := 4096
+		length := len(sql)
+		if length > maxQueryLen {
+			sql = fmt.Sprintf("%.*q(len:%d)", maxQueryLen, sql, length)
+		}
+		log.Warn(fmt.Sprintf("dbs not allow in the same statement. %s", groupDbs), zap.String("SQL", sql))
 		return nil
 	}
 	return fmt.Errorf("dbs not allow in the same statement.  %s", groupDbs)
