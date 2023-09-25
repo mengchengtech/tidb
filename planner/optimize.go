@@ -535,7 +535,7 @@ func OptimizeExecStmt(ctx context.Context, sctx sessionctx.Context,
 	}
 
 	// add by zhangbing
-	exec.AppendVarExprs(ctx, exec.PrepStmt.PreparedAst)
+	exec.AppendVarExprs(ctx)
 	// add end
 
 	plan, names, err := core.GetPlanFromSessionPlanCache(ctx, sctx, false, is, exec.PrepStmt, exec.Params)
