@@ -5,20 +5,20 @@ import (
 	"time"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSequence(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
-		mctech.M(t, map[string]bool{"SequenceMock": false}),
+		mock.M(t, map[string]bool{"SequenceMock": false}),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache",
-		mctech.M(t, "true"),
+		mock.M(t, "true"),
 	)
 	now := time.Now().UnixNano()
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mctech.M(t, "1310341421945856,1310341421945866"),
+		mock.M(t, "1310341421945856,1310341421945866"),
 	)
 	cache := GetCache()
 	id, err := cache.Next()
@@ -47,15 +47,15 @@ func TestSequenceDecodeFailure(t *testing.T) {
 
 func TestVersionJustPass(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/GetMctechOption",
-		mctech.M(t, map[string]bool{"SequenceMock": false}),
+		mock.M(t, map[string]bool{"SequenceMock": false}),
 	)
 
 	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache",
-		mctech.M(t, "true"),
+		mock.M(t, "true"),
 	)
 
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mctech.M(t, "1310341421945866"),
+		mock.M(t, "1310341421945866"),
 	)
 	cache := GetCache()
 	version, err := cache.VersionJustPass()
