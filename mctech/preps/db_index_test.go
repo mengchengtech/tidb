@@ -5,6 +5,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +41,7 @@ func TestDbSelectorGetDbIndex(t *testing.T) {
 
 func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mctech.M(t, c.response),
+		mock.M(t, c.response),
 	)
 	result, err := mctech.NewPrepareResult(c.tenant, c.params)
 	if err != nil {
