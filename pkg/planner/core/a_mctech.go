@@ -150,7 +150,6 @@ func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) error {
 		}
 		index, err = mctx.GetDbIndex()
 		if err != nil {
-			err = nil
 			index = -1
 		}
 	}
@@ -212,10 +211,10 @@ func appendExtensionArgs[T any](
 	for _, p := range params {
 		if p.GetOffset() == mctech.ExtensionParamMarkerOffset {
 			// 扩展自定义参数
-			if item, err := callback(); err != nil {
-				return nil, err
-			} else {
+			if item, err := callback(); err == nil {
 				extensions = append(extensions, item)
+			} else {
+				return nil, err
 			}
 		}
 	}

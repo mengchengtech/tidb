@@ -14,30 +14,32 @@ import (
 )
 
 var (
-	fullSqlLogger,
-	largeSqlLogger *zap.Logger
+	fullQueryLogger,
+	largeQueryLogger *zap.Logger
 )
 
+// F Get full sql trace logger
 func F() *zap.Logger {
-	if fullSqlLogger != nil {
-		return fullSqlLogger
+	if fullQueryLogger != nil {
+		return fullQueryLogger
 	}
 
 	// 只能懒加载，需要在启动时先加载 config模块
 	once := &sync.Once{}
-	once.Do(initFullSqlLogger)
-	return fullSqlLogger
+	once.Do(initFullQueryLogger)
+	return fullQueryLogger
 }
 
+// L Get large query logger
 func L() *zap.Logger {
-	if largeSqlLogger != nil {
-		return largeSqlLogger
+	if largeQueryLogger != nil {
+		return largeQueryLogger
 	}
 
 	// 只能懒加载，需要在启动时先加载 config模块
 	once := &sync.Once{}
-	once.Do(initLargeSqlLogger)
-	return largeSqlLogger
+	once.Do(initLargeQueryLogger)
+	return largeQueryLogger
 }
 
 func newZapEncoder(cfg *log.Config) zapcore.Encoder {
@@ -95,8 +97,8 @@ func (e *largeQueryEncoder) AddUintptr(string, uintptr)                      {}
 func (e *largeQueryEncoder) AddReflected(string, interface{}) error          { return nil }
 func (e *largeQueryEncoder) OpenNamespace(string)                            {}
 
-func initLargeSqlLogger() {
-	if largeSqlLogger != nil {
+func initLargeQueryLogger() {
+	if largeQueryLogger != nil {
 		return
 	}
 
@@ -121,16 +123,16 @@ func initLargeSqlLogger() {
 		return newCore
 	}))
 	prop.Core = newCore
-	largeSqlLogger = logger
+	largeQueryLogger = logger
 }
 
-func initFullSqlLogger() {
-	if fullSqlLogger != nil {
+func initFullQueryLogger() {
+	if fullQueryLogger != nil {
 		return
 	}
 
 	globalConfig := config.GetGlobalConfig()
-	sqlTraceConfig := globalConfig.MCTech.Metrics.SqlTrace
+	sqlTraceConfig := globalConfig.MCTech.Metrics.SQLTrace
 	cfg := globalConfig.Log.ToLogConfig()
 	// copy the global log config to full sql log config
 	fsConfig := cfg.Config
@@ -155,10 +157,11 @@ func initFullSqlLogger() {
 		panic(errors.Trace(err))
 	}
 
-	fullSqlLogger = logger
+	fullQueryLogger = logger
 }
 
-type LobTimeObject struct {
+// LogTimeObject time data struct whitch is used for trace log.
+type LogTimeObject struct {
 	All   time.Duration // 执行总时间
 	Parse time.Duration // 解析语法树用时，含mctech扩展
 	Plan  time.Duration // 生成执行计划用时
@@ -167,7 +170,8 @@ type LobTimeObject struct {
 	Send  time.Duration // 发送到客户端用时
 }
 
-func (lt *LobTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
+func (lt *LogTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("all", lt.All)
 	enc.AddDuration("parse", lt.Parse)
 	enc.AddDuration("plan", lt.Plan)

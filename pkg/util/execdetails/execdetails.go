@@ -708,6 +708,7 @@ const (
 	// TpRURuntimeStats is the tp for RURuntimeStats
 	TpRURuntimeStats
 	// add by zhangbing
+
 	// TpMCTechLargeQueryRuntimeStat is the tp for TpMCTechLargeQueryRuntimeStat
 	TpMCTechLargeQueryRuntimeStat
 	// add end

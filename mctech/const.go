@@ -1,3 +1,4 @@
 package mctech
 
-var LogFilterToken = "$#&*^mctech!sql!log^*&#$"
+// MCTechLogFilterToken token to filter mctech log
+var MCTechLogFilterToken = "$#&*^mctech!sql!log^*&#$"

@@ -1732,7 +1732,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 
 	// add by zhangbing
 	var mctechCtx mctech.Context
-	ctx, mctechCtx, sql, err = cc.beforeParseSql(ctx, sql)
+	ctx, mctechCtx, sql, err = cc.beforeParseSQL(ctx, sql)
 	if err != nil {
 		return err
 	}
@@ -1750,7 +1750,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 
 	// add by zhangbing
-	if err = cc.afterParseSql(ctx, mctechCtx, sql, stmts); err != nil {
+	if err = cc.afterParseSQL(ctx, mctechCtx, sql, stmts); err != nil {
 		return err
 	}
 	// add end

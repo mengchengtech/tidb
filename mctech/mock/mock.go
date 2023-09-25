@@ -9,6 +9,7 @@ import (
 	"testing"
 )
 
+// M check if in testing mode
 func M(t *testing.T, v interface{}) string {
 	panic(errors.New("SHOULD NOT call out of test"))
 }
