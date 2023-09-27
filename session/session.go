@@ -1524,19 +1524,12 @@ func (s *session) Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
 		// Mute the warning for internal SQLs.
 		if !s.sessionVars.InRestrictedSQL {
 			// modify by zhangbing
-			db, user, client := sessionctx.ResolveSession(s)
 			if s.sessionVars.EnableRedactLog {
 				// logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
-				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err),
-					zap.String("token", mctech.MCTechLogFilterToken),
-					zap.String("db", db), zap.String("user", user), zap.String("client", client),
-					zap.String("SQL", sql))
+				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(s)), zap.String("SQL", sql))
 			} else {
 				// logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
-				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err),
-					zap.String("token", mctech.MCTechLogFilterToken),
-					zap.String("db", db), zap.String("user", user), zap.String("client", client),
-					zap.String("SQL", sql))
+				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(s)), zap.String("SQL", sql))
 			}
 			// modify end
 			s.sessionVars.StmtCtx.AppendError(err)
@@ -1591,19 +1584,12 @@ func (s *session) ParseWithParams(ctx context.Context, sql string, args ...inter
 		// Mute the warning for internal SQLs.
 		if !s.sessionVars.InRestrictedSQL {
 			// modify by zhangbing
-			db, user, client := sessionctx.ResolveSession(s)
 			if s.sessionVars.EnableRedactLog {
 				// logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
-				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err),
-					zap.String("token", mctech.MCTechLogFilterToken),
-					zap.String("db", db), zap.String("user", user), zap.String("client", client),
-					zap.String("SQL", sql))
+				logutil.Logger(ctx).Debug("parse SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(s)), zap.String("SQL", sql))
 			} else {
 				// logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.String("SQL", sql))
-				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err),
-					zap.String("token", mctech.MCTechLogFilterToken),
-					zap.String("db", db), zap.String("user", user), zap.String("client", client),
-					zap.String("SQL", sql))
+				logutil.Logger(ctx).Warn("parse SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(s)), zap.String("SQL", sql))
 			}
 			// modify end
 		}
@@ -1970,12 +1956,7 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 		if !s.sessionVars.InRestrictedSQL {
 			// modify by zhangbing
 			// logutil.Logger(ctx).Warn("compile SQL failed", zap.Error(err), zap.String("SQL", stmtNode.Text()))
-			db, user, client := sessionctx.ResolveSession(s)
-			logutil.Logger(ctx).Warn("compile SQL failed",
-				zap.Error(err),
-				zap.String("token", mctech.MCTechLogFilterToken),
-				zap.String("db", db), zap.String("user", user), zap.String("client", client),
-				zap.String("SQL", stmtNode.Text()))
+			logutil.Logger(ctx).Warn("compile SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(s)), zap.String("SQL", stmtNode.Text()))
 			// modify end
 		}
 		return nil, err
@@ -1999,12 +1980,10 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 			// 	zap.Int64("schemaVersion", s.GetInfoSchema().SchemaMetaVersion()),
 			// 	zap.Error(err),
 			// 	zap.String("session", s.String()))
-			db, user, client := sessionctx.ResolveSession(s)
 			logutil.Logger(ctx).Warn("run statement failed",
 				zap.Int64("schemaVersion", s.GetInfoSchema().SchemaMetaVersion()),
 				zap.Error(err),
-				zap.String("token", mctech.MCTechLogFilterToken),
-				zap.String("db", db), zap.String("user", user), zap.String("client", client),
+				zap.Object("session", sessionctx.ShortInfo(s)),
 				zap.String("SQL", stmt.OriginText()))
 			// modify end
 		}

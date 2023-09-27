@@ -83,11 +83,7 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sq
 
 	handler := mctech.GetHandler()
 	if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
-		db, user, client := sessionctx.ResolveSession(cc.getCtx())
-		logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
-			zap.String("token", mctech.MCTechLogFilterToken),
-			zap.String("db", db), zap.String("user", user), zap.String("client", client),
-			zap.String("SQL", sql))
+		logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(cc.getCtx())), zap.String("SQL", sql))
 		return err
 	}
 
@@ -128,11 +124,7 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sq
 			if len(origSQL) > opts.Metrics.QueryLog.MaxLength {
 				origSQL = origSQL[0:opts.Metrics.QueryLog.MaxLength]
 			}
-			db, user, client := sessionctx.ResolveSession(cc.getCtx())
-			logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
-				zap.String("token", mctech.MCTechLogFilterToken),
-				zap.String("db", db), zap.String("user", user), zap.String("client", client),
-				zap.String("SQL", origSQL))
+			logutil.Logger(ctx).Warn("(handleQuery) MCTECH SQL QueryLog", zap.Object("session", sessionctx.ShortInfo(cc.getCtx())), zap.String("SQL", origSQL))
 		}
 	}
 
@@ -256,7 +248,6 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	}
 
 	timeStart := sessVars.StartTime // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-	var db string                   // 执行该 SQL 查询时使用的数据库名称
 	// connId := sessVars.ConnectionID                                          // SQL 查询客户端连接 ID
 	queryTime := time.Since(sessVars.StartTime) + sessVars.DurationParse     // 执行 SQL 耗费的自然时间
 	parseTime := sessVars.DurationParse                                      // 解析耗时
@@ -265,9 +256,6 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	var _ string                                                             // 移除注释并且参数替换后的sql模板
 	memMax := stmtCtx.MemTracker.MaxConsumed()                               // 该 SQL 查询执行时占用的最大内存空间
 	diskMax := stmtCtx.DiskTracker.MaxConsumed()                             // 该 SQL 查询执行时占用的最大磁盘空间
-	var user string                                                          // 执行该 SQL 查询的用户名，可能存在多个执行用户，仅显示其中某一个
-	var _ string                                                             // 发送 SQL 查询的客户端地址
-	db, user, _ = sessionctx.ResolveSession(cc.getCtx())                     //
 	writeSQLRespTotal := stmtDetail.WriteSQLRespDuration                     // 发送结果耗时
 	firstRowReadyTime := queryTime - writeSQLRespTotal                       // 首行结果准备好时间(总执行时间除去发送结果耗时)
 	resultRows := executor.GetResultRowsCount(cc.ctx.Session, execStmt.Plan) // 查询返回结果行数
@@ -296,9 +284,10 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 		}
 	}
 
+	si := sessionctx.ShortInfo(cc.getCtx()) //
 	var fields = []zapcore.Field{
-		zap.String("db", db),
-		zap.String("usr", user),
+		zap.String("db", si.GetDB()),
+		zap.String("usr", si.GetUser()),
 		// zap.Uint64("conn", connId),
 		zap.String("tp", sqlType),
 		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
