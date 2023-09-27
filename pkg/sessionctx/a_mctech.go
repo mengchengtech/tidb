@@ -1,6 +1,11 @@
 package sessionctx
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/pingcap/tidb/sessionctx/variable"
+	"go.uber.org/zap/zapcore"
+)
 
 // MCTechExecStmtVarKeyType is a dummy type to avoid naming collision in context.
 type MCTechExecStmtVarKeyType int
@@ -13,17 +18,60 @@ func (k MCTechExecStmtVarKeyType) String() string {
 // MCTechExecStmtVarKey is a variable key for ExecStmt.
 const MCTechExecStmtVarKey MCTechExecStmtVarKeyType = 0
 
-// ResolveSession resolve information from current session.
-func ResolveSession(sctx Context) (db string, user string, client string) {
+// ShortInfo resolve information from current session.
+func ShortInfo(sctx Context) ShortSessionInfo {
+	var si = &shortSessionInfo{}
 	sessVars := sctx.GetSessionVars()
-	db = strings.ToLower(sessVars.CurrentDB)
+	si.db = strings.ToLower(sessVars.CurrentDB)
+	si.host = variable.GetSysVar(variable.Hostname).Value
+
 	if sessVars.User != nil {
-		user = sessVars.User.Username
-		client = sessVars.User.Hostname
-		if sessVars.ConnectionInfo != nil {
-			client = sessVars.ConnectionInfo.ClientIP
-		}
+		si.user = sessVars.User.Username
+		si.client = sessVars.User.Hostname
 	}
 
-	return db, user, client
+	return si
+}
+
+// ShortSessionInfo current session user info
+type ShortSessionInfo interface {
+	zapcore.ObjectMarshaler
+	GetUser() string
+	GetDB() string
+	GetClient() string
+	GetHost() string
+}
+
+type shortSessionInfo struct {
+	user   string
+	db     string
+	client string
+	host   string
+}
+
+func (si *shortSessionInfo) GetUser() string {
+	return si.user
+}
+
+func (si *shortSessionInfo) GetDB() string {
+	return si.db
+}
+
+func (si *shortSessionInfo) GetClient() string {
+	return si.client
+}
+
+func (si *shortSessionInfo) GetHost() string {
+	return si.host
+}
+
+const mctechLogFilterToken = "!@#$mctech$#@!"
+
+func (si *shortSessionInfo) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("token", mctechLogFilterToken)
+	enc.AddString("user", si.user)
+	enc.AddString("db", si.db)
+	enc.AddString("client", si.client)
+	enc.AddString("host", si.host)
+	return nil
 }
