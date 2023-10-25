@@ -131,16 +131,17 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sq
 	return nil
 }
 
-func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, err error) {
+func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, sql string, err error) {
 	if sessVars := cc.ctx.GetSessionVars(); sessVars.InRestrictedSQL {
 		// 不记录内部sql
 		return
 	}
 
 	var mctx mctech.Context
-	mctx, err = mctech.GetContext(ctx)
-	if err != nil {
-		panic(err)
+	var e error
+	mctx, e = mctech.GetContext(ctx)
+	if e != nil {
+		panic(e)
 	}
 
 	opts := config.GetMCTechConfig()
@@ -165,7 +166,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	if err == nil {
 		// 全量sql只记录执行成功的sql
 		if opts.Metrics.SQLTrace.Enabled {
-			cc.traceFullQuery(ctx)
+			cc.traceFullQuery(ctx, sql)
 		}
 	}
 }
@@ -199,10 +200,8 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ
 }
 
 // 记录全量sql
-func (cc *clientConn) traceFullQuery(ctx context.Context) {
+func (cc *clientConn) traceFullQuery(ctx context.Context, origSQL string) {
 	sessVars := cc.ctx.GetSessionVars()
-	stmtCtx := sessVars.StmtCtx
-	origSQL := stmtCtx.OriginalSQL
 
 	execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
 	var sqlType string // sql语句类型
@@ -239,6 +238,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context) {
 		}
 	}()
 
+	stmtCtx := sessVars.StmtCtx
 	execDetails := stmtCtx.GetExecDetails()
 
 	var stmtDetail execdetails.StmtExecDetails
@@ -263,7 +263,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context) {
 	if execDetails.CommitDetail != nil {
 		writeKeys = execDetails.CommitDetail.WriteKeys
 	}
-	normalizedSQL, digest := stmtCtx.SQLDigest() //
+	_, digest := stmtCtx.SQLDigest() //
 
 	var zip []byte
 	sqlLen := len(origSQL)
@@ -274,7 +274,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context) {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
 					zip = b.Bytes()
-					origSQL = normalizedSQL[:128] + fmt.Sprintf("...len(%d)", sqlLen)
+					origSQL = origSQL[:256] + fmt.Sprintf("...len(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}

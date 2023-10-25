@@ -1923,7 +1923,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 			}
 		}
 		// add by zhangbing
-		cc.afterHandleStmt(ctx, stmt, err)
+		cc.afterHandleStmt(ctx, stmt, sql, err)
 		// add end
 	}
 	return err
