@@ -73,7 +73,6 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sq
 				if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
 					return err
 				}
-				defer mppVarCtx.ReloadSessionMPPVars()
 				if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
 					return err
 				}
