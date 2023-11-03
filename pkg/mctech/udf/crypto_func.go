@@ -22,15 +22,40 @@ const cryptoPrefix = "{crypto}"
 
 var cryptoPfrefixLength = len(cryptoPrefix)
 
+// CryptoClient crypto client
+type CryptoClient interface {
+	// Encrypt text
+	Encrypt(plainText string) (string, error)
+	// Decrypt text
+	Decrypt(content string) (string, error)
+}
+
+type mockCryptoClient struct {
+}
+
+// Encrypt text
+func (p *mockCryptoClient) Encrypt(plainText string) (string, error) {
+	return plainText, nil
+}
+
+// Decrypt text
+func (p *mockCryptoClient) Decrypt(content string) (string, error) {
+	return content, nil
+}
+
 type aesCryptoClient struct {
 	option *config.MCTech
 	key    []byte
 	iv     []byte
 }
 
-func newAesCryptoClientFromService() *aesCryptoClient {
-	c := new(aesCryptoClient)
+func newAesCryptoClientFromService() CryptoClient {
 	option := config.GetMCTechConfig()
+	if option.Encryption.Mock {
+		return &mockCryptoClient{}
+	}
+
+	c := new(aesCryptoClient)
 	c.option = option
 
 	key, iv, err := loadCryptoParams(option)
@@ -66,11 +91,6 @@ func newAesCryptoClientFromService() *aesCryptoClient {
 
 // Encrypt encrypt plain text
 func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
-	if c.option.Encryption.Mock {
-		// 用于调试场景
-		return plainText, nil
-	}
-
 	var cypher string
 	block, err := aes.NewCipher(c.key)
 	if err != nil {
@@ -92,11 +112,6 @@ func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
 
 // Decrypt decrypt cipher text
 func (c *aesCryptoClient) Decrypt(content string) (string, error) {
-	if c.option.Encryption.Mock {
-		// 用于调试场景
-		return content, nil
-	}
-
 	if !strings.HasPrefix(content, cryptoPrefix) {
 		return content, nil
 	}
@@ -173,11 +188,11 @@ func pkcs7Unpadding(data []byte) []byte {
 	return data[:length-unpadding]
 }
 
-var client *aesCryptoClient
+var client CryptoClient
 var cryptoInitOnce sync.Once
 
 // GetClient get crypto client
-func GetClient() *aesCryptoClient {
+func GetClient() CryptoClient {
 	if client != nil {
 		return client
 	}
