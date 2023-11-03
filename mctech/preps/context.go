@@ -92,11 +92,11 @@ func (d *tidbSessionMCTechContext) ReloadSessionMPPVars() (err error) {
 	vars := d.storedVars
 	// 把之前缓存的当前会话的原始值恢复到初始状态
 	for _, v := range vars {
-		err = sessionVars.SetSystemVar(v.name, v.value)
-		if err != nil {
+		if err = sessionVars.SetSystemVar(v.name, v.value); err != nil {
 			return
 		}
 	}
+	d.storedVars = nil
 	return
 }
 
