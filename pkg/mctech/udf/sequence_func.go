@@ -249,8 +249,53 @@ type sequenceMetrics struct {
 	TotalFetchCount int64 // 总共被取走的序列数
 }
 
+type sequenceCacheMetrics interface {
+	// GetMetrics get metrics
+	GetMetrics() *sequenceMetrics
+}
+
+// SequenceCache sequence cache interface
+type SequenceCache interface {
+	// VersionJustPass get version just pass seconds
+	VersionJustPass() (int64, error)
+	// Next get next sequence
+	Next() (int64, error)
+}
+
+type mockSequenceCache struct {
+	// 统计信息
+	metrics sequenceMetrics
+
+	mockSequence int64
+	mockLock     *sync.Mutex
+}
+
+func (m *mockSequenceCache) GetMetrics() *sequenceMetrics {
+	return &m.metrics
+}
+
+func (m *mockSequenceCache) VersionJustPass() (int64, error) {
+	// 用于调试场景
+	m.mockLock.Lock()
+	defer m.mockLock.Unlock()
+
+	val := m.mockSequence
+	m.mockSequence = m.mockSequence + 1
+	return val, nil
+}
+
+func (m *mockSequenceCache) Next() (int64, error) {
+	// 用于调试场景
+	m.mockLock.Lock()
+	defer m.mockLock.Unlock()
+
+	val := m.mockSequence
+	m.mockSequence = m.mockSequence + 1
+	return val, nil
+}
+
 // SequenceCache sequence client(Cached)
-type SequenceCache struct {
+type rpcSequenceCache struct {
 	frange *compositeRange
 	// 定义后端获取序列的线程资源锁
 	sem *semaphore.Weighted
@@ -259,43 +304,50 @@ type SequenceCache struct {
 	option  *config.MCTech
 	// 激活后台取序列的阈值
 	backendThreshold int64
-
-	mockSequence int64
-	mockLock     *sync.Mutex
 }
 
-func newSequenceCache() *SequenceCache {
-	sc := new(SequenceCache)
+func newSequenceCache() SequenceCache {
+	var sc SequenceCache
 	option := config.GetMCTechConfig()
-	sc.frange = newCompositeRange()
+	if option.Sequence.Mock {
+		sc = &mockSequenceCache{
+			mockSequence: time.Now().UnixMicro(),
+			mockLock:     &sync.Mutex{},
+		}
+	} else {
+		sc = &rpcSequenceCache{
+			frange:           newCompositeRange(),
+			option:           option,
+			sem:              semaphore.NewWeighted(option.Sequence.Backend), // 后台取序列的最大线程数
+			backendThreshold: (option.Sequence.MaxFetchCount * option.Sequence.Backend * 2) / 3,
+		}
+	}
 
-	sc.mockSequence = time.Now().UnixMicro()
-	sc.mockLock = &sync.Mutex{}
-	sc.option = option
-
-	// 后台取序列的最大线程数
-	sc.sem = semaphore.NewWeighted(sc.option.Sequence.Backend)
-	sc.backendThreshold = (option.Sequence.MaxFetchCount * option.Sequence.Backend * 2) / 3
+	if option.Sequence.Debug {
+		go func() {
+			c := make(chan os.Signal)
+			for {
+				select {
+				case <-c:
+					return
+				default:
+					start := time.Now().UnixNano()
+					time.Sleep(time.Second)
+					renderSequenceMetrics(sc, start)
+				}
+			}
+		}()
+	}
 	return sc
 }
 
 // GetMetrics get metrics
-func (s *SequenceCache) GetMetrics() *sequenceMetrics {
+func (s *rpcSequenceCache) GetMetrics() *sequenceMetrics {
 	return &s.metrics
 }
 
 // VersionJustPass versionJustPass
-func (s *SequenceCache) VersionJustPass() (int64, error) {
-	if s.option.Sequence.Mock {
-		// 用于调试场景
-		s.mockLock.Lock()
-		defer s.mockLock.Unlock()
-
-		val := s.mockSequence
-		s.mockSequence = s.mockSequence + 1
-		return val, nil
-	}
-
+func (s *rpcSequenceCache) VersionJustPass() (int64, error) {
 	url := s.option.Sequence.APIPrefix + "version"
 	if s.option.Sequence.Debug {
 		log.Debug("version just pass url", zap.String("url", url))
@@ -320,17 +372,7 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 }
 
 // Next next
-func (s *SequenceCache) Next() (int64, error) {
-	if s.option.Sequence.Mock {
-		// 用于调试场景
-		s.mockLock.Lock()
-		defer s.mockLock.Unlock()
-
-		val := s.mockSequence
-		s.mockSequence = s.mockSequence + 1
-		return val, nil
-	}
-
+func (s *rpcSequenceCache) Next() (int64, error) {
 	s.frange.frontLock.Lock()
 	defer s.frange.frontLock.Unlock()
 
@@ -356,7 +398,7 @@ func (s *SequenceCache) Next() (int64, error) {
 	s.metrics.TotalFetchCount++
 	return value, nil
 }
-func (s *SequenceCache) backendFetchSequenceIfNeeded() {
+func (s *rpcSequenceCache) backendFetchSequenceIfNeeded() {
 	if s.frange.Remaining() > s.backendThreshold {
 		return
 	}
@@ -376,7 +418,7 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 	}()
 }
 
-func (s *SequenceCache) loadSequence(count int64) error {
+func (s *rpcSequenceCache) loadSequence(count int64) error {
 	url := s.option.Sequence.APIPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
 	post, err := http.NewRequest("POST", url, &strings.Reader{})
 	if err != nil {
@@ -397,11 +439,11 @@ func (s *SequenceCache) loadSequence(count int64) error {
 	return nil
 }
 
-var cache *SequenceCache
+var cache SequenceCache
 var sequenceInitOnce sync.Once
 
 // GetCache 获取带缓存的序列服务客户端
-func GetCache() *SequenceCache {
+func GetCache() SequenceCache {
 	failpoint.Inject("ResetSequenceCache", func() {
 		failpoint.Return(newSequenceCache())
 	})
@@ -412,21 +454,6 @@ func GetCache() *SequenceCache {
 
 	sequenceInitOnce.Do(func() {
 		cache = newSequenceCache()
-		if cache.option.Sequence.Debug {
-			go func() {
-				c := make(chan os.Signal)
-				for {
-					select {
-					case <-c:
-						return
-					default:
-						start := time.Now().UnixNano()
-						time.Sleep(time.Second)
-						renderSequenceMetrics(cache, start)
-					}
-				}
-			}()
-		}
 		log.Info("init sequence cache")
 	})
 	return cache
@@ -445,8 +472,8 @@ func SequenceDecode(id int64) (int64, error) {
 	return ep + delta, nil
 }
 
-func renderSequenceMetrics(cache *SequenceCache, startNano int64) {
-	metric := cache.GetMetrics()
+func renderSequenceMetrics(cache SequenceCache, startNano int64) {
+	metric := cache.(sequenceCacheMetrics).GetMetrics()
 	if metric.TotalFetchCount == 0 {
 		return
 	}
