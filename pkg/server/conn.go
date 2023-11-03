@@ -1708,8 +1708,8 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	sc := sessVars.StmtCtx
 	prevWarns := sc.GetWarnings()
 	// add by zhangbing
-	var mctechCtx mctech.Context
-	ctx, mctechCtx, sql, err = cc.beforeParseSQL(ctx, sql)
+	var mctx mctech.Context
+	ctx, mctx, sql, err = cc.beforeParseSQL(ctx, sql)
 	if err != nil {
 		return err
 	}
@@ -1725,7 +1725,9 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		return cc.writeOK(ctx)
 	}
 	// add by zhangbing
-	if err = cc.afterParseSQL(ctx, mctechCtx, sql, stmts); err != nil {
+	mppVarCtx := mctx.(mctech.SessionMPPVarsContext)
+	defer mppVarCtx.ReloadSessionMPPVars()
+	if err = cc.afterParseSQL(ctx, mctx, sql, stmts); err != nil {
 		return err
 	}
 	// add end
