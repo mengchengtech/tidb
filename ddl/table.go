@@ -126,6 +126,15 @@ func createTable(d *ddlCtx, t *meta.Meta, job *model.Job, fkCheck bool) (*model.
 			return tbInfo, errors.Trace(err)
 		}
 
+		// add by zhangbing
+		// 新创建表，尝试生成tiflash的policy
+		// 按目前的tidb版本，新创建表的时候不会同时创建tiflash副本，TiFlashReplica属性始终是nil，但以后的版不确定会不会支持
+		// 此处添加了这段代码在目前的版里不会有什么实际影响
+		if err = updateFullTiflashTableReplacementPolicy(tbInfo, bundles); err != nil {
+			job.State = model.JobStateCancelled
+			return tbInfo, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		}
+		// add end
 		// Send the placement bundle to PD.
 		err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
 		if err != nil {
@@ -574,6 +583,13 @@ func clearTablePlacementAndBundles(tblInfo *model.TableInfo) error {
 		return nil
 	}
 
+	// add by zhangbing
+	// 从当前函数前面的逻辑可以看到清空placement不只是清除表上的，还清除了分区里独立配置的Policy
+	// 相当于重新创建的没有带Policy的表，因此需要作FULL操作
+	if err := updateFullTiflashTableReplacementPolicy(tblInfo, bundles); err != nil {
+		return err
+	}
+	// add end
 	return infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
 }
 
@@ -797,6 +813,14 @@ func onTruncateTable(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, _ erro
 		return ver, errors.Trace(err)
 	}
 
+	// add by zhangbing
+	// truncate table会直接删除原来的table生成一个新的table，新的tableId与原来的不一样，相当于新创建表
+	// 需要跟新创建表时执行相同的操作
+	if err = updateFullTiflashTableReplacementPolicy(tblInfo, bundles); err != nil {
+		job.State = model.JobStateCancelled
+		return 0, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+	}
+	// add end
 	err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
 	if err != nil {
 		job.State = model.JobStateCancelled
@@ -1378,6 +1402,21 @@ func (w *worker) onSetTableFlashReplica(d *ddlCtx, t *meta.Meta, job *model.Job)
 	if err != nil {
 		return ver, errors.Trace(err)
 	}
+	// add by zhangbing
+	// 设置 TIFLASH REPLICA，
+	// 刚增加完分区后马上执行该语句有可能新增加的分区正在创建过程中
+	// 删除分区后马上执行该语句，还有可能删除的分区正在删除中
+	var bundles []*placement.Bundle
+	if bundles, err = placement.NewFullTableBundles(t, tblInfo); err != nil {
+		job.State = model.JobStateCancelled
+		return ver, errors.Wrapf(err, "failed to generate tiflash placement rules")
+	}
+
+	if err = updateFullTiflashTableReplacementPolicy(tblInfo, bundles); err != nil {
+		job.State = model.JobStateCancelled
+		return ver, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+	}
+	// add end
 	job.FinishTableJob(model.JobStateDone, model.StatePublic, ver, tblInfo)
 	return ver, nil
 }
@@ -1743,6 +1782,21 @@ func onAlterTablePartitionPlacement(d *ddlCtx, t *meta.Meta, job *model.Job) (ve
 
 	// Send the placement bundle to PD.
 	if bundle != nil {
+		// add by zhangbing
+		// 单独修改一个分区的Placement
+		partBundle := bundle
+		if partBundle.Rules == nil {
+			// 分区上的placement被设置为default了，表示删除分区上独立的placement，此后应该从表上获取placement
+			partBundle, err = placement.NewTableBundle(t, tblInfo)
+			if err != nil {
+				return ver, errors.Trace(err)
+			}
+		}
+		if err = updateTiflashTablePartitionReplacementPolicy(partitionID, tblInfo, partBundle); err != nil {
+			job.State = model.JobStateCancelled
+			return ver, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		}
+		// add end
 		err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), []*placement.Bundle{bundle})
 	}
 
@@ -1791,6 +1845,13 @@ func onAlterTablePlacement(d *ddlCtx, t *meta.Meta, job *model.Job) (ver int64, 
 
 	// Send the placement bundle to PD.
 	if bundle != nil {
+		// add by zhangbing
+		// 修改一个表的的Placement. 只会影响Policy继承自表的分区，独立定义placement的分区不应该受影响
+		if err = updateTiflashTableReplacementPolicy(tblInfo, bundle); err != nil {
+			job.State = model.JobStateCancelled
+			return ver, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		}
+		// add end
 		err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), []*placement.Bundle{bundle})
 	}
 
