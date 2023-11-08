@@ -2091,6 +2091,12 @@ func (e *memtableRetriever) dataForTableTiFlashReplica(ctx sessionctx.Context, s
 					progress = progressMap[tbl.ID]
 				}
 			}
+			// add by zhangbing
+			var policyName interface{}
+			if schema.PlacementPolicyRef != nil {
+				policyName = schema.PlacementPolicyRef.Name.O
+			}
+			// add end
 			record := types.MakeDatums(
 				schema.Name.O,                   // TABLE_SCHEMA
 				tbl.Name.O,                      // TABLE_NAME
@@ -2099,6 +2105,9 @@ func (e *memtableRetriever) dataForTableTiFlashReplica(ctx sessionctx.Context, s
 				strings.Join(tbl.TiFlashReplica.LocationLabels, ","), // LOCATION_LABELS
 				tbl.TiFlashReplica.Available,                         // AVAILABLE
 				progress,                                             // PROGRESS
+				/* add by zhangbing */
+				policyName, // TIFLASH_PLACEMENT_POLICY_NAME
+				/* add end */
 			)
 			rows = append(rows, record)
 		}

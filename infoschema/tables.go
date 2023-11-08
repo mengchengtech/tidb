@@ -1094,6 +1094,9 @@ var tableTableTiFlashReplicaCols = []columnInfo{
 	{name: "LOCATION_LABELS", tp: mysql.TypeVarchar, size: 64},
 	{name: "AVAILABLE", tp: mysql.TypeTiny, size: 1},
 	{name: "PROGRESS", tp: mysql.TypeDouble, size: 22},
+	/* add by zhangbing */
+	{name: "TIFLASH_PLACEMENT_POLICY_NAME", tp: mysql.TypeVarchar, size: 64},
+	/* add end */
 }
 
 var tableInspectionResultCols = []columnInfo{

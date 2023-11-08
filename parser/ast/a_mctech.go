@@ -22,7 +22,7 @@ const (
 	MCDecrypt         = "mc_decrypt"
 	MCEncrypt         = "mc_encrypt"
 	MCSeqDecode       = "mc_seq_decode"
-	MCGetFullSql     = "mc_get_full_sql"
+	MCGetFullSql      = "mc_get_full_sql"
 
 	// 全名
 	MCTechSequence        = "mctech_sequence"
@@ -30,7 +30,7 @@ const (
 	MCTechDecrypt         = "mctech_decrypt"
 	MCTechEncrypt         = "mctech_encrypt"
 	MCTechSequenceDecode  = "mctech_sequence_decode"
-	MCTechGetFullSql     = "mctech_get_full_sql"
+	MCTechGetFullSql      = "mctech_get_full_sql"
 )
 
 type MCTechStmt struct {

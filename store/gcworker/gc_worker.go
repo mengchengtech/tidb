@@ -1937,6 +1937,9 @@ func (w *GCWorker) doGCPlacementRules(safePoint uint64, dr util.DelRangeTask, gc
 			gcPlacementRuleCache[id] = struct{}{}
 		}
 	}
+	// add by zhangbing
+	// 因为生成到pd里的tiflash rule借用的是原来tiflash的规则，因此，在清理partition时，tiflash partition不需要额外处理，等着tiflash删除默认规则就可以了
+	// add end
 	return infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
 }
 
