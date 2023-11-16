@@ -221,6 +221,8 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, origSQL string) {
 		sqlType = "load"
 	case *ast.SetStmt:
 		sqlType = "set"
+	case *ast.TruncateTableStmt:
+		sqlType = "truncate"
 	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, // lock/unlock table
 		// *ast.UseStmt,  // use
 		*ast.CallStmt, // precedure
