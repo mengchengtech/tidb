@@ -29,6 +29,7 @@ import (
 	"github.com/pingcap/tidb/br/pkg/utils"
 	"github.com/pingcap/tidb/br/pkg/version"
 	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/parser/model"
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/mathutil"
 	"github.com/spf13/cobra"
@@ -206,6 +207,13 @@ type RestoreConfig struct {
 	checkpointLogRestoreTaskName      string `json:"-" toml:"-"`
 	checkpointTaskInfoClusterID       uint64 `json:"-" toml:"-"`
 	WaitTiflashReady                  bool   `json:"wait-tiflash-ready" toml:"wait-tiflash-ready"`
+	// add by zhangbing
+	SkipTiFlashRestore bool   `json:"skip-tiflash-restore" toml:"skip-tiflash-restore"`
+	ForceReplicaCount  uint16 `json:"force-replica-count" toml:"force-replica-count"`
+	IgnorePlacement    bool   `json:"ignore-placement" toml:"ignore-placement"`
+	RestoreTableSuffix string `json:"restore-table-suffix" toml:"restore-table-suffix"`
+	RestoreDBSuffix    string `json:"restore-db-suffix" toml:"restore-db-suffix"`
+	// add end
 
 	// for ebs-based restore
 	FullBackupType      FullBackupType        `json:"full-backup-type" toml:"full-backup-type"`
@@ -233,6 +241,13 @@ func DefineRestoreFlags(flags *pflag.FlagSet) {
 
 	flags.Bool(FlagWaitTiFlashReady, false, "whether wait tiflash replica ready if tiflash exists")
 
+	// add by zhangbing
+	flags.Bool(FlagSkipTiFlashRestore, false, "whether skip tiflash replica restore if tiflash exists")
+	flags.Uint16(FlagForceReplicaCount, 0, "set tiflash replica restore count if tiflash exists. default 0, use restore meta information")
+	flags.Bool(FlagIgnorePlacement, false, "whether ignore db and table placements")
+	flags.String(FlagRestoreTableSuffix, "", "restore table name suffix. default \"\"")
+	flags.String(FlagRestoreDBSuffix, "", "restore db name suffix. default \"\"")
+	// addend
 	DefineRestoreCommonFlags(flags)
 }
 
@@ -339,7 +354,32 @@ func (cfg *RestoreConfig) ParseFromFlags(flags *pflag.FlagSet) error {
 	if err != nil {
 		return errors.Annotatef(err, "failed to get flag %s", FlagWaitTiFlashReady)
 	}
+	// add by zhangbing
+	cfg.SkipTiFlashRestore, err = flags.GetBool(FlagSkipTiFlashRestore)
+	if err != nil {
+		return errors.Annotatef(err, "failed to get flag %s", FlagForceReplicaCount)
+	}
 
+	cfg.ForceReplicaCount, err = flags.GetUint16(FlagForceReplicaCount)
+	if err != nil {
+		return errors.Annotatef(err, "failed to get flag %s", FlagForceReplicaCount)
+	}
+
+	cfg.IgnorePlacement, err = flags.GetBool(FlagIgnorePlacement)
+	if err != nil {
+		return errors.Annotatef(err, "failed to get flag %s", FlagIgnorePlacement)
+	}
+
+	cfg.RestoreTableSuffix, err = flags.GetString(FlagRestoreTableSuffix)
+	if err != nil {
+		return errors.Annotatef(err, "failed to get flag %s", FlagRestoreTableSuffix)
+	}
+
+	cfg.RestoreDBSuffix, err = flags.GetString(FlagRestoreDBSuffix)
+	if err != nil {
+		return errors.Annotatef(err, "failed to get flag %s", FlagRestoreDBSuffix)
+	}
+	// add end
 	if flags.Lookup(flagFullBackupType) != nil {
 		// for restore full only
 		fullBackupType, err := flags.GetString(flagFullBackupType)
@@ -486,6 +526,13 @@ func configureRestoreClient(ctx context.Context, client *restore.Client, cfg *Re
 	if err != nil {
 		return errors.Trace(err)
 	}
+
+	// add by zhangbing
+	if cfg.IgnorePlacement {
+		// ignore all placement policy
+		client.SetSupportPolicy(false)
+	}
+	// add end
 
 	return nil
 }
@@ -1054,11 +1101,39 @@ func filterRestoreFiles(
 		if !cfg.TableFilter.MatchSchema(dbName) {
 			continue
 		}
+		// add by zhangbing
+		var newDBName string
+		if len(cfg.RestoreDBSuffix) > 0 {
+			newDBName = db.Info.Name.O + cfg.RestoreDBSuffix
+			db.Info.Name = model.NewCIStr(newDBName)
+		}
+		// add end
 		dbs = append(dbs, db)
 		for _, table := range db.Tables {
 			if table.Info == nil || !cfg.TableFilter.MatchTable(dbName, table.Info.Name.O) {
 				continue
 			}
+			// add by zhangbing
+			if len(newDBName) > 0 {
+				table.DB.Name = db.Info.Name
+			}
+
+			if len(cfg.RestoreTableSuffix) > 0 {
+				newTBName := table.Info.Name.O + cfg.RestoreTableSuffix
+				table.Info.Name = model.NewCIStr(newTBName)
+			}
+
+			if table.Info.TiFlashReplica != nil {
+				if cfg.SkipTiFlashRestore {
+					// skip tiflash restore
+					table.TiFlashReplicas = 0
+					table.Info.TiFlashReplica = nil
+				} else if cfg.ForceReplicaCount > 0 {
+					table.TiFlashReplicas = int(cfg.ForceReplicaCount)
+					table.Info.TiFlashReplica.Count = uint64(cfg.ForceReplicaCount)
+				}
+			}
+			// add end
 			files = append(files, table.Files...)
 			tables = append(tables, table)
 		}
