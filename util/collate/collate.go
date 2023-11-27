@@ -359,6 +359,13 @@ func CollationToProto(c string) int32 {
 		return RewriteNewCollationIDIfNeeded(int32(coll.ID))
 	}
 	v := RewriteNewCollationIDIfNeeded(int32(mysql.DefaultCollationID))
+	// add by zhangbing
+	if len(c) == 0 {
+		// collate为空时不输出warn日志
+		// sql语句中字符串常量转换时可能会触发
+		return v
+	}
+	// add end
 	logutil.BgLogger().Warn(
 		"Unable to get collation ID by name, use ID of the default collation instead",
 		zap.String("name", c),
