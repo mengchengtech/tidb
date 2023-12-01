@@ -5,6 +5,7 @@ import (
 
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
+	"github.com/pingcap/tidb/parser/model"
 )
 
 type _msicExtension struct {
@@ -17,6 +18,16 @@ func (r *_msicExtension) Apply(mctx mctech.Context, node ast.Node) (matched bool
 		stmtNode.DBName, err = r.changeToPhysicalDb(mctx, stmtNode.DBName)
 	case *ast.ShowStmt:
 		stmtNode.DBName, err = r.changeToPhysicalDb(mctx, stmtNode.DBName)
+	case *ast.AnalyzeTableStmt:
+		for _, tName := range stmtNode.TableNames {
+			var newName string
+			newName, err = r.changeToPhysicalDb(mctx, tName.Schema.O)
+			newDbName := model.NewCIStr(newName)
+			tName.Schema = newDbName
+			if tName.DBInfo != nil {
+				tName.DBInfo.Name = newDbName
+			}
+		}
 	default:
 		matched = false
 	}
