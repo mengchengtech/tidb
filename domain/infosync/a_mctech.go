@@ -123,7 +123,7 @@ func attachLeaderRuleFromBundle(id int64, rule *placement.TiFlashRule, bundle *p
 	}
 
 	if leaderRule == nil {
-		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule don't exists in Bundle!", placement.GroupID(id))
+		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule don't exists in Bundle", placement.GroupID(id))
 	}
 
 	for _, c := range leaderRule.Constraints {

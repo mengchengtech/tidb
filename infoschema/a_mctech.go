@@ -15,6 +15,9 @@ const (
 
 	// ClusterTableMCTechLargeQuery is the string constant of cluster large sql query memory table.
 	ClusterTableMCTechLargeQuery = "CLUSTER_MCTECH_LARGE_QUERY"
+
+	// TableMCTechTableTTLInfo is the string constant of mctech table ttl info
+	TableMCTechTableTTLInfo = "MCTECH_TABLE_TTL_INFO"
 )
 
 var mctechLargeQueryCols = []columnInfo{
@@ -47,12 +50,25 @@ var mctechLargeQueryCols = []columnInfo{
 	{name: execdetails.MCTechTotalKeysStr, tp: mysql.TypeLonglong, size: 20, flag: mysql.UnsignedFlag},
 }
 
+var mcTechTableTTLInfoCols = []columnInfo{
+	{name: "TABLE_SCHEMA", tp: mysql.TypeVarchar, size: 64},
+	{name: "TABLE_NAME", tp: mysql.TypeVarchar, size: 64},
+	{name: "TIDB_TABLE_ID", tp: mysql.TypeLonglong, size: 21},
+	{name: "TTL_COLUMN_NAME", tp: mysql.TypeVarchar, size: 64},
+	{name: "TTL", tp: mysql.TypeVarchar, size: 64},
+	{name: "TTL_UNIT", tp: mysql.TypeVarchar, size: 64},
+	{name: "TTL_ENABLE", tp: mysql.TypeVarchar, size: 21},
+	{name: "TTL_JOB_INTERVAL", tp: mysql.TypeVarchar, size: 64},
+}
+
 func init() {
 	const mctechInformationSchemaDBID = 100000000
 	memTableToAllTiDBClusterTables[TableMCTechLargeQuery] = ClusterTableMCTechLargeQuery
 
 	tableIDMap[TableMCTechLargeQuery] = mctechInformationSchemaDBID + 1
 	tableIDMap[ClusterTableMCTechLargeQuery] = mctechInformationSchemaDBID + 2
+	tableIDMap[TableMCTechTableTTLInfo] = mctechInformationSchemaDBID + 3
 
 	tableNameToColumns[TableMCTechLargeQuery] = mctechLargeQueryCols
+	tableNameToColumns[TableMCTechTableTTLInfo] = mcTechTableTTLInfoCols
 }

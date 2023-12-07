@@ -245,6 +245,14 @@ type getServiceCase struct {
 	service string
 }
 
+func TestTableTTLInfo(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("create database if not exists test")
+	tk.MustExec("create table test.ttl_demo (id bigint, created_at datetime) ttl created_at + interval 1 year ttl_enable = 'on' ttl_job_interval '3h'")
+	tk.MustQuery("select * from information_schema.mctech_table_ttl_info").Check(testkit.Rows("test ttl_demo 88 created_at 1 YEAR ON 3h"))
+}
+
 func TestGetSeriveFromSql(t *testing.T) {
 	cases := []*getServiceCase{
 		{"/* from:'tenant-service', host */ select 1", "tenant-service"},
