@@ -586,13 +586,6 @@ func configureRestoreClient(ctx context.Context, client *restore.Client, cfg *Re
 	}
 	client.SetConcurrency(uint(cfg.Concurrency))
 
-	// add by zhangbing
-	if cfg.IgnorePlacement {
-		// ignore all placement policy
-		client.SetSupportPolicy(false)
-	}
-	// add end
-
 	return nil
 }
 
@@ -1225,6 +1218,9 @@ func filterRestoreFiles(
 			newDBName = db.Info.Name.O + cfg.RestoreDBSuffix
 			db.Info.Name = model.NewCIStr(newDBName)
 		}
+		if cfg.IgnorePlacement {
+			db.Info.PlacementPolicyRef = nil
+		}
 		// add end
 		dbs = append(dbs, db)
 		for _, table := range db.Tables {
@@ -1239,6 +1235,9 @@ func filterRestoreFiles(
 			if len(cfg.RestoreTableSuffix) > 0 {
 				newTBName := table.Info.Name.O + cfg.RestoreTableSuffix
 				table.Info.Name = model.NewCIStr(newTBName)
+			}
+			if cfg.IgnorePlacement {
+				table.Info.PlacementPolicyRef = nil
 			}
 
 			if table.Info.TiFlashReplica != nil {
