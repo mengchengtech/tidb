@@ -327,7 +327,7 @@ func (b *builtinMCTechGetFullSQLSig) evalString(row chunk.Row) (string, bool, er
 		if isNull || err != nil {
 			return "", isNull, err
 		}
-		at, err = types.StrToDateTime(sc, s, b.tp.GetDecimal())
+		at, err = types.ParseDatetime(sc, s)
 		if err != nil {
 			return "", isNull, err
 		}

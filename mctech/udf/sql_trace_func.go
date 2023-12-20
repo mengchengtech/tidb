@@ -13,6 +13,8 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
+const _DATE_FORMAT = "2006-01-02"
+
 // GetFullSQL get full sql from disk compact file
 func GetFullSQL(node, conn string, at types.Time) (sql string, err error) {
 	config := config.GetMCTechConfig()
@@ -20,15 +22,12 @@ func GetFullSQL(node, conn string, at types.Time) (sql string, err error) {
 	if fullSQLDir == "" {
 		return "", errors.New("未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
 	}
-	date, err := at.DateFormat("%Y-%m-%d")
-	if err != nil {
-		return "", err
-	}
 
-	gotime, err := at.GoTime(time.Local)
-	if err != nil {
+	var gotime time.Time
+	if gotime, err = at.GoTime(time.Local); err != nil {
 		return "", err
 	}
+	date := gotime.Format(_DATE_FORMAT)
 	fullPath := path.Join(fullSQLDir, date, node, conn, fmt.Sprintf("%d.gz", gotime.UnixMilli()))
 	if _, err := os.Stat(fullPath); err != nil {
 		return "", err
