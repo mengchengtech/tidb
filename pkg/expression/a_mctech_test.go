@@ -108,11 +108,16 @@ func TestGetFullSqlByTime(t *testing.T) {
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 
-	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594436)), mysql.TypeDatetime, 3)
+	datetime := "2023-10-11 13:53:14.436"
+	at, err := time.ParseInLocation("2006-01-02 15:04:05.999", datetime, time.Local)
+	require.NoError(t, err)
+	unixMilli := at.UnixMilli()
+	require.Equal(t, int64(1697003594436), unixMilli)
+	dt := types.NewTime(types.FromGoTime(at), mysql.TypeDatetime, 3)
 	ctx := createContext(t)
 	fc := funcs[ast.MCGetFullSql]
 	f, err := fc.getFunction(mock.NewContext(),
-		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", datetime)))
+		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", dt)))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
@@ -127,10 +132,11 @@ func TestGetFullSqlByString(t *testing.T) {
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 
+	datetime := "2023-10-11 13:53:14.436"
 	ctx := createContext(t)
 	fc := funcs[ast.MCGetFullSql]
 	f, err := fc.getFunction(mock.NewContext(),
-		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", "2023-10-11 05:53:14.436")))
+		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", datetime)))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
