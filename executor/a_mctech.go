@@ -1149,11 +1149,21 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(ctx context.Context, 
 			if !table.IsView() {
 				ttlInfo := table.TTLInfo
 				ttlUnit := ast.TimeUnitType(ttlInfo.IntervalTimeUnit).String()
+				var colExpr string
+				var columnType string
+				for _, c := range table.Columns {
+					if c.Name.L == ttlInfo.ColumnName.L {
+						colExpr = c.GeneratedExprString
+						columnType = c.FieldType.InfoSchemaStr()
+					}
+				}
 				record := types.MakeDatums(
 					schema.Name.O,                        // TABLE_SCHEMA
 					table.Name.O,                         // TABLE_NAME
 					table.ID,                             // TIDB_TABLE_ID
 					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
+					columnType,														// TTL_COLUMN_TYPE
+					colExpr,                              // TTL_COLUMN_GENERATED_EXPR
 					ttlInfo.IntervalExprStr,              // TTL
 					ttlUnit,                              // TTL_UNIT
 					variable.BoolToOnOff(ttlInfo.Enable), // TTL_ENABLE

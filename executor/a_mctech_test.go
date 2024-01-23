@@ -245,12 +245,57 @@ type getServiceCase struct {
 	service string
 }
 
-func TestTableTTLInfo(t *testing.T) {
+func TestTableTTLInfoNormalColumn(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("create database if not exists test")
-	tk.MustExec("create table test.ttl_demo (id bigint, created_at datetime) ttl created_at + interval 1 year ttl_enable = 'on' ttl_job_interval '3h'")
-	tk.MustQuery("select * from information_schema.mctech_table_ttl_info").Check(testkit.Rows("test ttl_demo 88 created_at 1 YEAR ON 3h"))
+	tk.MustExec(`create table test.ttl_normal_column_demo (
+		id bigint,
+		created_at datetime
+	) ttl created_at + interval 1 year ttl_enable = 'on' ttl_job_interval '3h'
+	`)
+	tk.MustQuery(
+		`select TABLE_SCHEMA, TABLE_NAME, TTL_COLUMN_NAME, TTL_COLUMN_TYPE, TTL_COLUMN_GENERATED_EXPR, TTL, TTL_UNIT, TTL_ENABLE, TTL_JOB_INTERVAL
+	from information_schema.mctech_table_ttl_info`,
+	).Check(testkit.Rows("test ttl_normal_column_demo created_at datetime  1 YEAR ON 3h"))
+}
+
+func TestTableTTLInfoGenerateDateLiteralColumn(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("create database if not exists test")
+	tk.MustExec(`create table test.ttl_generated_column_demo (
+		id bigint,
+		is_removed boolean,
+		updated_at datetime,
+		__discarded_at datetime AS (IF (is_removed, updated_at, '9999-12-31 23:59:59'))
+	) ttl __discarded_at + interval 180 day ttl_enable = 'on' ttl_job_interval '3h'
+	`)
+	tk.MustQuery(
+		`select TABLE_SCHEMA, TABLE_NAME, TTL_COLUMN_NAME, TTL_COLUMN_TYPE, TTL_COLUMN_GENERATED_EXPR, TTL, TTL_UNIT, TTL_ENABLE, TTL_JOB_INTERVAL
+	from information_schema.mctech_table_ttl_info`,
+	).Check(testkit.Rows(
+		"test ttl_generated_column_demo __discarded_at datetime if(`is_removed`, `updated_at`, '9999-12-31 23:59:59')) 180 DAY ON 3h",
+	))
+}
+
+func TestTableTTLInfoGeneratedColumn(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("create database if not exists test")
+	tk.MustExec(`create table test.ttl_generated_column_demo (
+		id bigint,
+		is_removed boolean,
+		updated_at datetime,
+		__discarded_at datetime AS (IF(is_removed, updated_at, date_add(updated_at, INTERVAL 180 DAY)))
+	) ttl __discarded_at + interval 180 day ttl_enable = 'on' ttl_job_interval '3h'
+	`)
+	tk.MustQuery(
+		`select TABLE_SCHEMA, TABLE_NAME, TTL_COLUMN_NAME, TTL_COLUMN_TYPE, TTL_COLUMN_GENERATED_EXPR, TTL, TTL_UNIT, TTL_ENABLE, TTL_JOB_INTERVAL
+	from information_schema.mctech_table_ttl_info`,
+	).Check(testkit.Rows(
+		"test ttl_generated_column_demo __discarded_at datetime if(`is_removed`, `updated_at`, date_add(`updated_at`, interval 180 day)) 180 DAY ON 3h",
+	))
 }
 
 func TestGetSeriveFromSql(t *testing.T) {
