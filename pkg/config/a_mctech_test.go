@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/mctech/mock"
+	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -88,10 +88,10 @@ func TestLogFile(t *testing.T) {
 		{"a/b/c/{hostname1}/large-sql.log", "a/b/c/tidb01/large-sql.log", "metrics log filename template DO NOT support 'hostname1' only allow 'hostname'"},
 	}
 
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetHostName", mock.M(t, "true"))
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetHostName", mock.M(t, "true"))
 
 	defer func() {
-		failpoint.Disable("github.com/pingcap/tidb/mctech/GetHostName")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetHostName")
 	}()
 
 	for _, c := range cases {

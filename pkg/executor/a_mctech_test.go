@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/mctech"
 
 	// 强制调用preps包里的init方法
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/mctech/mock"
-	_ "github.com/pingcap/tidb/mctech/preps"
+	"github.com/pingcap/tidb/pkg/mctech/mock"
+	_ "github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
