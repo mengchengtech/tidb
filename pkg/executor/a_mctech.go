@@ -712,7 +712,7 @@ func (e *mctechLargeLogRetriever) setColumnValue(sctx sessionctx.Context, row []
 		if field == variable.MCLargeLogTimeStr && checker != nil {
 			t, err := ParseTime(value)
 			if err != nil {
-				err = fmt.Errorf("Parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
+				err = fmt.Errorf("parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
 				sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 				return false
 			}
@@ -723,7 +723,7 @@ func (e *mctechLargeLogRetriever) setColumnValue(sctx sessionctx.Context, row []
 	}
 	valid, err := factory(row, value, tz, checker)
 	if err != nil {
-		err = fmt.Errorf("Parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
+		err = fmt.Errorf("parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
 		sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 		return true
 	}
