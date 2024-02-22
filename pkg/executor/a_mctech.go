@@ -25,7 +25,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor/internal/exec"
-	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/parser/model"
@@ -1163,7 +1163,7 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(sctx sessionctx.Conte
 					table.Name.O,                         // TABLE_NAME
 					table.ID,                             // TIDB_TABLE_ID
 					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
-					columnType,														// TTL_COLUMN_TYPE
+					columnType,                           // TTL_COLUMN_TYPE
 					colExpr,                              // TTL_COLUMN_GENERATED_EXPR
 					ttlInfo.IntervalExprStr,              // TTL
 					ttlUnit,                              // TTL_UNIT
