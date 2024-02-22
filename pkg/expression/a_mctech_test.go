@@ -116,7 +116,7 @@ func TestGetFullSqlByTime(t *testing.T) {
 func TestGetFullSqlByString(t *testing.T) {
 	fullPath, err := filepath.Abs("../mctech/udf/data")
 	require.NoError(t, err)
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		fmt.Sprintf("return(`{\"Metrics.SqlTrace.FullSqlDir\": \"%s\"}`)", fullPath),
 	)
 
@@ -130,5 +130,5 @@ func TestGetFullSqlByString(t *testing.T) {
 	_, err = evalBuiltinFunc(f, chunk.Row{})
 	require.NoError(t, err)
 
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }

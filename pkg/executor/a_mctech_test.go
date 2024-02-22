@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/kv"
-	"github.com/pingcap/tidb/mctech"
 
 	// 强制调用preps包里的init方法
 	"github.com/pingcap/failpoint"
@@ -312,7 +312,7 @@ func TestGetSeriveFromSql(t *testing.T) {
 func TestLargeQueryWithoutLogFile(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),
 	)
 	// cfg := config.GetMCTechConfig()
@@ -320,7 +320,7 @@ func TestLargeQueryWithoutLogFile(t *testing.T) {
 	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_query_file='%v'", cfg.Metrics.LargeQuery.Filename))
 	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
 	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func TestLargeQuery(t *testing.T) {
@@ -365,7 +365,7 @@ func TestLargeQuery(t *testing.T) {
 		require.NoError(t, os.Remove(f.Name()))
 	}()
 
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": f.Name()}),
 	)
 
@@ -383,5 +383,5 @@ func TestLargeQuery(t *testing.T) {
 			"select * from t;",
 		))
 
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }

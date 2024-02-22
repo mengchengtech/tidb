@@ -16,7 +16,7 @@ type encryptionTestCases struct {
 }
 
 func TestMCTechCrypto(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Encryption.Mock": false}),
 	)
 	cases := []*encryptionTestCases{
@@ -26,7 +26,7 @@ func TestMCTechCrypto(t *testing.T) {
 	}
 
 	doRunCryptoTest(t, cases)
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
