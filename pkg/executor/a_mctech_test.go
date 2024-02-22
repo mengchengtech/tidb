@@ -312,15 +312,15 @@ func TestGetSeriveFromSql(t *testing.T) {
 func TestLargeLogWithoutLogFile(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
-		mock.M(t, map[string]any{"Metrics.LargeLog.Filename": "mctech-large-log-exist.log"}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]any{"Metrics.LargeLog.Filename": "mctech-large-query-exist.log"}),
 	)
 	// cfg := config.GetMCTechConfig()
 	tk := testkit.NewTestKit(t, store)
 	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_log_file='%v'", cfg.Metrics.LargeLog.Filename))
 	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
 	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
 
 func TestLargeLog(t *testing.T) {
@@ -365,7 +365,7 @@ func TestLargeLog(t *testing.T) {
 		require.NoError(t, os.Remove(f.Name()))
 	}()
 
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeLog.Filename": f.Name()}),
 	)
 
@@ -383,5 +383,5 @@ func TestLargeLog(t *testing.T) {
 			"select * from t;",
 		))
 
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }

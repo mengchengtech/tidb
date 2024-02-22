@@ -116,7 +116,7 @@ func TestGetFullSqlByTime(t *testing.T) {
 func TestGetFullSqlByString(t *testing.T) {
 	fullPath, err := filepath.Abs("../mctech/udf/data")
 	require.NoError(t, err)
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		fmt.Sprintf("return(`{\"Metrics.SqlTrace.FullSqlDir\": \"%s\"}`)", fullPath),
 	)
 
@@ -127,8 +127,8 @@ func TestGetFullSqlByString(t *testing.T) {
 		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", datetime)))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
-	_, err = evalBuiltinFunc(f, chunk.Row{})
+	_, err = evalBuiltinFunc(f, ctx, chunk.Row{})
 	require.NoError(t, err)
 
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 }
