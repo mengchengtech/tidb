@@ -270,6 +270,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context) {
 	writeSQLRespTotal := stmtDetail.WriteSQLRespDuration                 // 发送结果耗时
 	firstRowReadyTime := queryTime - writeSQLRespTotal                   // 首行结果准备好时间(总执行时间除去发送结果耗时)
 	resultRows := executor.GetResultRowsCount(stmtCtx, execStmt.Plan)    // 查询返回结果行数
+	affectedRows := stmtCtx.AffectedRows()                               // sql执行结果影响的数据行数
 	var writeKeys int = 0                                                // 写入 Key 个数
 	if execDetails.CommitDetail != nil {
 		writeKeys = execDetails.CommitDetail.WriteKeys
@@ -314,6 +315,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context) {
 		zap.Int64("mem", memMax),
 		zap.Int64("disk", diskMax),
 		zap.Int("keys", writeKeys),
+		zap.Uint64("affected", affectedRows),
 		zap.Int64("rows", resultRows),
 		zap.String("sql", origSQL),
 	}
