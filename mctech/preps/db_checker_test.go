@@ -66,6 +66,11 @@ func newTestMCTechContext(tenantOnly bool) (mctech.Context, error) {
 }
 
 func TestDatabaseChecker(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DbChecker.Compatible": false}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
 	cases := []*testDatabaseCheckerCase{
 		// 当前账号不属于tenant_only角色
 		{false, []string{"global_cq3", "global_mtlp"}, ""},
@@ -84,11 +89,7 @@ func TestDatabaseChecker(t *testing.T) {
 		{true, []string{"asset_component", "global_cq3"}, "dbs not allow in the same statement"},
 		{true, []string{"global_mp", "global_mp"}, ""},
 	}
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
-		mock.M(t, map[string]bool{"DbChecker.Compatible": false}),
-	)
 	doRunTest(t, checkRunTestCase, cases)
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 type mockStmtTextAware struct{}

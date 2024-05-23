@@ -94,6 +94,7 @@ func TestGetFullSqlByTime(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		fmt.Sprintf("return(`{\"Metrics.SqlTrace.FullSqlDir\": \"%s\"}`)", fullPath),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := "2023-10-11 13:53:14.436"
 	at, err := time.ParseInLocation("2006-01-02 15:04:05.999", datetime, time.Local)
@@ -109,8 +110,6 @@ func TestGetFullSqlByTime(t *testing.T) {
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
 	require.NoError(t, err)
-
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func TestGetFullSqlByString(t *testing.T) {
@@ -119,6 +118,7 @@ func TestGetFullSqlByString(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		fmt.Sprintf("return(`{\"Metrics.SqlTrace.FullSqlDir\": \"%s\"}`)", fullPath),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := "2023-10-11 13:53:14.436"
 	ctx := createContext(t)
@@ -129,6 +129,4 @@ func TestGetFullSqlByString(t *testing.T) {
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
 	require.NoError(t, err)
-
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }

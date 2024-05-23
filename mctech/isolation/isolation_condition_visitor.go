@@ -305,16 +305,16 @@ func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	v.columnModifiedScope.Push(modified)
 }
 
-func (v *isolationConditionVisitor) leaveInsertStatement(node *ast.InsertStmt) {
+func (v *isolationConditionVisitor) leaveInsertStatement(_ *ast.InsertStmt) {
 	v.columnModifiedScope.Pop()
 }
 
-func (v *isolationConditionVisitor) enterSubquery(node *ast.SubqueryExpr) {
+func (v *isolationConditionVisitor) enterSubquery(_ *ast.SubqueryExpr) {
 	// 子查询不应该受 insert/upsert 的列修改影响
 	v.columnModifiedScope.Push(false)
 }
 
-func (v *isolationConditionVisitor) leaveSubquery(node *ast.SubqueryExpr) {
+func (v *isolationConditionVisitor) leaveSubquery(_ *ast.SubqueryExpr) {
 	v.columnModifiedScope.Pop()
 }
 

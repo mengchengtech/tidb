@@ -43,6 +43,8 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
 		mock.M(t, c.response),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
+
 	result, err := mctech.NewPrepareResult(c.tenant, true, c.params)
 	if err != nil {
 		return err
@@ -53,6 +55,5 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 		return err
 	}
 	require.Equal(t, c.expect, index, c.Source())
-	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 	return nil
 }

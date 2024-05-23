@@ -92,9 +92,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechC
 	stmt := stmts[0]
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
 	modifyCtx.Reset()
-	if err != nil {
-		return err
-	}
+
 	dbs, skipped, err := preprocessor.ResolveStmt(mctechCtx, stmt, charset, collation)
 	if err != nil {
 		return err

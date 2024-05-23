@@ -13,7 +13,7 @@ import (
 	"github.com/pingcap/tidb/types"
 )
 
-const _DATE_FORMAT = "2006-01-02"
+const dateFormat = "2006-01-02"
 
 // GetFullSQL get full sql from disk compact file
 func GetFullSQL(node, conn string, at types.Time) (sql string, err error) {
@@ -27,7 +27,7 @@ func GetFullSQL(node, conn string, at types.Time) (sql string, err error) {
 	if gotime, err = at.GoTime(time.Local); err != nil {
 		return "", err
 	}
-	date := gotime.Format(_DATE_FORMAT)
+	date := gotime.Format(dateFormat)
 	fullPath := path.Join(fullSQLDir, date, node, conn, fmt.Sprintf("%d.gz", gotime.UnixMilli()))
 	if _, err := os.Stat(fullPath); err != nil {
 		return "", err

@@ -107,10 +107,11 @@ func TestDDLExtensionVisitor(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
 	for _, lst := range ddlExtensionCases {
 		doRunTest(t, doRunDDLMCTechTestCase, lst)
 	}
-	require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig"))
 }
 
 func doRunDDLMCTechTestCase(t *testing.T, c *ddlMCTechTestCase) error {

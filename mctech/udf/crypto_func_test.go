@@ -19,6 +19,8 @@ func TestMCTechCrypto(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Encryption.Mock": false}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
 	cases := []*encryptionTestCases{
 		{true, "13511868785", "{crypto}HMvlbGus4V3geqwFULvOUw==", ""},
 		{false, "{crypto}HMvlbGus4V3geqwFULvOUw==", "13511868785", ""},
@@ -26,13 +28,13 @@ func TestMCTechCrypto(t *testing.T) {
 	}
 
 	doRunCryptoTest(t, cases)
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
 		mock.M(t, map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 
 	client := newAesCryptoClientFromService()
 	for _, c := range cases {
@@ -56,5 +58,4 @@ func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
 			require.Equal(t, c.expect, text)
 		}
 	}
-	failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 }

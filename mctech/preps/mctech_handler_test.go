@@ -64,10 +64,8 @@ func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Conte
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.Enabled": c.tenantEnabled, "DbChecker.Enabled": c.dbCheckerEnabled}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
-	defer func() {
-		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-	}()
 	var sql string
 	if sql, err = handler.PrepareSQL(mctechCtx, c.sql); err != nil {
 		return err

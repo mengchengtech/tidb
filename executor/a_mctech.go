@@ -982,7 +982,7 @@ func uncompress(ctx context.Context, line string) (string, error) {
 
 type mctechLargeQueryColumnValueFactory func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error)
 
-func getLargeQueryColumnValueFactoryByName(sctx sessionctx.Context, colName string, columnIdx int) (mctechLargeQueryColumnValueFactory, error) {
+func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string, columnIdx int) (mctechLargeQueryColumnValueFactory, error) {
 	switch colName {
 	case variable.MCTechLargeQueryTimeStr:
 		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (bool, error) {
@@ -1133,7 +1133,7 @@ func GetSeriveFromSQL(sql string) string {
 
 // --------------------------------------------------------------------------------
 
-func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(ctx context.Context, sctx sessionctx.Context, schemas []*model.DBInfo) error {
+func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sctx sessionctx.Context, schemas []*model.DBInfo) error {
 	checker := privilege.GetPrivilegeManager(sctx)
 	var rows [][]types.Datum
 	for _, schema := range schemas {

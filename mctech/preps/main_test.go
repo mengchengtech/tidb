@@ -28,7 +28,7 @@ type mctechTestCase interface {
 	Failure() string
 }
 
-func createSession(t *testing.T, tk *testkit.TestKit, user string, roles ...string) sessionctx.Context {
+func createSession(_ *testing.T, tk *testkit.TestKit, user string, roles ...string) sessionctx.Context {
 	session := tk.Session()
 	vars := session.GetSessionVars()
 	vars.User = &auth.UserIdentity{Username: user, Hostname: "%"}

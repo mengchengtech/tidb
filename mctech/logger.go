@@ -38,7 +38,7 @@ func L() *zap.Logger {
 	return largeQueryLogger
 }
 
-func newZapEncoder(cfg *log.Config) zapcore.Encoder {
+func newZapEncoder(_ *log.Config) zapcore.Encoder {
 	cc := zapcore.EncoderConfig{
 		TimeKey:        "", // 不记录生成日志时的time
 		LevelKey:       "", // 不记录日志级别

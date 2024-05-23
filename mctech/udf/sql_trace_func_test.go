@@ -23,9 +23,10 @@ func TestGetFullSql(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]string{"Metrics.SqlTrace.FullSqlDir": fullPath}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
 	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594436)), mysql.TypeDatetime, 3)
 	sql, err := GetFullSQL("tidb05", "5qz4J4Ux23z", datetime)
 	require.NoError(t, err)
 	require.Equal(t, 279828, len(sql))
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }

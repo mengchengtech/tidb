@@ -51,6 +51,8 @@ func TestForbiddenPrepare(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": true}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
@@ -62,7 +64,6 @@ func TestForbiddenPrepare(t *testing.T) {
 	for _, c := range cases {
 		tk.MustContainErrMsg(c.source, c.failure)
 	}
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func TestIntegerAutoIncrement(t *testing.T) {
@@ -90,6 +91,8 @@ func TestPrepareByQuery(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
 
@@ -120,14 +123,13 @@ func TestPrepareByQuery(t *testing.T) {
 	for _, row := range rows1 {
 		seqs1[row[0].(string)] = true
 	}
-
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func TestPrepareByCmd(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
@@ -143,18 +145,17 @@ func TestPrepareByCmd(t *testing.T) {
 	for _, row := range rows1 {
 		seqs1[row[0].(string)] = true
 	}
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func TestPrepareByCmdNoTenant(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("select * from information_schema.statements_summary limit ?", 5)
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
@@ -310,23 +311,21 @@ func TestGetSeriveFromSql(t *testing.T) {
 }
 
 func TestLargeQueryWithoutLogFile(t *testing.T) {
-	store := testkit.CreateMockStore(t)
-
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
+	store := testkit.CreateMockStore(t)
+
 	// cfg := config.GetMCTechConfig()
 	tk := testkit.NewTestKit(t, store)
 	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_query_file='%v'", cfg.Metrics.LargeQuery.Filename))
 	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
 	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
 
 func TestLargeQuery(t *testing.T) {
-	store := testkit.CreateMockStore(t)
-	tk := testkit.NewTestKit(t, store)
-
 	f, err := os.CreateTemp("", "mctech-large-query-*.log")
 	require.NoError(t, err)
 
@@ -368,6 +367,10 @@ func TestLargeQuery(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": f.Name()}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
 
 	tk.MustQuery("select count(*) from `information_schema`.`mctech_large_query` where time > '2020-10-16 20:08:13' and time < '2020-10-16 21:08:13'").Check(testkit.Rows("1"))
 	tk.MustQuery("select count(*) from `information_schema`.`mctech_large_query` where time > '2019-10-13 20:08:13' and time < '2020-10-16 21:08:13'").Check(testkit.Rows("2"))
@@ -382,6 +385,4 @@ func TestLargeQuery(t *testing.T) {
 			"select * from t2;",
 			"select * from t;",
 		))
-
-	failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 }
