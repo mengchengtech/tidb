@@ -1727,7 +1727,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	// add by zhangbing
 	mppVarCtx := mctx.(mctech.SessionMPPVarsContext)
 	defer mppVarCtx.ReloadSessionMPPVars()
-	if err = cc.afterParseSQL(ctx, mctx, sql, stmts); err != nil {
+	if err = cc.afterParseSQL(ctx, mctx, stmts); err != nil {
 		return err
 	}
 	// add end
