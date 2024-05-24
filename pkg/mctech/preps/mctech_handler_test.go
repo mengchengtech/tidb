@@ -12,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var handler = mctech.GetHandler()
+
 type handlerTestCase struct {
 	sql              string
 	expectChanged    bool
@@ -77,9 +79,14 @@ func handlerRunTestCase(t *testing.T, c *handlerTestCase, mctechCtx mctech.Conte
 	}
 
 	require.Equal(t, 1, len(stmts), c.Source())
-	changed, err := handler.ApplyAndCheck(mctechCtx, stmts)
-	if err != nil {
-		return err
+	var changed bool
+	for _, stmt := range stmts {
+		ch, err := handler.ApplyAndCheck(mctechCtx, stmt)
+		if err != nil {
+			return err
+		}
+
+		changed = changed || ch
 	}
 
 	for _, stmt := range stmts {
