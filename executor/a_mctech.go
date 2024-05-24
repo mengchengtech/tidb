@@ -134,11 +134,13 @@ func (e *PrepareExec) afterParseSQL(ctx context.Context, stmts []ast.StmtNode) (
 	if mctx != nil {
 		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 		modifyCtx.SetUsingTenantParam(true)
-		if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
-			if strFmt, ok := e.ctx.(fmt.Stringer); ok {
-				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", e.sqlText))
+		for _, stmt := range stmts {
+			if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
+				if strFmt, ok := e.ctx.(fmt.Stringer); ok {
+					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", stmt.OriginalText()))
+				}
+				return err
 			}
-			return err
 		}
 	}
 
@@ -1162,7 +1164,7 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sc
 					table.Name.O,                         // TABLE_NAME
 					table.ID,                             // TIDB_TABLE_ID
 					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
-					columnType,														// TTL_COLUMN_TYPE
+					columnType,                           // TTL_COLUMN_TYPE
 					colExpr,                              // TTL_COLUMN_GENERATED_EXPR
 					ttlInfo.IntervalExprStr,              // TTL
 					ttlUnit,                              // TTL_UNIT
