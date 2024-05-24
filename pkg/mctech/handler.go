@@ -9,7 +9,7 @@ type Handler interface {
 	// PrepareSQL
 	PrepareSQL(ctx Context, rawSQL string) (sql string, err error)
 	// ApplyAndCheck
-	ApplyAndCheck(ctx Context, stmts []ast.StmtNode) (changed bool, err error)
+	ApplyAndCheck(ctx Context, stmt ast.StmtNode) (changed bool, err error)
 }
 
 var handler Handler
