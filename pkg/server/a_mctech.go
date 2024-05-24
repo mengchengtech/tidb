@@ -41,7 +41,7 @@ func (cc *clientConn) beforeParseSQL(ctx context.Context, sql string) (context.C
 	return subCtx, mctx, sql, nil
 }
 
-func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sql string, stmts []ast.StmtNode) (err error) {
+func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, stmts []ast.StmtNode) (err error) {
 	// 判断当前是否是查询语句
 	queryOnly := false
 	for _, stmt := range stmts {
@@ -81,9 +81,11 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, sq
 	}
 
 	handler := mctech.GetHandler()
-	if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
-		logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(cc.getCtx())), zap.String("SQL", sql))
-		return err
+	for _, stmt := range stmts {
+		if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
+			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(cc.getCtx())), zap.String("SQL", stmt.OriginalText()))
+			return err
+		}
 	}
 
 	if opts := config.GetMCTechConfig(); opts.Metrics.QueryLog.Enabled {
