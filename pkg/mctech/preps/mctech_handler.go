@@ -17,6 +17,9 @@ type mctechHandler struct{}
 
 // PrepareSQL prepare sql
 func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql string, err error) {
+	if rawSQL == "" {
+		return rawSQL, nil
+	}
 	option := config.GetMCTechConfig()
 	if !option.Tenant.Enabled {
 		// 禁用租户隔离
