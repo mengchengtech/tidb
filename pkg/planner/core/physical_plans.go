@@ -829,10 +829,10 @@ type PhysicalTableScan struct {
 	// AccessCondition is used to calculate range.
 	AccessCondition []expression.Expression
 	filterCondition []expression.Expression
-	// lateMaterializationFilterCondition is used to record the filter conditions
+	// LateMaterializationFilterCondition is used to record the filter conditions
 	// that are pushed down to table scan from selection by late materialization.
 	// TODO: remove this field after we support pushing down selection to coprocessor.
-	lateMaterializationFilterCondition []expression.Expression
+	LateMaterializationFilterCondition []expression.Expression
 
 	Table   *model.TableInfo
 	Columns []*model.ColumnInfo
@@ -900,6 +900,7 @@ func (ts *PhysicalTableScan) Clone() (PhysicalPlan, error) {
 	clonedScan.physicalSchemaProducer = *prod
 	clonedScan.AccessCondition = util.CloneExprs(ts.AccessCondition)
 	clonedScan.filterCondition = util.CloneExprs(ts.filterCondition)
+	clonedScan.LateMaterializationFilterCondition = util.CloneExprs(ts.LateMaterializationFilterCondition)
 	if ts.Table != nil {
 		clonedScan.Table = ts.Table.Clone()
 	}
@@ -917,11 +918,11 @@ func (ts *PhysicalTableScan) Clone() (PhysicalPlan, error) {
 
 // ExtractCorrelatedCols implements PhysicalPlan interface.
 func (ts *PhysicalTableScan) ExtractCorrelatedCols() []*expression.CorrelatedColumn {
-	corCols := make([]*expression.CorrelatedColumn, 0, len(ts.AccessCondition)+len(ts.filterCondition))
+	corCols := make([]*expression.CorrelatedColumn, 0, len(ts.AccessCondition)+len(ts.LateMaterializationFilterCondition))
 	for _, expr := range ts.AccessCondition {
 		corCols = append(corCols, expression.ExtractCorColumns(expr)...)
 	}
-	for _, expr := range ts.filterCondition {
+	for _, expr := range ts.LateMaterializationFilterCondition {
 		corCols = append(corCols, expression.ExtractCorColumns(expr)...)
 	}
 	return corCols
@@ -1028,6 +1029,9 @@ func (ts *PhysicalTableScan) MemoryUsage() (sum int64) {
 		sum += cond.MemoryUsage()
 	}
 	for _, cond := range ts.filterCondition {
+		sum += cond.MemoryUsage()
+	}
+	for _, cond := range ts.LateMaterializationFilterCondition {
 		sum += cond.MemoryUsage()
 	}
 	for _, rang := range ts.Ranges {
