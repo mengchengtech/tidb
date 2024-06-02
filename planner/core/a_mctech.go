@@ -98,7 +98,7 @@ func (e *MCTech) prepareSchema() error {
 func (e *MCTech) RenderResult(ctx context.Context) error {
 	switch strings.ToLower(e.Format) {
 	case types.ExplainFormatROW:
-		if err := e.mctechPlanInRowFormat(ctx); err != nil {
+		if err := e.mctechPlanInRowFormat(); err != nil {
 			return err
 		}
 	default:
@@ -108,9 +108,9 @@ func (e *MCTech) RenderResult(ctx context.Context) error {
 }
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
-func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) error {
-	mctx, err := mctech.GetContext(ctx)
-	if err != nil {
+func (e *MCTech) mctechPlanInRowFormat() (err error) {
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(e.SCtx()); err != nil {
 		return err
 	}
 
@@ -191,7 +191,7 @@ func isDefaultValMCSymFunc(expr ast.ExprNode) bool {
 
 // ----------------------------------------------------------------
 
-func (e *Execute) getExtensionParams(ctx context.Context) ([]ast.ParamMarkerExpr, int) {
+func (e *Execute) getExtensionParams() ([]ast.ParamMarkerExpr, int) {
 	prepared := e.PrepStmt.PreparedAst
 	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
 		return p.GetOffset() == mctech.ExtensionParamMarkerOffset
@@ -223,15 +223,15 @@ func appendExtensionArgs[T any](
 }
 
 // AppendVarExprs append custom extension parameters
-func (e *Execute) AppendVarExprs(ctx context.Context) error {
+func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 	// 获取扩展参数列表
-	extParams, from := e.getExtensionParams(ctx)
+	extParams, from := e.getExtensionParams()
 	if len(extParams) == 0 {
 		return nil
 	}
 
-	mctx, err := mctech.GetContext(ctx)
-	if err != nil {
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(sctx); err != nil {
 		return err
 	}
 
@@ -253,7 +253,6 @@ func (e *Execute) AppendVarExprs(ctx context.Context) error {
 		}
 	}
 
-	sctx := mctx.Session()
 	sessionVars := sctx.GetSessionVars()
 	if tenantValue == nil {
 		user := sessionVars.User.Username

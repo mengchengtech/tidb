@@ -303,9 +303,10 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 	defer tk.Session().GetSessionVars().ClearAlloc(&tk.alloc, err != nil)
 	// add by zhangbing
 	var mctx mctech.Context
-	if ctx, mctx, sql, err = tk.onBeforeParseSQL(ctx, sql); err != nil {
+	if mctx, sql, err = tk.onBeforeParseSQL(sql); err != nil {
 		return nil, err
 	}
+	defer mctx.Clear()
 	// add end
 	if len(args) == 0 {
 		sc := tk.session.GetSessionVars().StmtCtx
@@ -320,7 +321,7 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 		}
 
 		// add by zhangbing
-		if err = tk.onAfterParseSQL(ctx, mctx, stmts); err != nil {
+		if err = tk.onAfterParseSQL(stmts); err != nil {
 			return nil, err
 		}
 		// add end
@@ -342,7 +343,7 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 			}
 
 			// add by zhangbing
-			tk.onAfterHandleStmt(ctx, stmt, err)
+			tk.onAfterHandleStmt(stmt, err)
 			// add end
 			if err != nil {
 				tk.session.GetSessionVars().StmtCtx.AppendError(err)

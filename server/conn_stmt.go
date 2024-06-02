@@ -48,6 +48,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/charset"
@@ -71,6 +72,14 @@ import (
 )
 
 func (cc *clientConn) handleStmtPrepare(ctx context.Context, sql string) error {
+	// add by zhangbing
+	var err error
+	var mctx mctech.Context
+	if mctx, sql, err = cc.onBeforeParseSQL(sql); err != nil {
+		return err
+	}
+	defer mctx.Clear()
+	// add end
 	stmt, columns, params, err := cc.ctx.Prepare(sql)
 	if err != nil {
 		return err
@@ -135,6 +144,13 @@ func (cc *clientConn) handleStmtPrepare(ctx context.Context, sql string) error {
 }
 
 func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err error) {
+	// add by zhangbing
+	var mctx mctech.Context
+	if mctx, _, err = cc.onBeforeParseSQL(""); err != nil {
+		return err
+	}
+	defer mctx.Clear()
+	// add end
 	defer trace.StartRegion(ctx, "HandleStmtExecute").End()
 	if len(data) < 9 {
 		return mysql.ErrMalformPacket
