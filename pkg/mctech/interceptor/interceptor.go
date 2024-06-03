@@ -251,6 +251,29 @@ func traceFullQuery(sctx sessionctx.Context) {
 		}
 	}()
 
+	si := sessionctx.ShortInfo(sctx)
+	var (
+		timeStart         time.Time      // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
+		connID            uint64         // SQL 查询客户端连接 ID
+		db                = si.GetDB()   // 执行sql时的当前库名称
+		dbs               string         // 执行的sql中用到的所有数据库名称列表。','分隔
+		user              = si.GetUser() // 执行sql时使用的账号
+		tenant            string         // 所属租户信息
+		queryTime         time.Duration  // 执行 SQL 耗费的自然时间
+		parseTime         time.Duration  // 解析耗时
+		compileTime       time.Duration  // 生成执行计划耗时
+		copTime           time.Duration  // Coprocessor 执行耗时
+		memMax            int64          // 该 SQL 查询执行时占用的最大内存空间
+		diskMax           int64          // 该 SQL 查询执行时占用的最大磁盘空间
+		writeSQLRespTotal time.Duration  // 发送结果耗时
+		firstRowReadyTime time.Duration  // 首行结果准备好时间(总执行时间除去发送结果耗时)
+		resultRows        int64          // 查询返回结果行数
+		affectedRows      uint64         // sql执行结果影响的数据行数
+		digest            string         // sql 语句的hash
+		zip               []byte         // 压缩后的sql文本
+		writeKeys         = 0            // 写入 Key 个数
+	)
+
 	execDetails := stmtCtx.GetExecDetails()
 
 	var stmtDetail execdetails.StmtExecDetails
@@ -259,25 +282,24 @@ func traceFullQuery(sctx sessionctx.Context) {
 		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
 	}
 
-	timeStart := sessVars.StartTime                                      // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-	connID := sessVars.ConnectionID                                      // SQL 查询客户端连接 ID
-	queryTime := time.Since(sessVars.StartTime) + sessVars.DurationParse // 执行 SQL 耗费的自然时间
-	parseTime := sessVars.DurationParse                                  // 解析耗时
-	compileTime := sessVars.DurationCompile                              // 生成执行计划耗时
-	copTime := execDetails.CopTime                                       // Coprocessor 执行耗时
-	var _ string                                                         // 移除注释并且参数替换后的sql模板
-	memMax := stmtCtx.MemTracker.MaxConsumed()                           // 该 SQL 查询执行时占用的最大内存空间
-	diskMax := stmtCtx.DiskTracker.MaxConsumed()                         // 该 SQL 查询执行时占用的最大磁盘空间
-	writeSQLRespTotal := stmtDetail.WriteSQLRespDuration                 // 发送结果耗时
-	firstRowReadyTime := queryTime - writeSQLRespTotal                   // 首行结果准备好时间(总执行时间除去发送结果耗时)
-	resultRows := executor.GetResultRowsCount(stmtCtx, execStmt.Plan)    // 查询返回结果行数
-	affectedRows := stmtCtx.AffectedRows()                               // sql执行结果影响的数据行数
-	var writeKeys int = 0                                                // 写入 Key 个数
+	timeStart = sessVars.StartTime
+	connID = sessVars.ConnectionID
+	queryTime = time.Since(sessVars.StartTime) + sessVars.DurationParse
+	parseTime = sessVars.DurationParse
+	compileTime = sessVars.DurationCompile
+	copTime = execDetails.CopTime
+	memMax = stmtCtx.MemTracker.MaxConsumed()
+	diskMax = stmtCtx.DiskTracker.MaxConsumed()
+	writeSQLRespTotal = stmtDetail.WriteSQLRespDuration
+	firstRowReadyTime = queryTime - writeSQLRespTotal
+	resultRows = executor.GetResultRowsCount(stmtCtx, execStmt.Plan)
+	affectedRows = stmtCtx.AffectedRows()
 	if execDetails.CommitDetail != nil {
 		writeKeys = execDetails.CommitDetail.WriteKeys
 	}
-	_, digest := stmtCtx.SQLDigest() //
-
+	_, d := stmtCtx.SQLDigest()
+	digest = d.String()
+	
 	failpoint.Inject("MockTraceLogData", func(val failpoint.Value) {
 		values := make(map[string]any)
 		err := json.Unmarshal([]byte(val.(string)), &values)
@@ -311,7 +333,6 @@ func traceFullQuery(sctx sessionctx.Context) {
 		}
 	})
 
-	var zip []byte
 	sqlLen := len(origSQL)
 	if sqlLen > config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold {
 		var b bytes.Buffer
@@ -330,10 +351,6 @@ func traceFullQuery(sctx sessionctx.Context) {
 		}
 	}
 
-	var (
-		dbs    string // 执行的sql中用到的所有数据库名称列表。','分隔
-		tenant string // 所属租户信息
-	)
 	if mctx, err := mctech.GetContext(sctx); err != nil {
 		panic(err)
 	} else {
@@ -346,11 +363,10 @@ func traceFullQuery(sctx sessionctx.Context) {
 		}
 	}
 
-	si := sessionctx.ShortInfo(sctx)
 	var fields = []zapcore.Field{
-		zap.String("db", si.GetDB()),
+		zap.String("db", db),
 		zap.String("dbs", dbs),
-		zap.String("usr", si.GetUser()),
+		zap.String("usr", user),
 		zap.String("tenant", tenant),
 		zap.String("conn", encode(connID)),
 		zap.String("tp", sqlType),
@@ -363,7 +379,7 @@ func traceFullQuery(sctx sessionctx.Context) {
 			ready: firstRowReadyTime,
 			send:  writeSQLRespTotal,
 		}),
-		zap.Stringer("digest", digest),
+		zap.String("digest", digest),
 		zap.Int64("mem", memMax),
 		zap.Int64("disk", diskMax),
 		zap.Int("keys", writeKeys),
