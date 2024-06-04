@@ -41,6 +41,7 @@ import (
 	_ "github.com/pingcap/tidb/extension/_import"
 	"github.com/pingcap/tidb/keyspace"
 	"github.com/pingcap/tidb/kv"
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/metrics"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/parser/terror"
@@ -795,6 +796,9 @@ func setupLog() {
 }
 
 func setupExtensions() *extension.Extensions {
+	// add by zhangbing
+	mctech.RegisterExtensions()
+	// add end
 	err := extension.Setup()
 	terror.MustNil(err)
 
