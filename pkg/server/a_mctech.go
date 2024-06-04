@@ -9,10 +9,12 @@ import (
 	"github.com/pingcap/tidb/pkg/sessionctx"
 )
 
+// onBeforeParseSQL sql语法解析前 执行的方法
 func (cc *clientConn) onBeforeParseSQL(sql string) (mctech.Context, string, error) {
 	return mctech.GetInterceptor().BeforeParseSQL(cc.getCtx(), sql)
 }
 
+// onAfterParseSQL 当sql语法解析成功后 执行的方法
 func (cc *clientConn) onAfterParseSQL(stmts []ast.StmtNode) (err error) {
 	it := mctech.GetInterceptor()
 	sctx := cc.getCtx()

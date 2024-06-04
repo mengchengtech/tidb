@@ -368,6 +368,9 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 			var err error
 			stmts, err = tk.session.Parse(ctx, sql)
 			if err != nil {
+				// add by zhangbing
+				tk.onParseSQLFailed(sql, err)
+				// add end
 				return nil, errors.Trace(err)
 			}
 		}
