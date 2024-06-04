@@ -40,6 +40,7 @@ import (
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/execdetails"
 	"github.com/pingcap/tidb/util/hack"
+	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/mathutil"
 	"github.com/pingcap/tidb/util/memory"
@@ -116,7 +117,7 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	return nil
 }
 
-func (e *PrepareExec) beforePrepare(ctx context.Context) error {
+func (e *PrepareExec) checkPrepare(ctx context.Context) error {
 	if config.GetMCTechConfig().Tenant.ForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
@@ -126,9 +127,12 @@ func (e *PrepareExec) beforePrepare(ctx context.Context) error {
 func (e *PrepareExec) afterParseSQL(ctx context.Context, stmt ast.StmtNode) (err error) {
 	handler := mctech.GetHandler()
 	var mctx mctech.Context
-	mctx, err = mctech.GetContext(ctx)
-	if err != nil {
+	if mctx, err = mctech.GetContext(ctx); err != nil {
 		return err
+	}
+
+	if intest.InTest && mctx == nil {
+		return nil
 	}
 
 	if mctx != nil {

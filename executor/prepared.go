@@ -74,7 +74,7 @@ func NewPrepareExec(ctx sessionctx.Context, sqlTxt string) *PrepareExec {
 // Next implements the Executor Next interface.
 func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	// add by zhangbing
-	if err := e.beforePrepare(ctx); err != nil {
+	if err := e.checkPrepare(ctx); err != nil {
 		return err
 	}
 	// add end
