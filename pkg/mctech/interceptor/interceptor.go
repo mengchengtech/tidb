@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/pingcap/failpoint"
@@ -335,10 +336,28 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 		}
 	}
 
+	var (
+		dbs    string // 执行的sql中用到的所有数据库名称列表。','分隔
+		tenant string // 所属租户信息
+	)
+	if mctx, err := mctech.GetContext(ctx); err != nil {
+		panic(err)
+	} else {
+		lst := mctx.GetDbs(execStmt.StmtNode)
+		if len(lst) > 0 {
+			dbs = strings.Join(lst, ",")
+		}
+		if result := mctx.PrepareResult(); result != nil {
+			tenant = result.Tenant()
+		}
+	}
+
 	si := sessionctx.ShortInfo(sess)
 	var fields = []zapcore.Field{
 		zap.String("db", si.GetDB()),
+		zap.String("dbs", dbs),
 		zap.String("usr", si.GetUser()),
+		zap.String("tenant", tenant),
 		zap.String("conn", encode(connID)),
 		zap.String("tp", sqlType),
 		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
