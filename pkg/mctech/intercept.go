@@ -14,6 +14,8 @@ type Interceptor interface {
 	BeforeParseSQL(sctx sessionctx.Context, sql string) (Context, string, error)
 	// AfterParseSQL
 	AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (err error)
+	// ParseSQLFailed
+	ParseSQLFailed(sctx sessionctx.Context, sql string, err error)
 	// AfterHandleStmt
 	AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, err error)
 }
