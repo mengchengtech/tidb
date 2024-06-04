@@ -25,7 +25,13 @@ func onStmtEvent(tp extension.StmtEventTp, event extension.StmtEventInfo) {
 	switch tp {
 	case extension.StmtError:
 		err := info.GetError()
-		it.AfterHandleStmt(info.SCtx(), info.StmtNode(), err)
+		if info.StmtNode() != nil {
+			// stmtNode存在，sql解析成功，执行失败
+			it.AfterHandleStmt(info.SCtx(), info.StmtNode(), err)
+		} else {
+			// stmtNode 不存在，sql 解析失败
+			it.ParseSQLFailed(info.SCtx(), info.OriginalText(), err)
+		}
 	case extension.StmtSuccess:
 		it.AfterHandleStmt(info.SCtx(), info.StmtNode(), nil)
 	}

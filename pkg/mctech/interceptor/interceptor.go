@@ -15,6 +15,7 @@ import (
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
 	"github.com/pingcap/tidb/pkg/util/logutil"
@@ -136,7 +137,15 @@ func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (e
 	return nil
 }
 
+func (*interceptor) ParseSQLFailed(sctx sessionctx.Context, sql string, err error) {
+	doAfterHandleStmt(sctx, sql, nil, err)
+}
+
 func (*interceptor) AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, err error) {
+	doAfterHandleStmt(sctx, "", stmt, err)
+}
+
+func doAfterHandleStmt(sctx sessionctx.Context, sql string, stmt ast.StmtNode, err error) {
 	if sessVars := sctx.GetSessionVars(); sessVars.InRestrictedSQL {
 		// 不记录内部sql
 		return
@@ -148,8 +157,19 @@ func (*interceptor) AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, 
 		return
 	}
 
+	var execStmt *executor.ExecStmt
+	if v := sctx.Value(mctech.MCExecStmtVarKey); v != nil {
+		execStmt = v.(*executor.ExecStmt)
+	}
+
 	mctx := mctech.GetContextStrict(sctx)
-	dbs := mctx.GetDbs(stmt)
+	var dbs []string
+	if stmt != nil {
+		dbs = mctx.GetDbs(stmt)
+	} else {
+		dbs = []string{sctx.GetSessionVars().CurrentDB}
+	}
+
 	if dbs != nil {
 		for _, db := range metrics.Exclude {
 			if slices.Contains(dbs, db) {
@@ -160,22 +180,25 @@ func (*interceptor) AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, 
 	}
 
 	if metrics.LargeQuery.Enabled {
-		logLargeQuery(sctx, stmt, err == nil)
+		// 只有正确执行的sql才考虑是否记录
+		logLargeQuery(execStmt, err == nil)
 	}
 
-	if err == nil {
-		// 全量sql只记录执行成功的sql
-		if metrics.SQLTrace.Enabled {
-			traceFullQuery(sctx)
-		}
+	if metrics.SQLTrace.Enabled {
+		traceFullQuery(sctx, sql, stmt, execStmt, err)
 	}
 }
 
 // 记录超长sql
-func logLargeQuery(sctx sessionctx.Context, stmt ast.StmtNode, succ bool) {
+func logLargeQuery(execStmt *executor.ExecStmt, succ bool) {
+	if execStmt == nil {
+		// 某些原因下execStmt为空的时候（比如sql解析失败，未能生成执行计划等），不记录超长sql
+		return
+	}
+
 	opts := config.GetMCTechConfig()
 	sqlType := "other"
-	switch stmt.(type) {
+	switch execStmt.StmtNode.(type) {
 	case *ast.SelectStmt, *ast.SetOprStmt:
 		sqlType = "select"
 	case *ast.DeleteStmt:
@@ -194,20 +217,27 @@ func logLargeQuery(sctx sessionctx.Context, stmt ast.StmtNode, succ bool) {
 	}()
 
 	if slices.Contains(opts.Metrics.LargeQuery.Types, sqlType) {
-		execStmt := sctx.Value(mctech.MCExecStmtVarKey).(*executor.ExecStmt)
 		execStmt.SaveLargeQuery(sqlType, succ)
 	}
 }
 
 // 记录全量sql
-func traceFullQuery(sctx sessionctx.Context) {
+func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
+	execStmt *executor.ExecStmt, err error) {
 	sessVars := sctx.GetSessionVars()
-	stmtCtx := sessVars.StmtCtx
-	origSQL := stmtCtx.OriginalSQL
+	var (
+		sqlType = "unknown" // sql语句类型
+		origSQL = sql       // 只有当stmt为nil时才会使用传入的sql参数，此时代表的是 sql 解析失败
+	)
+	// 此处不能使用 sessVars.StmtCtx 获取sql信息
+	// 原因参考当前方法后续 `if execStmt != nil {......}` 块内部的说明
+	//
+	// stmt 是解析sql后拆分的一条一条独立的sql语法树对象，与当前sql是密切相关的
+	if stmt != nil {
+		origSQL = stmt.OriginalText()
+	}
 
-	execStmt := sctx.Value(mctech.MCExecStmtVarKey).(*executor.ExecStmt)
-	var sqlType string // sql语句类型
-	switch s := execStmt.StmtNode.(type) {
+	switch s := stmt.(type) {
 	case *ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt: // execute
 		sqlType = "exec"
 	case *ast.BeginStmt, *ast.RollbackStmt, *ast.CommitStmt: // transaction
@@ -241,6 +271,7 @@ func traceFullQuery(sctx sessionctx.Context) {
 		*ast.DoStmt:   // do block
 		sqlType = "misc"
 	default:
+		// stmt 为 nil 或者除以上各个 case 项以外的类型
 		return
 	}
 
@@ -274,12 +305,36 @@ func traceFullQuery(sctx sessionctx.Context) {
 		writeKeys         = 0            // 写入 Key 个数
 	)
 
-	execDetails := stmtCtx.GetExecDetails()
-
 	var stmtDetail execdetails.StmtExecDetails
-	stmtDetailRaw := execStmt.GoCtx.Value(execdetails.StmtExecDetailKey)
-	if stmtDetailRaw != nil {
-		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
+	if execStmt != nil {
+		stmtDetailRaw := execStmt.GoCtx.Value(execdetails.StmtExecDetailKey)
+		if stmtDetailRaw != nil {
+			stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
+			writeSQLRespTotal = stmtDetail.WriteSQLRespDuration
+		}
+
+		// sessVars.StmtCtx 的值不一定准确
+		// 这个值只会在session.ExecuteStmt方法被调用时，在该方法内部修改
+		// 如果上述方法没有执行到时，比如遇到sql语法错误，还没有解析成ast.StmtNode对象时，
+		// 此时触发全量sql记录进入到当前方法时，sessVars.StmtCtx保存的还是上一次执行ExecuteStmt方法设置的值
+		//
+		// 另一方面 传入的 execStmt 参数的实例也是在 session.ExecuteStmt 方法内部创建的, 并且创建时间还在 StmtCtx 重置状态后。
+		// 因此可以认为只要 execStmt 有值，则StmtCtx的值一定也是最新的，反之当execStmt为nil时，StmtCtx 的状态不确定，此时不能使用
+		if stmtCtx := sessVars.StmtCtx; stmtCtx != nil {
+			if plan, ok := stmtCtx.GetPlan().(core.Plan); ok {
+				resultRows = executor.GetResultRowsCount(stmtCtx, plan)
+			}
+			execDetails := stmtCtx.GetExecDetails()
+			copTime = execDetails.CopTime
+			memMax = stmtCtx.MemTracker.MaxConsumed()
+			diskMax = stmtCtx.DiskTracker.MaxConsumed()
+			affectedRows = stmtCtx.AffectedRows()
+			if execDetails.CommitDetail != nil {
+				writeKeys = execDetails.CommitDetail.WriteKeys
+			}
+			_, d := stmtCtx.SQLDigest()
+			digest = d.String()
+		}
 	}
 
 	timeStart = sessVars.StartTime
@@ -287,19 +342,8 @@ func traceFullQuery(sctx sessionctx.Context) {
 	queryTime = time.Since(sessVars.StartTime) + sessVars.DurationParse
 	parseTime = sessVars.DurationParse
 	compileTime = sessVars.DurationCompile
-	copTime = execDetails.CopTime
-	memMax = stmtCtx.MemTracker.MaxConsumed()
-	diskMax = stmtCtx.DiskTracker.MaxConsumed()
-	writeSQLRespTotal = stmtDetail.WriteSQLRespDuration
 	firstRowReadyTime = queryTime - writeSQLRespTotal
-	resultRows = executor.GetResultRowsCount(stmtCtx, execStmt.Plan)
-	affectedRows = stmtCtx.AffectedRows()
-	if execDetails.CommitDetail != nil {
-		writeKeys = execDetails.CommitDetail.WriteKeys
-	}
-	_, d := stmtCtx.SQLDigest()
-	digest = d.String()
-	
+
 	failpoint.Inject("MockTraceLogData", func(val failpoint.Value) {
 		values := make(map[string]any)
 		err := json.Unmarshal([]byte(val.(string)), &values)
@@ -354,7 +398,7 @@ func traceFullQuery(sctx sessionctx.Context) {
 	if mctx, err := mctech.GetContext(sctx); err != nil {
 		panic(err)
 	} else {
-		lst := mctx.GetDbs(execStmt.StmtNode)
+		lst := mctx.GetDbs(stmt)
 		if len(lst) > 0 {
 			dbs = strings.Join(lst, ",")
 		}
@@ -385,6 +429,9 @@ func traceFullQuery(sctx sessionctx.Context) {
 		zap.Int("keys", writeKeys),
 		zap.Uint64("affected", affectedRows),
 		zap.Int64("rows", resultRows),
+	}
+	if err != nil {
+		fields = append(fields, zap.String("error", err.Error()))
 	}
 
 	fields = append(fields, zap.String("sql", origSQL))
