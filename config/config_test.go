@@ -899,7 +899,22 @@ spilled-file-encryption-method = "aes128-ctr"
 
 	configFile = "config.toml.example"
 	require.NoError(t, conf.Load(configFile))
-
+	// add zhangbing
+	conf.MCTech = MCTech{
+		Sequence:   Sequence{APIPrefix: "http://node-infra-sequence-service.mc/", Backend: 5, Mock: false, Debug: false, MaxFetchCount: 1000},
+		Encryption: Encryption{Mock: false, APIPrefix: "http://node-infra-encryption-service.mc/", AccessID: "oJEKJh1wvqncJYASxp1Iiw"},
+		DbChecker:  DbChecker{Enabled: false, Compatible: true, APIPrefix: "http://node-infra-dim-service.mc/", Mutex: []string{"asset_*", "global_*"}, Exclude: []string{"global_platform", "global_ipm", "global_dw_*", "global_dwb"}, Across: []string{"global_mtlp|global_ma"}},
+		Tenant:     Tenant{Enabled: false, ForbiddenPrepare: false},
+		DDL:        DDL{Version: VersionColumn{Enabled: false, Name: "__version", DbMatches: []string{"global_*", "asset_*", "public_*", "*_custom"}}},
+		MPP:        MPP{DefaultValue: "allow"},
+		Metrics: MctechMetrics{
+			Exclude:    []string{"test", "dp_stat", "mysql", "information_schema", "metrics_schema", "performance_schema"},
+			QueryLog:   QueryLog{Enabled: false, MaxLength: 4096},
+			LargeQuery: LargeQuery{Enabled: false, Filename: "mctech_large_query_log.log", FileMaxDays: 3, FileMaxSize: 512, Threshold: 4194304, Types: []string{"delete", "insert", "update", "select"}},
+			SQLTrace:   SQLTrace{Enabled: false, Filename: "mctech_tidb_full_sql.log", FileMaxDays: 3, FileMaxSize: 512, CompressThreshold: 65536, FullSQLDir: ""},
+		},
+	}
+	// add end
 	// Make sure the example config is the same as default config except `auto_tls`.
 	conf.Security.AutoTLS = false
 	require.Equal(t, GetGlobalConfig(), conf)

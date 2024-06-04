@@ -33,6 +33,7 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/stretchr/testify/require"
 	"github.com/tikv/client-go/v2/util"
+	"golang.org/x/exp/slices"
 )
 
 func MockDispatcher(t *testing.T, pool *pools.ResourcePool) (dispatcher.Dispatch, *storage.TaskManager) {
@@ -97,6 +98,11 @@ func TestGetInstance(t *testing.T) {
 	require.NoError(t, failpoint.Enable("github.com/pingcap/tidb/domain/infosync/mockGetAllServerInfo", makeFailpointRes(mockedAllServerInfos)))
 	serverNodes, err = dispatcher.GenerateSchedulerNodes(ctx)
 	require.NoError(t, err)
+	// add by zhangbing 解决go map 遍历乱序问题
+	slices.SortFunc(serverNodes, func(a, b *infosync.ServerInfo) bool {
+		return a.ID < b.ID
+	})
+	// add end
 	instanceID, err = dispatcher.GetEligibleInstance(serverNodes, 0)
 	require.NoError(t, err)
 	require.Equal(t, serverIDs[0], instanceID)

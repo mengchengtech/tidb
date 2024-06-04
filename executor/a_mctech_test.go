@@ -11,7 +11,6 @@ import (
 
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/mctech"
 
 	// 强制调用preps包里的init方法
 	"github.com/pingcap/failpoint"
@@ -91,16 +90,15 @@ func TestPrepareByQuery(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/EnsureContext", mock.M(t, "true"))
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/tidb/mctech/EnsureContext")
 
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
 
-	session := tk.Session()
-	var ctx context.Context
-	ctx, _, _ = mctech.WithNewContext3(context.Background(), session, true)
 	tk.MustExecWithContext(
-		ctx,
+		context.Background(),
 		fmt.Sprintf(`prepare st from "%s"`, sql),
 	)
 
@@ -108,12 +106,8 @@ func TestPrepareByQuery(t *testing.T) {
 		"SET @p1 = 'termination', @p2 = 'finished', @p3 = 'none', @p4 = 'project'",
 	)
 
-	var err error
-	ctx, _, err = mctech.WithNewContext(session)
-	require.NoError(t, err)
-
 	rs := tk.MustQueryWithContext(
-		ctx,
+		context.Background(),
 		`/*& tenant:mctest */ EXECUTE st USING @p1, @p2, @p3, @p4, @p4`,
 	)
 
@@ -129,15 +123,14 @@ func TestPrepareByCmd(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/EnsureContext", mock.M(t, "true"))
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/tidb/mctech/EnsureContext")
 
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
 
-	session := tk.Session()
-	var ctx context.Context
-	ctx, _, _ = mctech.WithNewContext3(context.Background(), session, true)
-	result1 := tk.MustQueryWithContext(ctx, sql, "termination", "finished", "none", "project", "project", "mctest")
+	result1 := tk.MustQueryWithContext(context.Background(), sql, "termination", "finished", "none", "project", "project", "mctest")
 
 	rows1 := result1.Rows()
 	seqs1 := map[string]any{}
@@ -151,7 +144,9 @@ func TestPrepareByCmdNoTenant(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false}),
 	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/EnsureContext", mock.M(t, "true"))
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/tidb/mctech/EnsureContext")
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
@@ -203,7 +198,8 @@ func initDbAndData(t *testing.T, store kv.Storage) (*testkit.TestKit, string) {
 	tk.MustExec(createTableSQL1)
 	tk.MustExec(createTableSQL2)
 
-	tk.MustExec(`insert into org_relation
+	tk.MustExec(`/*& global:true */
+insert into org_relation
 (tenant, org_id, child_org_id)
 values
 ('mctest', 466585195139584, 466585195139584)
@@ -211,7 +207,8 @@ values
 ,('crec4', 1241041712902656, 1241041712902656)
 ,('crec4', 1241042011738624, 1241042191774208)
 `)
-	tk.MustExec(`insert into project
+	tk.MustExec(`/*& global:true */
+insert into project
 (tenant, id, org_id, construct_status, is_removed)
 values
 ('mctest', 466585195139584, 466585195139584, 'finished', 0)
@@ -219,7 +216,8 @@ values
 ,('crec4', 1241041712902656, 1241041712902656, 'none', 0)
 ,('crec4', 1241042011738624, 1241042011738624, 'none', 0)
 `)
-	tk.MustExec(`insert into organization
+	tk.MustExec(`/*& global:true */
+insert into organization
 (id, tenant, org_type, ext_type, is_removed)
 values
 (466585195139584, 'mctest', 'project', 'project', 0)
@@ -276,7 +274,7 @@ func TestTableTTLInfoGenerateDateLiteralColumn(t *testing.T) {
 		`select TABLE_SCHEMA, TABLE_NAME, TTL_COLUMN_NAME, TTL_COLUMN_TYPE, TTL_COLUMN_GENERATED_EXPR, TTL, TTL_UNIT, TTL_ENABLE, TTL_JOB_INTERVAL
 	from information_schema.mctech_table_ttl_info`,
 	).Check(testkit.Rows(
-		"test ttl_generated_column_demo __discarded_at datetime if(`is_removed`, `updated_at`, '9999-12-31 23:59:59')) 180 DAY ON 3h",
+		"test ttl_generated_column_demo __discarded_at datetime if(`is_removed`, `updated_at`, _utf8mb4'9999-12-31 23:59:59') 180 DAY ON 3h",
 	))
 }
 

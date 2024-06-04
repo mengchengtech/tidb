@@ -236,10 +236,10 @@ func (e *Execute) AppendVarExprs(ctx context.Context) error {
 	}
 
 	var tenantValue expression.Expression
-	if mctx != nil {
-		// 优先从sql语句中提取租户信息
-		if result := mctx.PrepareResult(); result != nil {
-			tenantCode := result.Tenant()
+	// 优先从sql语句中提取租户信息
+	if result := mctx.PrepareResult(); result != nil {
+		tenantCode := result.Tenant()
+		if tenantCode != "" {
 			tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)
 		}
 	}
