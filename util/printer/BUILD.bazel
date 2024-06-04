@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//config",
         "//parser/mysql",
+        "//util/intest",
         "//util/israce",
         "//util/logutil",
         "//util/versioninfo",

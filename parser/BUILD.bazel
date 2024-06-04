@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "parser",
     srcs = [
+        "a_mctech.go",
         "digester.go",
         "hintparser.go",
         "hintparserimpl.go",
@@ -32,6 +33,7 @@ go_test(
     name = "parser_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "bench_test.go",
         "consistent_test.go",
         "digester_test.go",

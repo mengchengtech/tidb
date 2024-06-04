@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "variable",
     srcs = [
+        "a_mctech.go",
         "error.go",
         "mock_globalaccessor.go",
         "noop.go",
@@ -63,6 +64,7 @@ go_library(
         "//util/topsql/state",
         "//util/versioninfo",
         "@com_github_pingcap_errors//:errors",
+        "@com_github_pingcap_log//:log",
         "@com_github_tikv_client_go_v2//config",
         "@com_github_tikv_client_go_v2//kv",
         "@com_github_tikv_client_go_v2//oracle",
@@ -79,6 +81,7 @@ go_test(
     name = "variable_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "main_test.go",
         "mock_globalaccessor_test.go",
         "removed_test.go",
@@ -93,6 +96,7 @@ go_test(
     shard_count = 50,
     deps = [
         "//config",
+        "//executor",
         "//kv",
         "//parser",
         "//parser/auth",
@@ -114,6 +118,7 @@ go_test(
         "@com_github_stretchr_testify//require",
         "@com_github_tikv_client_go_v2//util",
         "@io_opencensus_go//stats/view",
+        "@org_golang_x_exp//slices",
         "@org_uber_go_goleak//:goleak",
     ],
 )

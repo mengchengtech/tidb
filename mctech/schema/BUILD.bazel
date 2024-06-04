@@ -1,0 +1,22 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "schema_test",
+    timeout = "short",
+    srcs = [
+        "custom_ddl_test.go",
+        "main_test.go",
+    ],
+    flaky = True,
+    shard_count = 6,
+    deps = [
+        "//kv",
+        "//mctech",
+        "//mctech/mock",
+        "//mctech/preps",
+        "//parser/auth",
+        "//testkit",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_stretchr_testify//require",
+    ],
+)

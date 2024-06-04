@@ -3301,6 +3301,14 @@ def go_deps():
         version = "v0.0.0-20180627143212-57f6aae5913c",
     )
     go_repository(
+        name = "com_github_patrickmn_go_cache",
+        build_file_proto_mode = "disable",
+        importpath = "github.com/patrickmn/go-cache",
+        sum = "h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=",
+        version = "v2.1.0+incompatible",
+    )
+
+    go_repository(
         name = "com_github_pborman_getopt",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/pborman/getopt",

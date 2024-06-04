@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "config",
     srcs = [
+        "a_mctech.go",
         "config.go",
         "config_util.go",
         "const.go",
@@ -18,9 +19,11 @@ go_library(
         "//util/versioninfo",
         "@com_github_burntsushi_toml//:toml",
         "@com_github_pingcap_errors//:errors",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@com_github_tikv_client_go_v2//config",
         "@com_github_uber_jaeger_client_go//config",
+        "@org_golang_x_exp//slices",
         "@org_uber_go_atomic//:atomic",
         "@org_uber_go_zap//:zap",
     ],
@@ -30,6 +33,7 @@ go_test(
     name = "config_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "config_test.go",
         "config_util_test.go",
         "main_test.go",
@@ -37,12 +41,14 @@ go_test(
     data = glob(["**"]),
     embed = [":config"],
     flaky = True,
-    shard_count = 23,
+    shard_count = 27,
     deps = [
+        "//mctech/mock",
         "//testkit/testsetup",
         "//util/logutil",
         "@com_github_burntsushi_toml//:toml",
         "@com_github_pingcap_errors//:errors",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@com_github_stretchr_testify//require",
         "@com_github_uber_jaeger_client_go//config",

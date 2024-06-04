@@ -1,0 +1,42 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "udf",
+    srcs = [
+        "crypto_func.go",
+        "sequence_func.go",
+        "sql_trace_func.go",
+    ],
+    importpath = "github.com/pingcap/tidb/mctech/udf",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config",
+        "//mctech",
+        "//types",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_pingcap_log//:log",
+        "@com_github_pkg_errors//:errors",
+        "@org_golang_x_sync//semaphore",
+        "@org_uber_go_zap//:zap",
+    ],
+)
+
+go_test(
+    name = "udf_test",
+    timeout = "short",
+    srcs = [
+        "crypto_func_test.go",
+        "sequence_func_test.go",
+        "sql_trace_func_test.go",
+    ],
+    embed = [":udf"],
+    flaky = True,
+    shard_count = 7,
+    deps = [
+        "//mctech/mock",
+        "//parser/mysql",
+        "//types",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_stretchr_testify//require",
+    ],
+)
