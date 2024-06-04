@@ -114,14 +114,12 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	if len(stmts) != 1 {
 		return exeerrors.ErrPrepareMulti
 	}
-
+	stmt0 := stmts[0]
 	// add by zhangbing
-	if err = e.afterParseSQL(ctx, stmts); err != nil {
+	if err = e.afterParseSQL(ctx, stmt0); err != nil {
 		return err
 	}
 	// add end
-
-	stmt0 := stmts[0]
 	if e.needReset {
 		err = ResetContextOfStmt(e.ctx, stmt0)
 		if err != nil {

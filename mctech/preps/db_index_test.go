@@ -1,4 +1,4 @@
-package preps
+package preps_test
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/mock"
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,7 +50,7 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	if err != nil {
 		return err
 	}
-	selector := newDBSelector(result)
+	selector := preps.NewDBSelectorForTest(result)
 	index, err := selector.GetDbIndex()
 	if err != nil {
 		return err

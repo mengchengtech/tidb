@@ -23,9 +23,9 @@ go_test(
         "isolation_condition_visitor_test.go",
         "main_test.go",
     ],
-    embed = [":isolation"],
     flaky = True,
     deps = [
+        ":isolation",
         "//mctech",
         "//parser",
         "//parser/format",

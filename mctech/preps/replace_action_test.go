@@ -1,10 +1,11 @@
-package preps
+package preps_test
 
 import (
 	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
@@ -42,7 +43,7 @@ func testReplaceCase(t *testing.T, c *replaceTestCase) error {
 	if strings.Contains(c.format, "%") {
 		args = fmt.Sprintf(c.format, c.tenant)
 	}
-	action := &replaceAction{}
+	action := preps.NewReplaceActionForTest()
 	outSQL, err := action.Resolve(sql, args, c.params)
 
 	if err != nil {

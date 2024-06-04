@@ -376,7 +376,6 @@ go_test(
         "//infoschema",
         "//kv",
         "//mctech/mock",
-        "//mctech/preps",
         "//meta",
         "//meta/autoid",
         "//metrics",

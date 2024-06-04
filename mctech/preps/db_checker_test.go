@@ -1,4 +1,4 @@
-package preps
+package preps_test
 
 import (
 	"fmt"
@@ -8,6 +8,7 @@ import (
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/mock"
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
@@ -100,7 +101,7 @@ func (a *mockStmtTextAware) OriginalText() string {
 
 func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
 	option := config.GetMCTechConfig()
-	checker := newMutexDatabaseCheckerWithParams(
+	checker := preps.NewMutexDatabaseCheckerWithParamsForTest(
 		option.DbChecker.Mutex,
 		option.DbChecker.Exclude,
 		option.DbChecker.Across)

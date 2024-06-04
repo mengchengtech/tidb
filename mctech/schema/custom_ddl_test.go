@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/kv"
-	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/pingcap/tidb/parser/auth"
 	"github.com/pingcap/tidb/testkit"
@@ -42,11 +42,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
-
-	session := tk.Session()
-	ctx, _, err := mctech.WithNewContext(session)
-	require.NoError(t, err)
-	tk.MustExecWithContext(ctx, createTableSQL)
+	tk.MustExecWithContext(context.Background(), createTableSQL)
 	res := tk.MustQuery("show create table version_table")
 	createSQL := res.Rows()[0][1].(string)
 	expected := strings.Join([]string{
@@ -126,11 +122,7 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
-
-	session := tk.Session()
-	ctx, _, err := mctech.WithNewContext(session)
-	require.NoError(t, err)
-	tk.MustExecWithContext(ctx, createTableSQL)
+	tk.MustExecWithContext(context.Background(), createTableSQL)
 	tk.MustExec(
 		`insert into version_table
 		(a, b)

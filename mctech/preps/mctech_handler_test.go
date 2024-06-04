@@ -1,4 +1,4 @@
-package preps
+package preps_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/mock"
+	_ "github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/session"
 	"github.com/stretchr/testify/require"
 )
