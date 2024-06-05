@@ -1,11 +1,13 @@
 package preps
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/pingcap/tidb/mctech"
+	"golang.org/x/exp/slices"
 )
 
 type valueFormatter interface {
@@ -42,6 +44,8 @@ func (f *booleanValueFormatter) format(name string, value string) (bool, error) 
 type globalValueFormatter struct {
 	boolFormatter valueFormatter
 }
+
+// --------------------------------------------------------------------------
 
 var tokenSplitterPattern = regexp.MustCompile(`,|\s+`)
 
@@ -84,4 +88,51 @@ func (f *globalValueFormatter) format(name string, value string) (*mctech.Global
 	}
 
 	return gv, nil
+}
+
+// --------------------------------------------------------------------------
+
+func newEnumValueFormatter(items ...string) valueFormatter {
+	return &enumValueFormatter{items: items}
+}
+
+type enumValueFormatter struct {
+	items []string
+}
+
+func (c *enumValueFormatter) Format(name string, value string) (any, error) {
+	if !slices.Contains(c.items, value) {
+		return "", fmt.Errorf("%s的值错误。可选值为'%s'", name, strings.Join(c.items, ","))
+	}
+	return value, nil
+}
+
+// --------------------------------------------------------------------------
+
+func newCrossValueFormatter() valueFormatter {
+	return &crosslValueFormatter{}
+}
+
+type crosslValueFormatter struct {
+}
+
+// across|global_ipm,global_sq;
+
+func (c *crosslValueFormatter) Format(name string, value string) (any, error) {
+	items := strings.Split(value, ",")
+	dbs := make([]string, 0, len(items))
+	for _, db := range items {
+		db = strings.TrimSpace(db)
+		if len(db) == 0 {
+			continue
+		}
+		dbs = append(dbs, db)
+	}
+
+	if len(dbs) <= 1 {
+		// 数据库对小于等于1，忽略
+		return nil, errors.New("across hint: 数据库分组里的数据库名称至少为2个")
+	}
+
+	return strings.Join(dbs, "|"), nil
 }

@@ -115,14 +115,19 @@ type DBSelector interface {
 }
 
 const (
-	// ParamTenant custom hint param "tenant"
+	// ParamTenant 自定义hint，租户限制条件
 	ParamTenant = "tenant"
-	// ParamDbPrefix custom hint param "dbPrefix"
+	// ParamDbPrefix 自定义hint，数据库前缀。'dev', 'test'
+	// Deprecated: 已废弃
 	ParamDbPrefix = "dbPrefix"
-	// ParamGlobal custom hint param "global"
+	// ParamGlobal 自定义hint，忽略租户隔离条件，使用全局查询
 	ParamGlobal = "global"
-	// ParamMPP custom hint param "mpp"
+	// ParamMPP 自定义hint，当前sql执行过程配置的mpp开关项
 	ParamMPP = "mpp"
+	// ParamAcross 自定义hint，额外允许跨库查询的数据库
+	ParamAcross = "across"
+	// ParamImpersonate 自定义hint，模拟特殊角色的功能
+	ParamImpersonate = "impersonate"
 )
 
 // GlobalValueInfo from global params
@@ -137,7 +142,9 @@ func (g *GlobalValueInfo) String() string {
 
 // PrepareResult sql resolve result
 type PrepareResult struct {
-	params         map[string]any
+	params map[string]any
+	// 自定义hint，数据库前缀。'dev', 'test'
+	// Deprecated: 已废弃
 	dbPrefix       string
 	tenant         string
 	globalInfo     *GlobalValueInfo
@@ -241,7 +248,8 @@ func (r *PrepareResult) Params() map[string]any {
 	return r.params
 }
 
-// DbPrefix db prefix
+// DbPrefix 自定义hint，数据库前缀。'dev', 'test'
+// Deprecated: 已废弃
 func (r *PrepareResult) DbPrefix() string {
 	return r.dbPrefix
 }

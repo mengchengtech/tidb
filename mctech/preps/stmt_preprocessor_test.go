@@ -49,6 +49,8 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "{{{,gdcd,false,[{mpp,allow} {requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		// background
 		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", "{{{,ztsj,false,[{background,true} {mpp,allow} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
+		// across
+		{"pf", "/*& tenant:ztsj */ /*& across:global_cq3,global_ds */ select * from company", "{{{,ztsj,false,[{across,global_cq3|global_ds} {mpp,allow} {tenant,ztsj}],{false,[]}}},global_platform}", ""},
 		// dbPrefix
 		{"pd", "/*& dbPrefix:mock */ select * from company", "{{{mock,,false,[{dbPrefix,mock} {mpp,allow}],{false,[]}}},public_data}", ""},
 		// replace
@@ -60,6 +62,12 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		// 新的值声明方式
 		{"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		{"pf", "/*& tenant|gdcd */ select * from company", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+
+		// 租户隔离角色
+		{"pf", "/*& impersonate: tenant */ select * from company", "", "impersonate的值错误。可选值为'tenant_only'"},
+		{"pf", "/*& impersonate: tenant_only */ select * from company", "", "当前用户root无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */"},
+		{"pf", "/*& global:true */ /*& impersonate: tenant_only */ select * from company", "", "当前数据库用户包含租户隔离角色，不允许启用 global hint"},
+		{"pf", "/*& tenant|gdcd */ /*& impersonate: tenant_only */ select * from company", "{{{,gdcd,false,[{impersonate,tenant_only} {mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 	}
 
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
