@@ -304,6 +304,7 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 	var (
 		dbs    string // 执行的sql中用到的所有数据库名称列表。','分隔
 		tenant string // 所属租户信息
+		across string // sql中指定的跨库查询的数据库
 	)
 	if mctx, err := mctech.GetContext(ctx); err != nil {
 		panic(err)
@@ -314,6 +315,11 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 		}
 		if result := mctx.PrepareResult(); result != nil {
 			tenant = result.Tenant()
+			if params := result.Params(); params != nil {
+				if v, ok := params[mctech.ParamAcross].(string); ok {
+					across = v
+				}
+			}
 		}
 	}
 
@@ -325,6 +331,7 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 		zap.String("tenant", tenant),
 		zap.String("conn", encode(connID)),
 		zap.String("tp", sqlType),
+		zap.String("across", across),
 		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
 		zap.Object("time", &logTimeObject{
 			all:   queryTime,
