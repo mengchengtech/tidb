@@ -10,6 +10,7 @@ go_library(
         "http_rpc.go",
         "intercept.go",
         "logger.go",
+        "trace.go",
     ],
     importpath = "github.com/pingcap/tidb/mctech",
     visibility = ["//visibility:public"],
