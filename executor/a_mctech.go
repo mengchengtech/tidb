@@ -33,6 +33,7 @@ import (
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/privilege"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"github.com/pingcap/tidb/table"
 	"github.com/pingcap/tidb/types"
@@ -1178,3 +1179,86 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sc
 	e.rows = rows
 	return nil
 }
+
+// ----------------------------------------------------------------------------------------
+
+// GetFlatPlan 把私有方法暴露出去
+func GetFlatPlan(stmtCtx *stmtctx.StatementContext) *plannercore.FlatPhysicalPlan {
+	return getFlatPlan(stmtCtx)
+}
+
+// ----------------------------------------------------------------------------------------
+
+// Collect collect cpu time
+func (e *HashAggRuntimeStats) Collect() *mctech.CPUTimeStats {
+	var cpuTime int64 = 0
+	for _, partial := range e.PartialStats {
+		cpuTime = cpuTime + partial.ExecTime
+	}
+
+	for _, final := range e.FinalStats {
+		cpuTime = cpuTime + final.ExecTime
+	}
+	return &mctech.CPUTimeStats{
+		Group: mctech.Root,
+		Type:  "HashAggregate",
+		Time:  time.Duration(cpuTime),
+	}
+}
+
+// Collect collect cpu time
+func (e *hashJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
+	var cpuTime time.Duration = 0
+	if e.hashStat.buildTableElapse > 0 {
+		cpuTime = e.hashStat.buildTableElapse
+	}
+	if e.probe > 0 {
+		cpuTime = cpuTime + time.Duration(e.probe)
+	}
+	return &mctech.CPUTimeStats{
+		Group: mctech.Root,
+		Type:  "HashJoin",
+		Time:  cpuTime,
+	}
+}
+
+// Collect collect cpu time
+func (e *IndexLookUpRunTimeStats) Collect() *mctech.CPUTimeStats {
+	var cpuTime time.Duration = 0
+	if e.FetchHandleTotal > 0 {
+		cpuTime = cpuTime + time.Duration(e.FetchHandleTotal)
+	}
+	return &mctech.CPUTimeStats{
+		Group: mctech.Root,
+		Type:  "IndexLookUp",
+		Time:  cpuTime,
+	}
+}
+
+// Collect collect cpu time
+func (e *indexLookUpJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
+	var cpuTime int64 = 0
+	if e.innerWorker.totalTime > 0 {
+		cpuTime = e.innerWorker.totalTime
+	}
+	if e.probe > 0 {
+		// index join
+		cpuTime = cpuTime + e.probe
+	}
+	if e.innerWorker.join > 0 {
+		// index hash join
+		cpuTime = cpuTime + e.innerWorker.join
+	}
+	return &mctech.CPUTimeStats{
+		Group: mctech.Root,
+		Type:  "IndexLookUpJoin",
+		Time:  time.Duration(cpuTime),
+	}
+}
+
+var (
+	_ mctech.CPUTimeCollector = &HashAggRuntimeStats{}
+	_ mctech.CPUTimeCollector = &hashJoinRuntimeStats{}
+	_ mctech.CPUTimeCollector = &IndexLookUpRunTimeStats{}
+	_ mctech.CPUTimeCollector = &indexLookUpJoinRuntimeStats{}
+)

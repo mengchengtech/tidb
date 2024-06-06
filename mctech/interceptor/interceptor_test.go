@@ -3,6 +3,7 @@ package interceptor_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	// 强制调用preps包里的init方法
 
@@ -45,6 +46,16 @@ func TestFullSQLLog(t *testing.T) {
 	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
 	require.NoError(t, err)
 	require.NotNil(t, logData)
+
+	times := logData["time"].(map[string]any)
+	for _, key := range []string{"cop", "tidb"} {
+		require.Contains(t, times, key)
+		val := times[key]
+		require.IsType(t, val, "")
+		cop, err := time.ParseDuration(val.(string))
+		require.NoError(t, err)
+		require.GreaterOrEqual(t, cop, time.Duration(0))
+	}
 
 	delete(logData, "at")
 	delete(logData, "time")

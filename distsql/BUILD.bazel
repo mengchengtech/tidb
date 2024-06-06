@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "distsql",
     srcs = [
+        "a_mctech.go",
         "distsql.go",
         "request_builder.go",
         "select_result.go",
@@ -16,6 +17,7 @@ go_library(
         "//expression",
         "//infoschema",
         "//kv",
+        "//mctech",
         "//metrics",
         "//parser/mysql",
         "//parser/terror",
