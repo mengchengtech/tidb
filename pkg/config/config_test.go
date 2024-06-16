@@ -916,7 +916,7 @@ spilled-file-encryption-method = "aes128-ctr"
 			Exclude:    []string{"test", "dp_stat", "mysql", "information_schema", "metrics_schema", "performance_schema"},
 			QueryLog:   QueryLog{Enabled: false, MaxLength: 4096},
 			LargeQuery: LargeQuery{Enabled: false, Filename: "mctech_large_query_log.log", FileMaxDays: 3, FileMaxSize: 512, Threshold: 4194304, Types: []string{"delete", "insert", "update", "select"}},
-			SQLTrace:   SQLTrace{Enabled: false, Filename: "mctech_tidb_full_sql.log", FileMaxDays: 3, FileMaxSize: 512, CompressThreshold: 65536, FullSQLDir: ""},
+			SQLTrace:   SQLTrace{Enabled: false, Filename: "mctech_tidb_full_sql.log", FileMaxDays: 3, FileMaxSize: 512, CompressThreshold: 4096, FullSQLDir: ""},
 		},
 	}
 	// add end
