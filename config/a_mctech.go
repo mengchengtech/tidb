@@ -159,7 +159,7 @@ const (
 	// DefaultMetricsSQLTraceFilename one of config default value
 	DefaultMetricsSQLTraceFilename = "mctech_tidb_full_sql.log"
 	// DefaultMetricsSQLTraceCompressThreshold one of config default value
-	DefaultMetricsSQLTraceCompressThreshold = 64 * 1024
+	DefaultMetricsSQLTraceCompressThreshold = 4 * 1024
 	// DefaultMetricsSQLTraceFileMaxDays one of config default value
 	DefaultMetricsSQLTraceFileMaxDays = 3
 	// DefaultMetricsSQLTraceFileMaxSize one of config default value
