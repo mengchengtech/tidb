@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/auth"
@@ -45,6 +46,7 @@ import (
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/pingcap/tidb/util/mathutil"
 	"github.com/pingcap/tidb/util/memory"
+	clientutil "github.com/tikv/client-go/v2/util"
 	"go.uber.org/zap"
 )
 
@@ -1254,6 +1256,49 @@ func (e *indexLookUpJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
 		Type:  "IndexLookUpJoin",
 		Time:  time.Duration(cpuTime),
 	}
+}
+
+// createRUStats 创建RU统计对象，收集RU使用信息。7.5.x 以后原生就支持不再需要当前方法
+func createRUStats(ctx sessionctx.Context, s ast.StmtNode) error {
+	sessVars := ctx.GetSessionVars()
+	if sessVars.InRestrictedSQL {
+		// 不统计内部sql
+		return nil
+	}
+
+	switch s.(type) {
+	case *ast.ExplainStmt:
+		return nil
+	}
+
+	stmtCtx := sessVars.StmtCtx
+	if stmtCtx == nil || stmtCtx.RuntimeStatsColl == nil {
+		return nil
+	}
+
+	resName := sessVars.ResourceGroupName
+	failpoint.Inject("CreateRUStats", func() {
+		resName = "rg-mock"
+	})
+	b := newExecutorBuilder(ctx, ctx.GetInfoSchema().(infoschema.InfoSchema), nil)
+	if store, ok := ctx.GetStore().(interface {
+		CreateRURuntimeStats(uint64) *clientutil.RURuntimeStats
+	}); len(resName) > 0 && ok {
+		if intest.InTest {
+			failpoint.Inject("CreateRUStats", func() {
+				failpoint.Goto("outer")
+			})
+			return nil
+		}
+		failpoint.Label("outer")
+		startTS, err := b.getSnapshotTS()
+		if err != nil {
+			return err
+		}
+		ruRuntimeStats := store.CreateRURuntimeStats(startTS)
+		ctx.SetValue(mctech.MCRUDetailsCtxKey, ruRuntimeStats)
+	}
+	return nil
 }
 
 var (

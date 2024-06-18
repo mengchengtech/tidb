@@ -2282,6 +2282,9 @@ func ResetContextOfStmt(ctx sessionctx.Context, s ast.StmtNode) (err error) {
 	vars.DurationWaitTS = 0
 	vars.CurrInsertBatchExtraCols = nil
 	vars.CurrInsertValues = chunk.Row{}
+	// add by zhangbing
+	err = createRUStats(ctx, s) // 创建RU统计对象，收集RU使用信息
+	// add end
 	return
 }
 
