@@ -35,8 +35,12 @@ func TestFullSQLLog(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
+	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
+		mock.M(t, "true"),
+	)
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
@@ -64,6 +68,7 @@ func TestFullSQLLog(t *testing.T) {
 		"conn": "1", "tp": "select",
 		// "at":   "2024-05-17 18:08:49.358",
 		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
+		"ru":  map[string]any{"rru": float64(0), "wru": float64(0)},
 		"mem": float64(151300), "disk": float64(0), "keys": float64(0), "affected": float64(0), "rows": float64(0),
 		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
 		"sql":    sql,

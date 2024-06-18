@@ -131,4 +131,5 @@ func (d *tidbSessionMCTechContext) Clear() {
 
 	d.session.ClearValue(mctech.MCExecStmtVarKey)
 	d.session.ClearValue(mctech.MCContextVarKey)
+	d.session.ClearValue(mctech.MCRUDetailsCtxKey)
 }
