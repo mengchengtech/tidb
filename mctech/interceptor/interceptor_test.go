@@ -56,9 +56,9 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send", "tiflash")
-	tikvTimes := times["tikv"].(map[string]any)
-	checkTimes(t, tikvTimes, "cop", "process", "process2")
+	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
+	tikvTimes := times["cop"].(map[string]any)
+	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	require.NotContains(t, times, "tx")
 	require.NotContains(t, logData, "tx")
 
@@ -104,9 +104,9 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send", "tiflash")
-	tikvTimes := times["tikv"].(map[string]any)
-	checkTimes(t, tikvTimes, "cop", "process", "process2")
+	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
+	tikvTimes := times["cop"].(map[string]any)
+	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	require.NotContains(t, times, "tx")
 	require.NotContains(t, logData, "tx")
 
@@ -150,9 +150,9 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send", "tiflash")
-	tikvTimes := times["tikv"].(map[string]any)
-	checkTimes(t, tikvTimes, "cop", "process", "process2")
+	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
+	tikvTimes := times["cop"].(map[string]any)
+	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	txTimes := times["tx"].(map[string]any)
 	checkTimes(t, txTimes, "prewrite", "commit")
 	deleteKeys(t, logData, "txId", "times")
@@ -198,9 +198,9 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send", "tiflash")
-	tikvTimes := times["tikv"].(map[string]any)
-	checkTimes(t, tikvTimes, "cop", "process", "process2")
+	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
+	tikvTimes := times["cop"].(map[string]any)
+	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	require.NotContains(t, times, "tx")
 	deleteKeys(t, logData, "txId", "times")
 	require.Equal(t, map[string]any{
@@ -245,9 +245,9 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send", "tiflash")
-	tikvTimes := times["tikv"].(map[string]any)
-	checkTimes(t, tikvTimes, "cop", "process", "process2")
+	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
+	tikvTimes := times["cop"].(map[string]any)
+	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	txTimes := times["tx"].(map[string]any)
 	checkTimes(t, txTimes, "prewrite", "commit")
 	deleteKeys(t, logData, "txId", "times")
