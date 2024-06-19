@@ -95,11 +95,12 @@ func (c *planStatCollector) collect() *planData {
 			// 由于从现有的统计信息里不能方便的收集到tidb-server上消耗的时间，因此在这里从执行计划中单独获取
 			ct.tidbTime = ct.tidbTime + details.rootProcTime
 		} else {
+			copProcTime := time.Duration(details.copProcTimes.Sum())
 			switch r.storeType {
 			case kv.TiKV:
-				ct.tikvCopTime = ct.tikvCopTime + details.copTotalTime
+				ct.tikvCopTime = ct.tikvCopTime + copProcTime
 			case kv.TiFlash:
-				ct.tiflashCopTime = ct.tiflashCopTime + details.copTotalTime
+				ct.tiflashCopTime = ct.tiflashCopTime + copProcTime
 			}
 		}
 	}
