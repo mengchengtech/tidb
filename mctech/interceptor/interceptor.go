@@ -299,8 +299,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 				collector := newPlanStatCollector(stmtCtx)
 				ct := collector.collect()
 				times.tidb = ct.tidbTime
-				times.tikv.process2 = ct.tikvCopTime
-				times.tiflash = ct.tiflashCopTime
+				// times.tikv.process2 = ct.tikvCopTime
+				times.cop.tiflash = ct.tiflashCopTime
 				maxAct = ct.maxActRows
 				if rs, ok := sctx.Value(mctech.MCRUDetailsCtxKey).(*clientutil.RURuntimeStats); ok {
 					ru.rru, ru.wru = rs.RRU(), rs.WRU()
@@ -315,8 +315,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			}
 
 			execDetails := stmtCtx.GetExecDetails()
-			times.tikv.cop = execDetails.CopTime
-			times.tikv.process = execDetails.TimeDetail.ProcessTime
+			times.cop.wall = execDetails.CopTime
+			times.cop.tikv = execDetails.TimeDetail.ProcessTime
 			memMax = stmtCtx.MemTracker.MaxConsumed()
 			diskMax = stmtCtx.DiskTracker.MaxConsumed()
 
