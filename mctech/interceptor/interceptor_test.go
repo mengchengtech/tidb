@@ -226,11 +226,15 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
 		mock.M(t, "true"),
 	)
+	failpoint.Enable("github.com/pingcap/tidb/executor/CreateeWarnings",
+		mock.M(t, "true"),
+	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/mctech/StartedAt", mock.M(t, now))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
+		failpoint.Disable("github.com/pingcap/tidb/executor/CreateeWarnings")
 		failpoint.Disable("github.com/pingcap/tidb/mctech/StartedAt")
 	}()
 	store := testkit.CreateMockStore(t)
@@ -261,9 +265,10 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 		"tx":     map[string]any{"affected": float64(0), "keys": float64(2), "size": float64(122)},
 		"ru":     map[string]any{"rru": float64(0), "wru": float64(0)},
 		"mem":    float64(0), "disk": float64(0),
-		"rows":   float64(0),
-		"digest": "9505cacb7c710ed17125fcc6cb3669e8ddca6c8cd8af6a31f6b3cd64604c3098",
-		"sql":    "commit",
+		"rows":     float64(0),
+		"digest":   "9505cacb7c710ed17125fcc6cb3669e8ddca6c8cd8af6a31f6b3cd64604c3098",
+		"warnings": map[string]any{"topN": []any{map[string]any{"msg": "this is for test warning", "extra": false}}, "total": float64(1)},
+		"sql":      "commit",
 	}, logData)
 }
 

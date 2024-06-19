@@ -3,6 +3,7 @@ package interceptor
 import (
 	"time"
 
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -99,6 +100,60 @@ func (lr *logTXObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt("size", lr.size)
 	enc.AddUint64("affected", lr.affected)
 	return nil
+}
+
+type logWarningObjects struct {
+	topN  warningObjects
+	total int
+}
+
+func (lw *logWarningObjects) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddArray("topN", lw.topN)
+	enc.AddInt("total", lw.total)
+	return nil
+}
+
+type warningObjects []*logWarningObject
+
+func (w warningObjects) MarshalLogArray(enc zapcore.ArrayEncoder) error {
+	for _, o := range w {
+		enc.AppendObject(o)
+	}
+	return nil
+}
+
+type logWarningObject struct {
+	msg   string
+	extra bool
+}
+
+func (lw *logWarningObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("msg", lw.msg)
+	enc.AddBool("extra", lw.extra)
+	return nil
+}
+
+func newWarnings(rawList []variable.JSONSQLWarnForSlowLog) *logWarningObjects {
+	length := len(rawList)
+	if length == 0 {
+		return nil
+	}
+
+	lst := make([]*logWarningObject, 0, length)
+	for _, log := range rawList {
+		lst = append(lst, &logWarningObject{
+			msg:   log.Message,
+			extra: log.IsExtra,
+		})
+	}
+
+	if length > 10 {
+		lst = lst[0:10]
+	}
+	return &logWarningObjects{
+		topN:  lst,
+		total: length,
+	}
 }
 
 type sqlStmtInfo struct {
