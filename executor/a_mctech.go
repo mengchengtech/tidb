@@ -1258,6 +1258,20 @@ func (e *indexLookUpJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
 	}
 }
 
+// CollectWarnings for mctech full trace log
+func CollectWarnings(stmtCtx *stmtctx.StatementContext) []variable.JSONSQLWarnForSlowLog {
+	failpoint.Inject("CreateeWarnings", func() {
+		stmtCtx.AppendWarning(errors.New("this is for test warning"))
+	})
+	warnings := stmtCtx.GetWarnings()
+	res := make([]variable.JSONSQLWarnForSlowLog, len(warnings))
+	for i := range warnings {
+		res[i].Level = warnings[i].Level
+		res[i].Message = extractMsgFromSQLWarn(&warnings[i])
+	}
+	return res
+}
+
 // createRUStats 创建RU统计对象，收集RU使用信息。7.5.x 以后原生就支持不再需要当前方法
 func createRUStats(ctx sessionctx.Context, s ast.StmtNode) error {
 	sessVars := ctx.GetSessionVars()
