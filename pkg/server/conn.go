@@ -1735,6 +1735,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 	// add by zhangbing
 	if err = cc.onAfterParseSQL(stmts); err != nil {
+		cc.onExtensionSQLParseFailed(sql, err)
 		return err
 	}
 	// add end
