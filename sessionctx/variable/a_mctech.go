@@ -140,8 +140,10 @@ const (
 	// MCTechMetricsSQLTraceFullSQLDir is one of mctech config items
 	MCTechMetricsSQLTraceFullSQLDir = "mctech_metrics_sql_trace_full_sql_dir"
 
-	// MCTechMetricsExclude is one of mctech config items
-	MCTechMetricsExclude = "mctech_metrics_exclude"
+	// MCTechMetricsIgnoreByRoles is one of mctech config items
+	MCTechMetricsIgnoreByRoles = "mctech_metrics_ignore_by_roles"
+	// MCTechMetricsIgnoreByDatabases is one of mctech config items
+	MCTechMetricsIgnoreByDatabases = "mctech_metrics_ignore_by_databases"
 )
 
 func init() {
@@ -268,12 +270,21 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsExclude, Type: TypeStr, Value: strings.Join(config.DefaultSQLTraceExclude, ","),
+		{Scope: ScopeGlobal, Name: MCTechMetricsIgnoreByDatabases, Type: TypeStr, Value: strings.Join(config.DefaultMetricsIgnoreByDatabases, ","),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.Exclude, ","), nil
+				return strings.Join(config.GetMCTechConfig().Metrics.Ignore.ByDatabases, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.Exclude = config.StrToSlice(val, ",")
+				config.GetMCTechConfig().Metrics.Ignore.ByDatabases = config.StrToSlice(val, ",")
+				return nil
+			},
+		},
+		{Scope: ScopeGlobal, Name: MCTechMetricsIgnoreByRoles, Type: TypeStr, Value: strings.Join(config.DefaultMetricsIgnoreByRoles, ","),
+			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
+				return strings.Join(config.GetMCTechConfig().Metrics.Ignore.ByRoles, ","), nil
+			},
+			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
+				config.GetMCTechConfig().Metrics.Ignore.ByRoles = config.StrToSlice(val, ",")
 				return nil
 			},
 		},
@@ -356,7 +367,8 @@ func LoadMCTechSysVars() {
 	SetSysVar(MCTechMetricsSQLTraceFileMaxDays, strconv.Itoa(option.Metrics.SQLTrace.FileMaxDays))
 	SetSysVar(MCTechMetricsSQLTraceCompressThreshold, strconv.Itoa(option.Metrics.SQLTrace.CompressThreshold))
 
-	SetSysVar(MCTechMetricsExclude, strings.Join(option.Metrics.Exclude, ","))
+	SetSysVar(MCTechMetricsIgnoreByRoles, strings.Join(option.Metrics.Ignore.ByRoles, ","))
+	SetSysVar(MCTechMetricsIgnoreByDatabases, strings.Join(option.Metrics.Ignore.ByDatabases, ","))
 }
 
 // MCTechLargeQueryLogItems is a collection of items that should be included in the

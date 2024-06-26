@@ -908,7 +908,10 @@ spilled-file-encryption-method = "aes128-ctr"
 		DDL:        DDL{Version: VersionColumn{Enabled: false, Name: "__version", DbMatches: []string{"global_*", "asset_*", "public_*", "*_custom"}}},
 		MPP:        MPP{DefaultValue: "allow"},
 		Metrics: MctechMetrics{
-			Exclude:    []string{"test", "dp_stat", "mysql", "information_schema", "metrics_schema", "performance_schema"},
+			Ignore: MetricsIgnore{
+				ByDatabases: []string{"test", "dp_stat", "mysql", "information_schema", "metrics_schema", "performance_schema"},
+				ByRoles:     []string{"mc_write", "mc_read", "sm_write", "sm_read"},
+			},
 			QueryLog:   QueryLog{Enabled: false, MaxLength: 4096},
 			LargeQuery: LargeQuery{Enabled: false, Filename: "mctech_large_query_log.log", FileMaxDays: 3, FileMaxSize: 512, Threshold: 4194304, Types: []string{"delete", "insert", "update", "select"}},
 			SQLTrace:   SQLTrace{Enabled: false, Filename: "mctech_tidb_full_sql.log", FileMaxDays: 3, FileMaxSize: 512, CompressThreshold: 4096, FullSQLDir: ""},
