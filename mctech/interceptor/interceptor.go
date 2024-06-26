@@ -91,28 +91,19 @@ func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (e
 		}
 	}
 
+	opts := config.GetMCTechConfig()
+	queryLogEnabled := opts.Metrics.QueryLog.Enabled
 	handler := mctech.GetHandler()
 	if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
-		logutil.BgLogger().Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(sctx)), zap.String("SQL", stmt.OriginalText()))
+		if queryLogEnabled {
+			logutil.BgLogger().Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(sctx)), zap.String("SQL", stmt.OriginalText()))
+		}
 		return err
 	}
 
-	if opts := config.GetMCTechConfig(); opts.Metrics.QueryLog.Enabled {
-		exclude := opts.Metrics.Exclude
-		dbs := mctx.GetDbs(stmt)
-		if dbs != nil && len(exclude) > 0 {
-			ignore := false
-			for _, db := range exclude {
-				if slices.Contains(dbs, db) {
-					// 不记录这些数据库下的sql
-					ignore = true
-					break
-				}
-			}
-
-			if ignore {
-				return nil
-			}
+	if queryLogEnabled {
+		if ignoreTrace(sctx, mctx, stmt, &opts.Metrics) {
+			return nil
 		}
 
 		shouldLog := false
@@ -147,8 +138,37 @@ func (*interceptor) AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, 
 	doAfterHandleStmt(sctx, "", stmt, err)
 }
 
+// ignoreTrace 是否跳过记录sql跟踪日志
+func ignoreTrace(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode, metrics *config.MctechMetrics) bool {
+	databases := metrics.Ignore.ByDatabases
+	var dbs []string
+	if stmt != nil {
+		dbs = mctx.GetDbs(stmt)
+	} else {
+		dbs = []string{sctx.GetSessionVars().CurrentDB}
+	}
+
+	if dbs != nil && len(databases) > 0 {
+		for _, db := range databases {
+			if slices.Contains(dbs, db) {
+				// 不记录这些数据库下的sql
+				return true
+			}
+		}
+	}
+
+	for _, r := range sctx.GetSessionVars().ActiveRoles {
+		if slices.Contains(metrics.Ignore.ByRoles, r.Username) {
+			// 不记录这些角色执行的sql
+			return true
+		}
+	}
+	return false
+}
+
 func doAfterHandleStmt(sctx sessionctx.Context, sql string, stmt ast.StmtNode, err error) {
-	if sessVars := sctx.GetSessionVars(); sessVars.InRestrictedSQL {
+	sessVars := sctx.GetSessionVars()
+	if sessVars.InRestrictedSQL {
 		// 不记录内部sql
 		return
 	}
@@ -159,26 +179,14 @@ func doAfterHandleStmt(sctx sessionctx.Context, sql string, stmt ast.StmtNode, e
 		return
 	}
 
+	mctx := mctech.GetContextStrict(sctx)
+	if ignoreTrace(sctx, mctx, stmt, metrics) {
+		return
+	}
+
 	var execStmt *executor.ExecStmt
 	if v := sctx.Value(mctech.MCExecStmtVarKey); v != nil {
 		execStmt = v.(*executor.ExecStmt)
-	}
-
-	mctx := mctech.GetContextStrict(sctx)
-	var dbs []string
-	if stmt != nil {
-		dbs = mctx.GetDbs(stmt)
-	} else {
-		dbs = []string{sctx.GetSessionVars().CurrentDB}
-	}
-
-	if dbs != nil {
-		for _, db := range metrics.Exclude {
-			if slices.Contains(dbs, db) {
-				// 不记录这些数据库下的sql
-				return
-			}
-		}
 	}
 
 	if metrics.LargeQuery.Enabled {
