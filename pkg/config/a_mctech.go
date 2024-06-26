@@ -34,7 +34,8 @@ type MCTech struct {
 
 // MctechMetrics metrics record used
 type MctechMetrics struct {
-	Exclude    []string   `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
+	Ignore MetricsIgnore `toml:"ignore" json:"ignore"` // 忽略的sql配置Ignore
+
 	QueryLog   QueryLog   `toml:"query-log" json:"query-log"`
 	LargeQuery LargeQuery `toml:"large-query" json:"large-query"`
 	SQLTrace   SQLTrace   `toml:"sql-trace" json:"sql-trace"`
@@ -48,6 +49,12 @@ type SQLTrace struct {
 	FileMaxSize       int    `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
 	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
 	FullSQLDir        string `toml:"full-sql-dir" json:"full-sql-dir"`             // sql重新导入数据库后，压缩的全量sql存储位置
+}
+
+// MetricsIgnore metrics ignore config
+type MetricsIgnore struct {
+	ByDatabases []string `toml:"by-databases" json:"by-databases"` // 需要排除记录的数据库
+	ByRoles     []string `toml:"by-roles" json:"by-roles"`         // 属于给定角色列表中的sql不记录
 }
 
 // QueryLog sql log record used
@@ -182,11 +189,13 @@ var (
 	// DefaultDbCheckerAcross default value of config.DbChecker.Mutex
 	DefaultDbCheckerAcross = []string{"global_mtlp|global_ma"}
 
-	// DefaultSQLTraceExclude default value of config.Metrics.SQLTrace.Exclude
-	DefaultSQLTraceExclude = []string{
+	// DefaultMetricsIgnoreByDatabases default value of config.Metrics.Ignore.Databases
+	DefaultMetricsIgnoreByDatabases = []string{
 		"test", "dp_stat",
 		"mysql", "information_schema", "metrics_schema", "performance_schema",
 	}
+	// DefaultMetricsIgnoreByRoles default value of config.Metrics.Ignore.ByRoles
+	DefaultMetricsIgnoreByRoles = []string{"mc_write", "mc_read", "sm_write", "sm_read"}
 
 	// DefaultAllowMetricsLargeQueryTypes default value of config.Metrics.LargeQuery.Types
 	DefaultAllowMetricsLargeQueryTypes = []string{"delete", "insert", "update", "select"}
@@ -229,7 +238,10 @@ func init() {
 			DefaultValue: DefaultMPPValue,
 		},
 		Metrics: MctechMetrics{
-			Exclude: []string{},
+			Ignore: MetricsIgnore{
+				ByDatabases: DefaultMetricsIgnoreByDatabases,
+				ByRoles:     DefaultMetricsIgnoreByRoles,
+			},
 			QueryLog: QueryLog{
 				Enabled:   DefaultMetricsQueryLogEnabled,
 				MaxLength: DefaultMetricsQueryLogMaxLength,
@@ -332,7 +344,8 @@ func storeMCTechConfig(config *Config) {
 	opts.DbChecker.Exclude = DistinctSlice(append(opts.DbChecker.Exclude, DefaultDbCheckerExclude...))
 	opts.DbChecker.Across = DistinctSlice(append(opts.DbChecker.Across, DefaultDbCheckerAcross...))
 
-	opts.Metrics.Exclude = DistinctSlice(append(opts.Metrics.Exclude, DefaultSQLTraceExclude...))
+	opts.Metrics.Ignore.ByDatabases = DistinctSlice(append(opts.Metrics.Ignore.ByDatabases, DefaultMetricsIgnoreByDatabases...))
+	opts.Metrics.Ignore.ByRoles = DistinctSlice(append(opts.Metrics.Ignore.ByRoles, DefaultMetricsIgnoreByRoles...))
 
 	if opts.MPP.DefaultValue == "" {
 		opts.MPP.DefaultValue = "allow"
