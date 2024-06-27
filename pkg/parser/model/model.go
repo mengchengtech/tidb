@@ -542,6 +542,15 @@ type TableInfo struct {
 	ExchangePartitionInfo *ExchangePartitionInfo `json:"exchange_partition_info"`
 
 	TTLInfo *TTLInfo `json:"ttl_info"`
+
+	// Revision is per table schema's version, it will be increased when the schema changed.
+	Revision uint64 `json:"revision"`
+}
+
+// TableNameInfo provides meta data describing a table name info.
+type TableNameInfo struct {
+	ID   int64 `json:"id"`
+	Name CIStr `json:"name"`
 }
 
 // SepAutoInc decides whether _rowid and auto_increment id use separate allocator.
@@ -1308,6 +1317,14 @@ func (pi *PartitionInfo) HasTruncatingPartitionID(pid int64) bool {
 	return false
 }
 
+// ClearReorgIntermediateInfo remove intermediate information used during reorganize partition.
+func (pi *PartitionInfo) ClearReorgIntermediateInfo() {
+	pi.DDLType = PartitionTypeNone
+	pi.DDLExpr = ""
+	pi.DDLColumns = nil
+	pi.NewTableID = 0
+}
+
 // PartitionState is the state of the partition.
 type PartitionState struct {
 	ID    int64       `json:"id"`
@@ -1766,6 +1783,11 @@ type TableItemID struct {
 	IsIndex bool
 }
 
+// Key is used to generate unique key for TableItemID to use in the syncload
+func (t TableItemID) Key() string {
+	return fmt.Sprintf("%d#%d#%t", t.ID, t.TableID, t.IsIndex)
+}
+
 // PolicyRefInfo is the struct to refer the placement policy.
 type PolicyRefInfo struct {
 	ID   int64 `json:"id"`
@@ -1903,6 +1925,10 @@ func (p *PlacementSettings) String() string {
 
 	if len(p.LearnerConstraints) > 0 {
 		writeSettingStringToBuilder(sb, "LEARNER_CONSTRAINTS", p.LearnerConstraints)
+	}
+
+	if len(p.SurvivalPreferences) > 0 {
+		writeSettingStringToBuilder(sb, "SURVIVAL_PREFERENCES", p.SurvivalPreferences)
 	}
 
 	return sb.String()

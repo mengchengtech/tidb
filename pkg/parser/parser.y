@@ -939,6 +939,7 @@ import (
 	MCSymOptionFractionParentheses  "MCSym with optional fraction part within potential parentheses"
 	/* add end */
 	CharsetNameOrDefault            "Character set name or default"
+	NextValueForSequenceParentheses "Default nextval expression within potential parentheses"
 	NextValueForSequence            "Default nextval expression"
 	BuiltinFunction                 "Default builtin functions for columns"
 	FunctionNameSequence            "Function with sequence function call"
@@ -3957,7 +3958,7 @@ DefaultValueExpr:
 |	MCSymOptionFractionParentheses
 /* add end */
 |	SignedLiteral
-|	NextValueForSequence
+|	NextValueForSequenceParentheses
 |	BuiltinFunction
 
 BuiltinFunction:
@@ -4007,6 +4008,13 @@ NowSymOptionFraction:
 	{
 		$$ = &ast.FuncCallExpr{FnName: model.NewCIStr("CURRENT_DATE")}
 	}
+
+NextValueForSequenceParentheses:
+	'(' NextValueForSequenceParentheses ')'
+	{
+		$$ = $2.(*ast.FuncCallExpr)
+	}
+|	NextValueForSequence
 
 /* add by zhangbing */
 MCSymOptionFractionParentheses:
@@ -8451,7 +8459,11 @@ SumExpr:
 	}
 |	builtinVarSamp '(' BuggyDefaultFalseDistinctOpt Expression ')' OptWindowingClause
 	{
-		$$ = &ast.AggregateFuncExpr{F: $1, Args: []ast.ExprNode{$4}, Distinct: $3.(bool)}
+		if $6 != nil {
+			$$ = &ast.WindowFuncExpr{Name: $1, Args: []ast.ExprNode{$4}, Distinct: $3.(bool), Spec: *($6.(*ast.WindowSpec))}
+		} else {
+			$$ = &ast.AggregateFuncExpr{F: $1, Args: []ast.ExprNode{$4}, Distinct: $3.(bool)}
+		}
 	}
 |	"JSON_ARRAYAGG" '(' Expression ')' OptWindowingClause
 	{

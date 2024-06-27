@@ -395,14 +395,6 @@ func simplifyOuterJoin(p *LogicalJoin, predicates []expression.Expression) {
 		innerTable, outerTable = outerTable, innerTable
 	}
 
-	// first simplify embedded outer join.
-	if innerPlan, ok := innerTable.(*LogicalJoin); ok {
-		simplifyOuterJoin(innerPlan, predicates)
-	}
-	if outerPlan, ok := outerTable.(*LogicalJoin); ok {
-		simplifyOuterJoin(outerPlan, predicates)
-	}
-
 	if p.JoinType == InnerJoin {
 		return
 	}
@@ -519,11 +511,6 @@ func (p *LogicalProjection) PredicatePushDown(predicates []expression.Expression
 		if expression.HasAssignSetVarFunc(expr) {
 			_, child := p.baseLogicalPlan.PredicatePushDown(nil, opt)
 			return predicates, child
-		}
-	}
-	if len(p.children) == 1 {
-		if _, isDual := p.children[0].(*LogicalTableDual); isDual {
-			return predicates, p
 		}
 	}
 	for _, cond := range predicates {

@@ -34,7 +34,7 @@ var (
 )
 
 func init() {
-	DeferredFunctions[ast.MCTechSequence] = struct{}{}
+	deferredFunctions[ast.MCTechSequence] = struct{}{}
 
 	// mctech function.
 	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}

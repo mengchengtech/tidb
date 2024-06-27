@@ -2036,7 +2036,7 @@ func (b *PlanBuilder) buildAdminCheckTable(ctx context.Context, as *ast.AdminStm
 	tableInfo := as.Tables[0].TableInfo
 	tbl, ok := b.is.TableByID(tableInfo.ID)
 	if !ok {
-		return nil, infoschema.ErrTableNotExists.GenWithStackByArgs(tblName.DBInfo.Name.O, tableInfo.Name.O)
+		return nil, infoschema.ErrTableNotExists.FastGenByArgs(tblName.DBInfo.Name.O, tableInfo.Name.O)
 	}
 	p := &CheckTable{
 		DBName: tblName.Schema.O,
@@ -3859,7 +3859,7 @@ func genAuthErrForGrantStmt(sctx sessionctx.Context, dbName string) error {
 	return ErrDBaccessDenied.FastGenByArgs(u, h, dbName)
 }
 
-func (b *PlanBuilder) getDefaultValue(col *table.Column) (*expression.Constant, error) {
+func (b *PlanBuilder) getDefaultValue(col *table.Column, isInsert bool) (*expression.Constant, error) {
 	var (
 		value types.Datum
 		err   error
@@ -3867,6 +3867,11 @@ func (b *PlanBuilder) getDefaultValue(col *table.Column) (*expression.Constant, 
 	if col.DefaultIsExpr && col.DefaultExpr != nil {
 		value, err = table.EvalColDefaultExpr(b.ctx, col.ToInfo(), col.DefaultExpr)
 	} else {
+		if isInsert {
+			if err := table.CheckNoDefaultValueForInsert(b.ctx.GetSessionVars().StmtCtx, col.ToInfo()); err != nil {
+				return nil, err
+			}
+		}
 		value, err = table.GetColDefaultValue(b.ctx, col.ToInfo())
 	}
 	if err != nil {
@@ -3918,11 +3923,11 @@ func (b *PlanBuilder) resolveGeneratedColumns(ctx context.Context, columns []*ta
 func (b *PlanBuilder) buildInsert(ctx context.Context, insert *ast.InsertStmt) (Plan, error) {
 	ts, ok := insert.Table.TableRefs.Left.(*ast.TableSource)
 	if !ok {
-		return nil, infoschema.ErrTableNotExists.GenWithStackByArgs()
+		return nil, infoschema.ErrTableNotExists.FastGenByArgs()
 	}
 	tn, ok := ts.Source.(*ast.TableName)
 	if !ok {
-		return nil, infoschema.ErrTableNotExists.GenWithStackByArgs()
+		return nil, infoschema.ErrTableNotExists.FastGenByArgs()
 	}
 	tableInfo := tn.TableInfo
 	if tableInfo.IsView() {
@@ -4155,7 +4160,7 @@ func (b PlanBuilder) getInsertColExpr(ctx context.Context, insertPlan *Insert, m
 			// See note in the end of the function. Only default for generated columns are OK.
 			return nil, nil
 		}
-		outExpr, err = b.getDefaultValue(refCol)
+		outExpr, err = b.getDefaultValue(refCol, true)
 	case *driver.ValueExpr:
 		outExpr = &expression.Constant{
 			Value:   x.Datum,
@@ -4430,7 +4435,7 @@ func (b *PlanBuilder) buildLoadData(ctx context.Context, ld *ast.LoadDataStmt) (
 	tableInPlan, ok := b.is.TableByID(tableInfo.ID)
 	if !ok {
 		db := b.ctx.GetSessionVars().CurrentDB
-		return nil, infoschema.ErrTableNotExists.GenWithStackByArgs(db, tableInfo.Name.O)
+		return nil, infoschema.ErrTableNotExists.FastGenByArgs(db, tableInfo.Name.O)
 	}
 	schema, names, err := expression.TableInfo2SchemaAndNames(b.ctx, model.NewCIStr(""), tableInfo)
 	if err != nil {
@@ -4514,7 +4519,7 @@ func (b *PlanBuilder) buildImportInto(ctx context.Context, ld *ast.ImportIntoStm
 	tableInPlan, ok := b.is.TableByID(tableInfo.ID)
 	if !ok {
 		db := b.ctx.GetSessionVars().CurrentDB
-		return nil, infoschema.ErrTableNotExists.GenWithStackByArgs(db, tableInfo.Name.O)
+		return nil, infoschema.ErrTableNotExists.FastGenByArgs(db, tableInfo.Name.O)
 	}
 	schema, names, err := expression.TableInfo2SchemaAndNames(b.ctx, model.NewCIStr(""), tableInfo)
 	if err != nil {

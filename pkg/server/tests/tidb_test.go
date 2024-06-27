@@ -55,6 +55,7 @@ import (
 	"github.com/pingcap/tidb/pkg/server/internal/testserverclient"
 	"github.com/pingcap/tidb/pkg/server/internal/testutil"
 	util2 "github.com/pingcap/tidb/pkg/server/internal/util"
+	"github.com/pingcap/tidb/pkg/server/tests/servertestkit"
 	"github.com/pingcap/tidb/pkg/session"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/store/mockstore"
@@ -103,11 +104,9 @@ func createTidbTestSuiteWithCfg(t *testing.T, cfg *config.Config) *tidbTestSuite
 	ts.domain, err = session.BootstrapSession(ts.store)
 	require.NoError(t, err)
 	ts.tidbdrv = server2.NewTiDBDriver(ts.store)
-
+	server2.RunInGoTestChan = make(chan struct{})
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
 	require.NoError(t, err)
-	ts.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
-	ts.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 	ts.server = server
 	ts.server.SetDomain(ts.domain)
 	ts.domain.InfoSyncer().SetSessionManager(ts.server)
@@ -115,6 +114,9 @@ func createTidbTestSuiteWithCfg(t *testing.T, cfg *config.Config) *tidbTestSuite
 		err := ts.server.Run(nil)
 		require.NoError(t, err)
 	}()
+	<-server2.RunInGoTestChan
+	ts.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
+	ts.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 	ts.WaitUntilServerOnline()
 
 	t.Cleanup(func() {
@@ -248,8 +250,9 @@ func TestStatusPort(t *testing.T) {
 	cfg.Performance.TCPKeepAlive = true
 
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
+	require.NoError(t, err)
+	err = server.Run(ts.domain)
 	require.Error(t, err)
-	require.Nil(t, server)
 }
 
 func TestStatusAPIWithTLS(t *testing.T) {
@@ -274,15 +277,16 @@ func TestStatusAPIWithTLS(t *testing.T) {
 	cfg.Security.ClusterSSLCA = fileName("ca-cert-2.pem")
 	cfg.Security.ClusterSSLCert = fileName("server-cert-2.pem")
 	cfg.Security.ClusterSSLKey = fileName("server-key-2.pem")
+	server2.RunInGoTestChan = make(chan struct{})
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
 	require.NoError(t, err)
-	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
-	cli.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
-	time.Sleep(time.Millisecond * 100)
+	<-server2.RunInGoTestChan
+	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
+	cli.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 
 	// https connection should work.
 	ts.RunTestStatusAPI(t)
@@ -331,18 +335,17 @@ func TestStatusAPIWithTLSCNCheck(t *testing.T) {
 	cfg.Security.ClusterSSLCert = serverCertPath
 	cfg.Security.ClusterSSLKey = serverKeyPath
 	cfg.Security.ClusterVerifyCN = []string{"tidb-client-2"}
+	server2.RunInGoTestChan = make(chan struct{})
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
 	require.NoError(t, err)
-
-	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
-	cli.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
 	defer server.Close()
-	time.Sleep(time.Millisecond * 100)
-
+	<-server2.RunInGoTestChan
+	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
+	cli.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 	hc := newTLSHttpClient(t, caPath,
 		client1CertPath,
 		client1KeyPath,
@@ -395,16 +398,16 @@ func TestSocketForwarding(t *testing.T) {
 	cfg.Port = cli.Port
 	os.Remove(cfg.Socket)
 	cfg.Status.ReportStatus = false
-
+	server2.RunInGoTestChan = make(chan struct{})
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
 	require.NoError(t, err)
 	server.SetDomain(ts.domain)
-	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
-	time.Sleep(time.Millisecond * 100)
+	<-server2.RunInGoTestChan
+	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
 	defer server.Close()
 
 	cli.RunTestRegression(t, func(config *mysql.Config) {
@@ -427,16 +430,16 @@ func TestSocket(t *testing.T) {
 	cfg.Host = ""
 	cfg.Status.ReportStatus = false
 
-	ts := createTidbTestSuite(t)
-
-	server, err := server2.NewServer(cfg, ts.tidbdrv)
+	ts := servertestkit.CreateTidbTestSuite(t)
+	server2.RunInGoTestChan = make(chan struct{})
+	server, err := server2.NewServer(cfg, ts.Tidbdrv)
 	require.NoError(t, err)
-	server.SetDomain(ts.domain)
+	server.SetDomain(ts.Domain)
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
-	time.Sleep(time.Millisecond * 100)
+	<-server2.RunInGoTestChan
 	defer server.Close()
 
 	confFunc := func(config *mysql.Config) {
@@ -462,16 +465,17 @@ func TestSocketAndIp(t *testing.T) {
 	cfg.Port = cli.Port
 	cfg.Status.ReportStatus = false
 
-	ts := createTidbTestSuite(t)
-
-	server, err := server2.NewServer(cfg, ts.tidbdrv)
+	ts := servertestkit.CreateTidbTestSuite(t)
+	server2.RunInGoTestChan = make(chan struct{})
+	server, err := server2.NewServer(cfg, ts.Tidbdrv)
 	require.NoError(t, err)
-	server.SetDomain(ts.domain)
-	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
+	server.SetDomain(ts.Domain)
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
+	<-server2.RunInGoTestChan
+	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
 	cli.WaitUntilServerCanConnect()
 	defer server.Close()
 
@@ -627,16 +631,16 @@ func TestOnlySocket(t *testing.T) {
 	cfg.Host = "" // No network interface listening for mysql traffic
 	cfg.Status.ReportStatus = false
 
-	ts := createTidbTestSuite(t)
-
-	server, err := server2.NewServer(cfg, ts.tidbdrv)
+	ts := servertestkit.CreateTidbTestSuite(t)
+	server2.RunInGoTestChan = make(chan struct{})
+	server, err := server2.NewServer(cfg, ts.Tidbdrv)
 	require.NoError(t, err)
-	server.SetDomain(ts.domain)
+	server.SetDomain(ts.Domain)
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
-	time.Sleep(time.Millisecond * 100)
+	<-server2.RunInGoTestChan
 	defer server.Close()
 	require.Nil(t, server.Listener())
 	require.NotNil(t, server.Socket())
@@ -1237,17 +1241,18 @@ func TestGracefulShutdown(t *testing.T) {
 	cfg.Status.StatusPort = 0
 	cfg.Status.ReportStatus = true
 	cfg.Performance.TCPKeepAlive = true
+	server2.RunInGoTestChan = make(chan struct{})
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
 	require.NoError(t, err)
 	require.NotNil(t, server)
-	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
-	cli.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
+
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
-	time.Sleep(time.Millisecond * 100)
-
+	<-server2.RunInGoTestChan
+	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
+	cli.StatusPort = testutil.GetPortFromTCPAddr(server.StatusListenerAddr())
 	resp, err := cli.FetchStatus("/status") // server is up
 	require.NoError(t, err)
 	require.Nil(t, resp.Body.Close())
@@ -2513,17 +2518,18 @@ func TestLocalhostClientMapping(t *testing.T) {
 	cfg.Port = cli.Port
 	cfg.Status.ReportStatus = false
 
-	ts := createTidbTestSuite(t)
-
-	server, err := server2.NewServer(cfg, ts.tidbdrv)
+	ts := servertestkit.CreateTidbTestSuite(t)
+	server2.RunInGoTestChan = make(chan struct{})
+	server, err := server2.NewServer(cfg, ts.Tidbdrv)
 	require.NoError(t, err)
-	server.SetDomain(ts.domain)
-	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
+	server.SetDomain(ts.Domain)
 	go func() {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
 	defer server.Close()
+	<-server2.RunInGoTestChan
+	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
 	cli.WaitUntilServerCanConnect()
 
 	cli.Port = testutil.GetPortFromTCPAddr(server.ListenAddr())
@@ -3035,6 +3041,7 @@ func TestProxyProtocolWithIpFallbackable(t *testing.T) {
 	ts := createTidbTestSuite(t)
 
 	// Prepare Server
+	server2.RunInGoTestChan = make(chan struct{})
 	server, err := server2.NewServer(cfg, ts.tidbdrv)
 	require.NoError(t, err)
 	server.SetDomain(ts.domain)
@@ -3042,7 +3049,7 @@ func TestProxyProtocolWithIpFallbackable(t *testing.T) {
 		err := server.Run(nil)
 		require.NoError(t, err)
 	}()
-	time.Sleep(time.Millisecond * 100)
+	<-server2.RunInGoTestChan
 	defer func() {
 		server.Close()
 	}()
@@ -3126,4 +3133,83 @@ func TestProxyProtocolWithIpNoFallbackable(t *testing.T) {
 	err = db.Ping()
 	require.NotNil(t, err)
 	db.Close()
+}
+
+func TestTypeAndCharsetOfSendLongData(t *testing.T) {
+	ts := servertestkit.CreateTidbTestSuite(t)
+	ts.RunTestTypeAndCharsetOfSendLongData(t)
+}
+
+func TestConnectionCount(t *testing.T) {
+	ts := servertestkit.CreateTidbTestSuite(t)
+	ts.RunTestConnectionCount(t)
+}
+
+func TestAuthSocket(t *testing.T) {
+	defer server2.ClearOSUserForAuthSocket()
+
+	cfg := util2.NewTestConfig()
+	cfg.Socket = filepath.Join(t.TempDir(), "authsock.sock")
+	cfg.Port = 0
+	cfg.Status.StatusPort = 0
+	ts := servertestkit.CreateTidbTestSuiteWithCfg(t, cfg)
+	ts.WaitUntilServerCanConnect()
+
+	ts.RunTests(t, nil, func(dbt *testkit.DBTestKit) {
+		dbt.MustExec("CREATE USER 'u1'@'%' IDENTIFIED WITH auth_socket;")
+		dbt.MustExec("CREATE USER 'u2'@'%' IDENTIFIED WITH auth_socket AS 'sockuser'")
+		dbt.MustExec("CREATE USER 'sockuser'@'%' IDENTIFIED WITH auth_socket;")
+	})
+
+	// network login should be denied
+	for _, uname := range []string{"u1", "u2", "u3"} {
+		server2.MockOSUserForAuthSocket(uname)
+		db, err := sql.Open("mysql", ts.GetDSN(func(config *mysql.Config) {
+			config.User = uname
+		}))
+		require.NoError(t, err)
+		_, err = db.Conn(context.TODO())
+		require.EqualError(t,
+			err,
+			fmt.Sprintf("Error 1045 (28000): Access denied for user '%s'@'127.0.0.1' (using password: NO)", uname),
+		)
+		require.NoError(t, db.Close())
+	}
+
+	socketAuthConf := func(user string) func(*mysql.Config) {
+		return func(config *mysql.Config) {
+			config.User = user
+			config.Net = "unix"
+			config.Addr = cfg.Socket
+			config.DBName = ""
+		}
+	}
+
+	server2.MockOSUserForAuthSocket("sockuser")
+
+	// mysql username that is different with the OS user should be rejected.
+	db, err := sql.Open("mysql", ts.GetDSN(socketAuthConf("u1")))
+	require.NoError(t, err)
+	_, err = db.Conn(context.TODO())
+	require.EqualError(t, err, "Error 1045 (28000): Access denied for user 'u1'@'localhost' (using password: YES)")
+	require.NoError(t, db.Close())
+
+	// mysql username that is the same with the OS user should be accepted.
+	ts.RunTests(t, socketAuthConf("sockuser"), func(dbt *testkit.DBTestKit) {
+		rows := dbt.MustQuery("select current_user();")
+		ts.CheckRows(t, rows, "sockuser@%")
+	})
+
+	// When a user is created with `IDENTIFIED WITH auth_socket AS ...`.
+	// It should be accepted when username or as string is the same with OS user.
+	ts.RunTests(t, socketAuthConf("u2"), func(dbt *testkit.DBTestKit) {
+		rows := dbt.MustQuery("select current_user();")
+		ts.CheckRows(t, rows, "u2@%")
+	})
+
+	server2.MockOSUserForAuthSocket("u2")
+	ts.RunTests(t, socketAuthConf("u2"), func(dbt *testkit.DBTestKit) {
+		rows := dbt.MustQuery("select current_user();")
+		ts.CheckRows(t, rows, "u2@%")
+	})
 }

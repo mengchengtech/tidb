@@ -2105,13 +2105,16 @@ func (b *executorBuilder) buildMemTable(v *plannercore.PhysicalMemTable) exec.Ex
 			strings.ToLower(infoschema.TableResourceGroups),
 			strings.ToLower(infoschema.TableRunawayWatches),
 			strings.ToLower(infoschema.TableCheckConstraints):
+			memTracker := memory.NewTracker(v.ID(), -1)
+			memTracker.AttachTo(b.ctx.GetSessionVars().StmtCtx.MemTracker)
 			return &MemTableReaderExec{
 				BaseExecutor: exec.NewBaseExecutor(b.ctx, v.Schema(), v.ID()),
 				table:        v.Table,
 				retriever: &memtableRetriever{
-					table:     v.Table,
-					columns:   v.Columns,
-					extractor: v.Extractor,
+					table:      v.Table,
+					columns:    v.Columns,
+					extractor:  v.Extractor,
+					memTracker: memTracker,
 				},
 			}
 		case strings.ToLower(infoschema.TableTiDBTrx),
@@ -2980,6 +2983,12 @@ func (*executorBuilder) corColInDistPlan(plans []plannercore.PhysicalPlan) bool 
 					return true
 				}
 			}
+		case *plannercore.PhysicalTopN:
+			for _, byItem := range x.ByItems {
+				if len(expression.ExtractCorColumns(byItem.Expr)) > 0 {
+					return true
+				}
+			}
 		case *plannercore.PhysicalTableScan:
 			for _, cond := range x.LateMaterializationFilterCondition {
 				if len(expression.ExtractCorColumns(cond)) > 0 {
@@ -3428,6 +3437,10 @@ func (b *executorBuilder) buildTableReader(v *plannercore.PhysicalTableReader) e
 			failpoint.Return(nil)
 		}
 	})
+	// https://github.com/pingcap/tidb/issues/50358
+	if len(v.Schema().Columns) == 0 && len(v.GetTablePlan().Schema().Columns) > 0 {
+		v.SetSchema(v.GetTablePlan().Schema())
+	}
 	useMPP := useMPPExecution(b.ctx, v)
 	useTiFlashBatchCop := v.ReadReqType == plannercore.BatchCop
 	useTiFlash := useMPP || useTiFlashBatchCop
