@@ -1091,11 +1091,6 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 
 		ast.Cast,
 
-		// add by zhangbing
-		// mctech functions
-		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt,
-		// add end
-
 		// misc functions.
 		// TODO(#26942): enable functions below after them are fully tested in TiKV.
 		/*ast.InetNtoa, ast.InetAton, ast.Inet6Ntoa, ast.Inet6Aton, ast.IsIPv4, ast.IsIPv4Compat, ast.IsIPv4Mapped, ast.IsIPv6,*/
@@ -1120,6 +1115,15 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 			return false
 		}
 		return true
+
+		// add by zhangbing
+		// mctech functions
+	case
+		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSql,
+		// 全名
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSql:
+		return false
+		// add end
 	}
 	return false
 }
@@ -1278,6 +1282,14 @@ func scalarExprSupportedByFlash(function *ScalarFunction) bool {
 		return true
 	case ast.IsIPv4, ast.IsIPv6:
 		return true
+		// add by zhangbing
+		// mctech functions
+	case
+		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSql,
+		// 全名
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSql:
+		return false
+		// add end
 	}
 	return false
 }
