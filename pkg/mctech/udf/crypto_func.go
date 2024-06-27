@@ -35,6 +35,8 @@ type CryptoClient interface {
 type mockCryptoClient struct {
 }
 
+var _ CryptoClient = &mockCryptoClient{}
+
 // Encrypt text
 func (p *mockCryptoClient) Encrypt(plainText string) (string, error) {
 	return plainText, nil

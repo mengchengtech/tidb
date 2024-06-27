@@ -1119,9 +1119,10 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 			return false
 		}
 		return true
-		// add by zhangbing
-		// mctech functions
-	case ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt:
+	case
+		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSql,
+		// 全名
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSql:
 		return false
 		// add end
 	}
@@ -1284,9 +1285,10 @@ func scalarExprSupportedByFlash(function *ScalarFunction) bool {
 		return true
 	case ast.Grouping: // grouping function for grouping sets identification.
 		return true
-		// add by zhangbing
-		// mctech functions
-	case ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt:
+	case
+		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSql,
+		// 全名
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSql:
 		return false
 		// add end
 	}
