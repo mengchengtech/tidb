@@ -1,10 +1,11 @@
-package preps
+package preps_test
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,7 +50,7 @@ func TestValueConverter(t *testing.T) {
 }
 
 func convertRunTestCase(t *testing.T, c *converterTestCase) error {
-	gc := newGlobalValueFormatter()
+	gc := preps.NewGlobalValueFormatterForTest()
 	out, err := gc.Format(c.name, c.value)
 	if err != nil {
 		return err

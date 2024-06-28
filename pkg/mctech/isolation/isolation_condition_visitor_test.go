@@ -1,10 +1,11 @@
-package isolation
+package isolation_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/isolation"
 	"github.com/pingcap/tidb/pkg/parser"
 	. "github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/stretchr/testify/require"
@@ -247,7 +248,7 @@ func doRunTenantMCTechTestCase(t *testing.T, c *tenantMCTechTestCase) error {
 		}
 
 		// var skipped bool
-		if _, _, err = ApplyExtension(context, stmt, "", ""); err != nil {
+		if _, _, err = isolation.ApplyExtension(context, stmt, "", ""); err != nil {
 			return err
 		}
 		// require.Equal(t, c.skipped, skipped)
