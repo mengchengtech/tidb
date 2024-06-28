@@ -82,6 +82,10 @@ func (cc *clientConn) afterParseSQL(ctx context.Context, mctx mctech.Context, st
 
 	handler := mctech.GetHandler()
 	for _, stmt := range stmts {
+		if _, ok := stmt.(*ast.PrepareStmt); ok {
+			// prapare 语句不在这里处理，在PrepareExec.Next方法内解析待执行语句时才处理
+			continue
+		}
 		if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
 			logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(cc.getCtx())), zap.String("SQL", stmt.OriginalText()))
 			return err
