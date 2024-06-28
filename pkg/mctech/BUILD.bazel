@@ -4,6 +4,7 @@ go_library(
     name = "mctech",
     srcs = [
         "context.go",
+        "extension.go",
         "filter.go",
         "handler.go",
         "http_rpc.go",
@@ -14,6 +15,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/config",
+        "//pkg/extension",
         "//pkg/parser/ast",
         "//pkg/sessionctx",
         "//pkg/util/intest",

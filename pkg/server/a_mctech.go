@@ -6,6 +6,7 @@ import (
 	"github.com/pingcap/tidb/pkg/mctech"
 	_ "github.com/pingcap/tidb/pkg/mctech/preps" // 强制初始化preps
 	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 )
 
 func (cc *clientConn) onBeforeParseSQL(sql string) (mctech.Context, string, error) {
@@ -23,6 +24,15 @@ func (cc *clientConn) onAfterParseSQL(stmts []ast.StmtNode) (err error) {
 	return nil
 }
 
-func (cc *clientConn) onAfterHandleStmt(stmt ast.StmtNode, err error) {
-	mctech.GetInterceptor().AfterHandleStmt(cc.getCtx(), stmt, err)
+type mctechStmtEventInfo struct {
+	stmtEventInfo
+	sctx sessionctx.Context
 }
+
+func (e *mctechStmtEventInfo) SCtx() sessionctx.Context {
+	return e.sctx
+}
+
+var (
+	_ mctech.SessionStmtEventInfo = &mctechStmtEventInfo{}
+)
