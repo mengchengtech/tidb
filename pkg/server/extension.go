@@ -73,10 +73,18 @@ func (cc *clientConn) onExtensionStmtEnd(node interface{}, stmtCtxValid bool, er
 	}
 
 	sessVars := ctx.GetSessionVars()
-	info := &stmtEventInfo{
+	// modify by zhangbing
+	info0 := &stmtEventInfo{
 		sessVars: sessVars,
 		err:      err,
 	}
+	// modify end
+	// add by zhangbing
+	info := &mctechStmtEventInfo{
+		stmtEventInfo: *info0,
+		sctx:          ctx,
+	}
+	// add end
 
 	switch stmt := node.(type) {
 	case *ast.ExecuteStmt:
@@ -108,11 +116,19 @@ func (cc *clientConn) onExtensionSQLParseFailed(sql string, err error) {
 		return
 	}
 
-	cc.extensions.OnStmtEvent(extension.StmtError, &stmtEventInfo{
-		sessVars:        cc.getCtx().GetSessionVars(),
+	// modify by zhangbing
+	ctx := cc.getCtx()
+	info0 := &stmtEventInfo{
+		sessVars:        ctx.GetSessionVars(),
 		err:             err,
 		failedParseText: sql,
-	})
+	}
+	info := &mctechStmtEventInfo{
+		stmtEventInfo: *info0,
+		sctx:          ctx,
+	}
+	cc.extensions.OnStmtEvent(extension.StmtError, info)
+	// modify end
 }
 
 func (cc *clientConn) onExtensionBinaryExecuteEnd(prep PreparedStatement, args []expression.Expression, stmtCtxValid bool, err error) {
