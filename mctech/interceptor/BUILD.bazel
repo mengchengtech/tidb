@@ -13,6 +13,7 @@ go_library(
     deps = [
         "//config",
         "//executor",
+        "//kv",
         "//mctech",
         "//parser/ast",
         "//planner/core",

@@ -292,7 +292,9 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		parseTime         time.Duration  // 解析耗时
 		compileTime       time.Duration  // 生成执行计划耗时
 		tidbTime          time.Duration  // tidb-server里用时
-		copTime           time.Duration  // Coprocessor 执行耗时
+		copTime           time.Duration  // 直接从统计结果中获取到的Coprocessor 执行耗时
+		tikvCopTime       time.Duration  // TiKV执行Coprocessor 耗时(从执行计划中统计)
+		tiflashCopTime    time.Duration  // TiFlash执行Coprocessor 耗时(从执行计划中统计)
 		memMax            int64          // 该 SQL 查询执行时占用的最大内存空间
 		diskMax           int64          // 该 SQL 查询执行时占用的最大磁盘空间
 		writeSQLRespTotal time.Duration  // 发送结果耗时
@@ -331,7 +333,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 					renderDetails:    false,
 					runtimeStatsColl: stmtCtx.RuntimeStatsColl,
 				}
-				tidbTime = collector.collectCPUTime(flat)
+				tidbTime, tikvCopTime, tiflashCopTime = collector.collectCPUTime(flat)
 			}
 
 			execDetails := stmtCtx.GetExecDetails()
@@ -404,6 +406,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			plan:  compileTime,
 			cop:   copTime,
 			tidb:  tidbTime,
+			copTK: tikvCopTime,
+			copTF: tiflashCopTime,
 			ready: firstRowReadyTime,
 			send:  writeSQLRespTotal,
 		}),
