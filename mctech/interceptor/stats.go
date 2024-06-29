@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/util/execdetails"
@@ -47,11 +48,11 @@ import (
 type planStatCollector struct {
 	renderDetails    bool
 	runtimeStatsColl *execdetails.RuntimeStatsColl
-	statRecords      []*shortRuntimeStatsRow
+	statRecords      []*shortRuntimeStatsRecord
 }
 
 // getOperatorsCPUTime 获取sql执行算子的执行时间信息
-func (c *planStatCollector) collectCPUTime(flat *core.FlatPhysicalPlan) time.Duration {
+func (c *planStatCollector) collectCPUTime(flat *core.FlatPhysicalPlan) (tidbTime time.Duration, tikvCopTime time.Duration, tiflashCopTime time.Duration) {
 	// 捕获后续执行的异常，不再向外抛出
 	defer func() time.Duration {
 		if err := recover(); err != nil {
@@ -62,23 +63,33 @@ func (c *planStatCollector) collectCPUTime(flat *core.FlatPhysicalPlan) time.Dur
 
 	c.collectFromFlatPlan(flat)
 
-	var tidbCPUTime time.Duration
 	var rows []string
 	for _, r := range c.statRecords {
 		if c.renderDetails {
 			rows = append(rows, r.String())
 		}
-		if r.IsRoot {
+		details := r.GetDetails()
+		if r.isRoot {
 			// root task，在 tidb-server 上执行
 			// 非 root task(cop task)，在 TiKV 或者 TiFlash 上并行执行
 			// 由于从现有的统计信息里不能方便的收集到tidb-server上消耗的时间，因此在这里从执行计划中单独获取
-			tidbCPUTime = tidbCPUTime + r.Stats.collectCPUTime()
+			tidbTime = tidbTime + details.rootProcTime
+		} else {
+			switch r.storeType {
+			case kv.TiKV:
+				tikvCopTime = tikvCopTime + details.copTotalTime
+			case kv.TiFlash:
+				tiflashCopTime = tiflashCopTime + details.copTotalTime
+			}
 		}
 	}
 	if c.renderDetails {
-		logutil.BgLogger().Warn("object inspect", zap.Duration("tidbTime", tidbCPUTime), zap.String("explain", strings.Join(rows, "\n")))
+		logutil.BgLogger().Warn("object inspect",
+			zap.Duration("tidbTime", tidbTime), zap.Duration("tikvCopTime",
+				tikvCopTime), zap.Duration("tiflashCopTime", tiflashCopTime),
+			zap.String("explain", strings.Join(rows, "\n")))
 	}
-	return tidbCPUTime
+	return tidbTime, tikvCopTime, tiflashCopTime
 }
 
 func (e *planStatCollector) collectFromFlatPlan(flat *core.FlatPhysicalPlan) {
@@ -129,9 +140,7 @@ func (e *planStatCollector) prepareOperatorInfo(flatOp *core.FlatOperator) {
 	)
 
 	rootStats = e.runtimeStatsColl.GetRootStats(p.ID())
-	if e.renderDetails {
-		copStats = e.runtimeStatsColl.GetCopStats(p.ID())
-	}
+	copStats = e.runtimeStatsColl.GetCopStats(p.ID())
 
 	var textTreeExplainID string
 	if e.renderDetails {
@@ -139,43 +148,44 @@ func (e *planStatCollector) prepareOperatorInfo(flatOp *core.FlatOperator) {
 		textTreeExplainID = texttree.PrettyIdentifier(explainID, flatOp.TextTreeIndent, flatOp.IsLastChild)
 	}
 
-	record := &shortRuntimeStatsRow{
-		ID:       textTreeExplainID,
-		IsRoot:   flatOp.IsRoot,
-		TaskType: taskType,
-		Stats: &shortRuntimeStats{
-			RootStats: rootStats,
-			CopStats:  copStats,
-		},
+	record := &shortRuntimeStatsRecord{
+		id:        textTreeExplainID,
+		isRoot:    flatOp.IsRoot,
+		taskType:  taskType,
+		storeType: flatOp.StoreType,
+		rootStats: rootStats,
+		copStats:  copStats,
 	}
 	e.statRecords = append(e.statRecords, record)
 }
 
-type shortRuntimeStatsRow struct {
-	ID       string
-	IsRoot   bool
-	TaskType string
-	Stats    *shortRuntimeStats
+type shortRuntimeStatsRecord struct {
+	id        string
+	isRoot    bool
+	taskType  string
+	storeType kv.StoreType
+	rootStats *execdetails.RootRuntimeStats
+	copStats  *execdetails.CopRuntimeStats
+	details   *shortRuntimeStatsDetails
 }
 
-func (s *shortRuntimeStatsRow) String() string {
-	return fmt.Sprintf("%v | task:%s | stats:%s", s.ID, s.TaskType, s.Stats)
+type shortRuntimeStatsDetails struct {
+	rootProcTime    time.Duration
+	copProcTimes    execdetails.Percentile[execdetails.Duration]
+	copTotalTime    time.Duration
+	copTotalTasks   int32
+	copTotalLoops   int32
+	copTotalThreads int32
 }
 
-type shortRuntimeStats struct {
-	RootStats    *execdetails.RootRuntimeStats
-	CopStats     *execdetails.CopRuntimeStats
-	rootProcTime *time.Duration
-}
-
-func (s *shortRuntimeStats) collectCPUTime() time.Duration {
-	if s.rootProcTime != nil {
-		return *s.rootProcTime
+func (s *shortRuntimeStatsRecord) GetDetails() *shortRuntimeStatsDetails {
+	if s.details != nil {
+		return s.details
 	}
 
 	// "executeInfo": "time:48.2s, loops:37, build_hash_table:{total:131ms, fetch:129.8ms, build:1.17ms}, probe:{concurrency:5, total:3m49.6s, max:48.2s, probe:3m48.7s, fetch:846ms}",
 	// 其中 _ 表示主时间轴的时间信息，groups 表示各种详细时间信息
-	_, groups := s.RootStats.MergeStats()
+	_, groups := s.rootStats.MergeStats()
 	var rootProcTime = time.Duration(0)
 	for _, group := range groups {
 		if collector, ok := group.(mctech.CPUTimeCollector); ok {
@@ -185,29 +195,40 @@ func (s *shortRuntimeStats) collectCPUTime() time.Duration {
 			}
 		}
 	}
-	s.rootProcTime = &rootProcTime
-	return rootProcTime
+	// "executeInfo": "time:79.9ms, loops:10, cop_task: {num: 8, max: 81.3ms, min: 21.3ms, avg: 34ms, p95: 81.3ms, rpc_num: 8, rpc_time: 271.6ms, copr_cache_hit_ratio: 0.00, build_task_duration: 3.69ms, max_distsql_concurrency: 8}
+	d := &shortRuntimeStatsDetails{
+		rootProcTime: rootProcTime,
+	}
+	s.details = d
+	if s.copStats != nil && s.copStats.HasStats() {
+		d.copProcTimes, d.copTotalTime, d.copTotalTasks, d.copTotalLoops, d.copTotalThreads, _ = s.copStats.MergeBasicStats()
+	}
+	return d
 }
 
-func (s *shortRuntimeStats) String() string {
+func (s *shortRuntimeStatsRecord) String() string {
+	return fmt.Sprintf("%v | task:%s | stats:%s", s.id, s.taskType, s.StatString())
+}
+
+func (s *shortRuntimeStatsRecord) StatString() string {
 	analyzeInfo := ""
 	var tps []string
-	if s.RootStats != nil {
+	if s.rootStats != nil {
+		analyzeInfo = "[" + reflect.TypeOf(s.rootStats).String() + "] =>"
 		// "executeInfo": "time:48.2s, loops:37, build_hash_table:{total:131ms, fetch:129.8ms, build:1.17ms}, probe:{concurrency:5, total:3m49.6s, max:48.2s, probe:3m48.7s, fetch:846ms}",
 		// 输出 execute info
 		// 其中 basic 表示主时间轴的时间信息，groups 表示各种详细时间信息
-		_, groups := s.RootStats.MergeStats()
+		_, groups := s.rootStats.MergeStats()
 		for _, group := range groups {
 			tps = append(tps, reflect.TypeOf(group).String())
-			s.collectCPUTime()
 		}
-		analyzeInfo = s.RootStats.String()
+		analyzeInfo = analyzeInfo + s.rootStats.String()
 	}
-	if s.CopStats != nil {
+	if s.copStats != nil {
 		if len(analyzeInfo) > 0 {
 			analyzeInfo += ", "
 		}
-		analyzeInfo += s.CopStats.String()
+		analyzeInfo += "[copStats]: " + s.copStats.String()
 	}
 	if len(tps) > 0 {
 		analyzeInfo = "[" + strings.Join(tps, ",") + "] -> " + analyzeInfo
