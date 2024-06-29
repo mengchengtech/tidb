@@ -81,7 +81,7 @@ func TestGetFullSqlWithNotConfig(t *testing.T) {
 	ctx := createContext(t)
 	fc := funcs[ast.MCGetFullSql]
 	f, err := fc.getFunction(mock.NewContext(),
-		datumsToConstants(types.MakeDatums("tidb06", "5MRDLP6DN2B", "2023-10-10 19:55:40")))
+		datumsToConstants(types.MakeDatums("2023-10-10 19:55:40", 1697003594436)))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
@@ -105,7 +105,7 @@ func TestGetFullSqlByTime(t *testing.T) {
 	ctx := createContext(t)
 	fc := funcs[ast.MCGetFullSql]
 	f, err := fc.getFunction(mock.NewContext(),
-		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", dt)))
+		datumsToConstants(types.MakeDatums(dt, 1697003594436)))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
@@ -124,7 +124,7 @@ func TestGetFullSqlByString(t *testing.T) {
 	ctx := createContext(t)
 	fc := funcs[ast.MCGetFullSql]
 	f, err := fc.getFunction(mock.NewContext(),
-		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", datetime)))
+		datumsToConstants(types.MakeDatums(datetime, "1697003594436")))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})
