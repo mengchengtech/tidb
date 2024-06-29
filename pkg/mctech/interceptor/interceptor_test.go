@@ -66,8 +66,7 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 		"cat":  "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "3.315821ms", "send": "10ms",
-			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
-			"tiflash": "12µs",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
 		},
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
@@ -116,8 +115,7 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
-			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
-			"tiflash": "12µs",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
 		},
 		"mem": float64(151300), "disk": float64(9527), "rows": float64(1024),
 		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
@@ -157,9 +155,8 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
-			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
-			"tiflash": "12µs",
-			"tx":      map[string]any{"prewrite": "1.032s", "commit": "100ms"},
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+			"tx":  map[string]any{"prewrite": "1.032s", "commit": "100ms"},
 		},
 		"tx":  map[string]any{"affected": float64(1), "keys": float64(1), "size": float64(44)},
 		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
@@ -204,8 +201,7 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
-			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
-			"tiflash": "12µs",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
 		},
 		"tx":  map[string]any{"affected": float64(1), "keys": float64(0), "size": float64(0)},
 		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
@@ -250,9 +246,8 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
-			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
-			"tiflash": "12µs",
-			"tx":      map[string]any{"prewrite": "1.032s", "commit": "100ms"},
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+			"tx":  map[string]any{"prewrite": "1.032s", "commit": "100ms"},
 		},
 		"tx":  map[string]any{"affected": float64(0), "keys": float64(2), "size": float64(122)},
 		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
