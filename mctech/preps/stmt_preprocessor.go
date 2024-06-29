@@ -65,6 +65,9 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 			if value[0] == '\'' && value[len(value)-1] == '\'' {
 				value = value[1 : len(value)-1]
 			}
+			if value[0] == ' ' || value[len(value)-1] == ' ' {
+				value = strings.TrimSpace(value)
+			}
 			if val, ok := params[name]; ok {
 				if val != value {
 					return "", nil, fmt.Errorf("多个 %s hint包含不同的值: %s <=> %s",

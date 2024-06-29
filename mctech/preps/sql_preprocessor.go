@@ -61,7 +61,9 @@ func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCod
 }
 
 var valueFormatters = map[string]valueFormatter{
-	mctech.ParamGlobal: newGlobalValueFormatter(),
+	mctech.ParamGlobal:      newGlobalValueFormatter(),
+	mctech.ParamAcross:      newCrossValueFormatter(),
+	mctech.ParamImpersonate: newEnumValueFormatter("tenant_only"),
 }
 
 var resolveActions = map[string]action{
@@ -117,13 +119,19 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context,
 		return nil, err
 	}
 
+	if v, ok := params[mctech.ParamImpersonate]; ok {
+		if role := v.(string); role == tenantOnlyRole {
+			tenantOnly = true
+		}
+	}
+
 	result, err := mctech.NewPrepareResult(tenantCode, tenantOnly, params)
 	if err != nil {
 		return nil, err
 	}
 
 	if result.Global() && tenantOnly {
-		return nil, errors.New("当前数据库用户不允许启用 global hint")
+		return nil, errors.New("当前数据库用户包含租户隔离角色，不允许启用 global hint")
 	}
 
 	return result, nil

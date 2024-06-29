@@ -49,7 +49,7 @@ func TestFullSQLLog(t *testing.T) {
 	delete(logData, "at")
 	delete(logData, "time")
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc",
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "",
 		"conn": "1", "tp": "select",
 		// "at":   "2024-05-17 18:08:49.358",
 		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
