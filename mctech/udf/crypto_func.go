@@ -211,6 +211,11 @@ var cryptoInitOnce sync.Once
 
 // GetClient get crypto client
 func GetClient() CryptoClient {
+	failpoint.Inject("GetCryptoClient", func() {
+		c := newAesCryptoClientFromService()
+		failpoint.Return(c)
+	})
+
 	if client != nil {
 		return client
 	}

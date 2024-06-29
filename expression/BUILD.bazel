@@ -198,6 +198,7 @@ go_test(
         "//config",
         "//errno",
         "//kv",
+        "//mctech/mock",
         "//parser",
         "//parser/ast",
         "//parser/auth",
