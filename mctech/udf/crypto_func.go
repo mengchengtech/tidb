@@ -12,9 +12,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
 )
 
@@ -111,7 +113,7 @@ func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
 }
 
 // Decrypt decrypt cipher text
-func (c *aesCryptoClient) Decrypt(content string) (string, error) {
+func (c *aesCryptoClient) Decrypt(content string) (s string, err error) {
 	if !strings.HasPrefix(content, cryptoPrefix) {
 		return content, nil
 	}
@@ -128,6 +130,16 @@ func (c *aesCryptoClient) Decrypt(content string) (string, error) {
 		return raw, err
 	}
 
+	defer func() {
+		if r := recover(); r != nil {
+			if err, ok := r.(error); ok {
+				logutil.BgLogger().Error("mctech decrypt failure", zap.String("input", content), zap.Error(err))
+			} else {
+				logutil.BgLogger().Error(fmt.Sprintf("mctech decrypt failure, %v", r), zap.String("input", content))
+			}
+			err = fmt.Errorf("mctech decrypt failure. '%s'", content)
+		}
+	}()
 	//创建缓冲，存放解密后的数据
 	orgData := make([]byte, len(cypher))
 	//开始解密
@@ -185,6 +197,10 @@ func pkcs7Padding(data []byte, blockSize int) []byte {
 func pkcs7Unpadding(data []byte) []byte {
 	length := len(data)
 	unpadding := int(data[length-1])
+
+	failpoint.Inject("pkcs7Unpadding", func() {
+		unpadding = length + 137
+	})
 	return data[:length-unpadding]
 }
 
