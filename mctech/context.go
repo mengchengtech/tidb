@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime/debug"
 	"strings"
+	"time"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
@@ -17,6 +18,7 @@ import (
 
 // Context mctech context interface
 type Context interface {
+	StartedAt() time.Time
 	// 获取tidb session
 	Session() sessionctx.Context
 	// 清除session中添加的自定义变量
@@ -254,6 +256,7 @@ func (r *PrepareResult) DbPrefix() string {
 }
 
 type baseContext struct {
+	startedAt        time.Time
 	inPrepareStmt    bool
 	selector         DBSelector
 	prepareResult    *PrepareResult
@@ -281,7 +284,11 @@ const DbCustomSuffix = "_custom"
 
 // NewBaseContext create mctechContext (Context)
 func NewBaseContext(usingTenantParam bool) Context {
-	return &baseContext{usingTenantParam: usingTenantParam, dbsDict: make(map[ast.StmtNode][]string)}
+	return &baseContext{
+		startedAt:        time.Now(),
+		usingTenantParam: usingTenantParam,
+		dbsDict:          make(map[ast.StmtNode][]string),
+	}
 }
 
 func (d *baseContext) CurrentDB() string {
@@ -317,6 +324,18 @@ func (d *baseContext) SetSessionMPPVars(mpp string) (err error) {
 }
 
 // ------------------------------------------------
+
+func (d *baseContext) StartedAt() time.Time {
+	failpoint.Inject("StartedAt", func(v failpoint.Value) {
+		str := v.(string)
+		if t, err := time.ParseInLocation("2006-01-02 15:04:05.000", str, time.Local); err == nil {
+			failpoint.Return(t)
+		} else {
+			panic(err)
+		}
+	})
+	return d.startedAt
+}
 
 func (d *baseContext) UsingTenantParam() bool {
 	return d.usingTenantParam
