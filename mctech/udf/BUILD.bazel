@@ -32,7 +32,7 @@ go_test(
     ],
     embed = [":udf"],
     flaky = True,
-    shard_count = 9,
+    shard_count = 10,
     deps = [
         "//mctech/mock",
         "//parser/mysql",
