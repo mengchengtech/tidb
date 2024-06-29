@@ -24,6 +24,7 @@ var (
 	_ functionClass = &mctechDecryptFunctionClass{}
 	_ functionClass = &mctechEncryptFunctionClass{}
 	_ functionClass = &mctechSequenceDecodeFunctionClass{}
+	_ functionClass = &mctechGetFullSQLFunctionClass{}
 )
 var (
 	_ builtinFunc = &builtinMCTechSequenceSig{}
@@ -31,6 +32,7 @@ var (
 	_ builtinFunc = &builtinMCTechDecryptSig{}
 	_ builtinFunc = &builtinMCTechEncryptSig{}
 	_ builtinFunc = &builtinMCTechSequenceDecodeSig{}
+	_ builtinFunc = &builtinMCTechGetFullSQLSig{}
 )
 
 func init() {
@@ -42,14 +44,14 @@ func init() {
 	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
-	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 3, 3}}
+	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
-	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 3, 3}}
+	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
 
 	// mctech function.
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
@@ -274,23 +276,13 @@ func (c *mctechGetFullSQLFunctionClass) getFunction(ctx sessionctx.Context, args
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	timeArgTp := c.getArgEvalTp(args[2].GetType())
-	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, types.ETString, types.ETString, timeArgTp)
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, types.ETDatetime, types.ETInt)
 	if err != nil {
 		return nil, err
 	}
 	bf.tp.SetFlen(mysql.MaxFieldCharLength)
 	sig := &builtinMCTechGetFullSQLSig{bf}
 	return sig, nil
-}
-
-func (c *mctechGetFullSQLFunctionClass) getArgEvalTp(fieldTp *types.FieldType) types.EvalType {
-	argTp := types.ETString
-	switch tp := fieldTp.EvalType(); tp {
-	case types.ETDuration, types.ETDatetime, types.ETTimestamp:
-		argTp = tp
-	}
-	return argTp
 }
 
 type builtinMCTechGetFullSQLSig struct {
@@ -303,46 +295,25 @@ func (b *builtinMCTechGetFullSQLSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (b *builtinMCTechGetFullSQLSig) evalString(row chunk.Row) (string, bool, error) {
-	var isNull bool
-	var err error
-	var node string
-	var conn string
-	var at types.Time
-	node, isNull, err = b.args[0].EvalString(b.ctx, row)
-	if isNull || err != nil {
+func (b *builtinMCTechGetFullSQLSig) evalString(row chunk.Row) (sql string, isNull bool, err error) {
+	var (
+		at   types.Time
+		txID int64
+	)
+
+	if at, isNull, err = b.args[0].EvalTime(b.ctx, row); isNull || err != nil {
 		return "", isNull, err
 	}
 
-	conn, isNull, err = b.args[1].EvalString(b.ctx, row)
-	if isNull || err != nil {
+	if txID, isNull, err = b.args[1].EvalInt(b.ctx, row); isNull || err != nil {
 		return "", isNull, err
 	}
 
-	sc := b.ctx.GetSessionVars().StmtCtx
-	switch b.args[2].GetType().EvalType() {
-	case types.ETString:
-		var s string
-		s, isNull, err = b.args[2].EvalString(b.ctx, row)
-		if isNull || err != nil {
-			return "", isNull, err
-		}
-		at, err = types.ParseDatetime(sc, s)
-		if err != nil {
-			return "", isNull, err
-		}
-	case types.ETDatetime, types.ETTimestamp:
-		at, isNull, err = b.args[2].EvalTime(b.ctx, row)
-		if isNull || err != nil {
-			return "", isNull, err
-		}
-	}
-	fullsql, err := udf.GetFullSQL(node, conn, at)
+	fullsql, isNull, err := udf.GetFullSQL(at, txID)
 	if err != nil {
 		return "", true, err
 	}
-
-	return fullsql, false, nil
+	return fullsql, isNull, nil
 }
 
 // --------------------------------------------------------------
