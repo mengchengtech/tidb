@@ -1,0 +1,41 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "interceptor",
+    srcs = [
+        "interceptor.go",
+        "logobject.go",
+        "notest.go",
+    ],
+    importpath = "github.com/pingcap/tidb/mctech/interceptor",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//config",
+        "//executor",
+        "//mctech",
+        "//parser/ast",
+        "//sessionctx",
+        "//util/execdetails",
+        "//util/logutil",
+        "@com_github_pingcap_log//:log",
+        "@org_golang_x_exp//slices",
+        "@org_uber_go_zap//:zap",
+        "@org_uber_go_zap//zapcore",
+    ],
+)
+
+go_test(
+    name = "interceptor_test",
+    timeout = "short",
+    srcs = ["interceptor_test.go"],
+    flaky = True,
+    deps = [
+        ":interceptor",
+        "//kv",
+        "//mctech/mock",
+        "//parser/auth",
+        "//testkit",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_stretchr_testify//require",
+    ],
+)

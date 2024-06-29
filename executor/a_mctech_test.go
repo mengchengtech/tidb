@@ -317,6 +317,7 @@ func TestLargeQueryWithoutLogFile(t *testing.T) {
 
 	// cfg := config.GetMCTechConfig()
 	tk := testkit.NewTestKit(t, store)
+
 	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_query_file='%v'", cfg.Metrics.LargeQuery.Filename))
 	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
 	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())

@@ -7,17 +7,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// MCTechExecStmtVarKeyType is a dummy type to avoid naming collision in context.
-type MCTechExecStmtVarKeyType int
-
-// String defines a Stringer function for debugging and pretty printing.
-func (k MCTechExecStmtVarKeyType) String() string {
-	return "mctech___exec_stmt_var_key"
-}
-
-// MCTechExecStmtVarKey is a variable key for ExecStmt.
-const MCTechExecStmtVarKey MCTechExecStmtVarKeyType = 0
-
 // ShortInfo resolve information from current session.
 func ShortInfo(sctx Context) ShortSessionInfo {
 	var si = &shortSessionInfo{}

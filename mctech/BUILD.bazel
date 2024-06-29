@@ -7,6 +7,7 @@ go_library(
         "filter.go",
         "handler.go",
         "http_rpc.go",
+        "intercept.go",
         "logger.go",
     ],
     importpath = "github.com/pingcap/tidb/mctech",

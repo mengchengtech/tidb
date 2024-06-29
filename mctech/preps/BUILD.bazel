@@ -19,6 +19,7 @@ go_library(
         "//config",
         "//mctech",
         "//mctech/ddl",
+        "//mctech/interceptor",
         "//mctech/isolation",
         "//mctech/msic",
         "//parser/ast",

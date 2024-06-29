@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/tidb/mctech"
+	_ "github.com/pingcap/tidb/mctech/interceptor" // 为了解除循环依赖，触发运行期动态函数初始化，在此处强制加载
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
 )

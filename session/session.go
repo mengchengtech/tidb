@@ -2207,6 +2207,11 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 	// Transform abstract syntax tree to a physical plan(stored in executor.ExecStmt).
 	compiler := executor.Compiler{Ctx: s}
 	stmt, err := compiler.Compile(ctx, stmtNode)
+	// add by zhangbing
+	if err == nil {
+		s.SetValue(mctech.MCExecStmtVarKey, stmt)
+	}
+	// add end
 	// session resource-group might be changed by query hint, ensure restore it back when
 	// the execution finished.
 	if sessVars.ResourceGroupName != originalResourceGroup {
@@ -2423,9 +2428,6 @@ func runStmt(ctx context.Context, se *session, s sqlexec.Statement) (rs sqlexec.
 	rs, err = s.Exec(ctx)
 	se.updateTelemetryMetric(s.(*executor.ExecStmt))
 	sessVars.TxnCtx.StatementCount++
-	// add by zhangbing
-	se.SetValue(sessionctx.MCTechExecStmtVarKey, s.(*executor.ExecStmt))
-	// add end
 	if rs != nil {
 		if se.GetSessionVars().StmtCtx.IsExplainAnalyzeDML {
 			if !sessVars.InTxn() {
@@ -2524,18 +2526,7 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 	}
 
 	// add by zhangbing
-	handler := mctech.GetHandler()
-	ctx, mctx, e := mctech.WithNewContext3(ctx, s, true)
-	if e != nil {
-		err = e
-		return
-	}
-
-	if mctx != nil {
-		if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
-			return
-		}
-	}
+	ctx, _, sql, err = mctech.GetInterceptor().BeforeParseSQL(ctx, s, sql)
 	// add end
 
 	prepareExec := executor.NewPrepareExec(s, sql)
