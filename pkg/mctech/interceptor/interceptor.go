@@ -302,8 +302,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 				collector := newPlanStatCollector(stmtCtx)
 				ct := collector.collect()
 				times.tidb = ct.tidbTime
-				times.tikv.process2 = ct.tikvCopTime
-				times.tiflash = ct.tiflashCopTime
+				// times.tikv.process2 = ct.tikvCopTime
+				times.cop.tiflash = ct.tiflashCopTime
 				maxAct = ct.maxActRows
 				if rs, ok := sctx.Value(mctech.MCRUDetailsCtxKey).(*clientutil.RUDetails); ok {
 					ru.rru, ru.wru = rs.RRU(), rs.WRU()
@@ -317,8 +317,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			}
 
 			execDetails := stmtCtx.GetExecDetails()
-			times.tikv.cop = execDetails.CopTime
-			times.tikv.process = execDetails.TimeDetail.ProcessTime
+			times.cop.wall = execDetails.CopTime
+			times.cop.tikv = execDetails.TimeDetail.ProcessTime
 			memMax = stmtCtx.MemTracker.MaxConsumed()
 			diskMax = stmtCtx.DiskTracker.MaxConsumed()
 
@@ -362,11 +362,10 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 					times.all, _ = time.ParseDuration("3.315821ms")
 					times.parse, _ = time.ParseDuration("176.943µs")
 					times.plan, _ = time.ParseDuration("1.417613ms")
-					times.tikv = tikvTimeObject{}
-					times.tikv.cop, _ = time.ParseDuration("0s128ms")
-					times.tikv.process, _ = time.ParseDuration("0s98ms")
-					times.tikv.process2, _ = time.ParseDuration("0s")
-					times.tiflash, _ = time.ParseDuration("0s12µs")
+					times.cop = copTimeObject{}
+					times.cop.wall, _ = time.ParseDuration("0s128ms")
+					times.cop.tikv, _ = time.ParseDuration("0s98ms")
+					times.cop.tiflash, _ = time.ParseDuration("12µs")
 					times.ready, _ = time.ParseDuration("2.315821ms")
 					times.send, _ = time.ParseDuration("1ms")
 					if times.tx != nil {

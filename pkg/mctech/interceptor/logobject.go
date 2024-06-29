@@ -19,22 +19,20 @@ type logTimeObject struct {
 	ready time.Duration // 首行结果准备好时间(总执行时间除去发送结果耗时)
 	send  time.Duration // 发送到客户端用时
 
-	tikv    tikvTimeObject
+	cop copTimeObject // cop task相关的时间
+	tx  *txTimeObject // 提交事务相关的信息（含显示事务/隐式事务）
+}
+
+type copTimeObject struct {
+	wall    time.Duration // tidb 上等待所有的 cop tasks (tikv, tiflash) 执行完毕耗费的自然时间。直接从ExecDetails.CopTime获取到的时间。如果存在并行任务的话，这个时间一般小于各个并行任务的总时间
+	tikv    time.Duration // 从ExecDetails.TimeDetail.ProcessTime获取到的tikv处理请求的过程总共用时。执行 SQL 在 TiKV 的处理时间之和，因为数据会并行的发到 TiKV 执行
 	tiflash time.Duration // 从执行计划中汇总统计的TiFlash执行Coprocessor 耗时
-	tx      *txTimeObject // 提交事务相关的信息（含显示事务/隐式事务）
 }
 
-type tikvTimeObject struct {
-	cop     time.Duration // 直接从ExecDetails.CopTime获取到的时间。TiDB Coprocessor 算子等待所有任务在 TiKV 上并行执行完毕耗费的自然时间。如果存在并行任务的话，这个时间一般小于各个并行任务的总时间
-	process time.Duration // 从ExecDetails.TimeDetail.ProcessTime获取到的tikv处理请求的过程总共用时。大多数时候都可以替代表示用于CPU的时间
-	// TODO 通过两种方式获取用于TiKV的时间，作个对比
-	process2 time.Duration // 从执行计划中汇总统计的TiKV执行Coprocessor 耗时
-}
-
-func (t *tikvTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddDuration("cop", t.cop)
-	enc.AddDuration("process", t.process)
-	enc.AddDuration("process2", t.process2)
+func (t *copTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddDuration("wall", t.wall)
+	enc.AddDuration("tikv", t.tikv)
+	enc.AddDuration("tiflash", t.tiflash)
 	return nil
 }
 
@@ -57,8 +55,7 @@ func (lt *logTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("tidb", lt.tidb)
 	enc.AddDuration("ready", lt.ready)
 	enc.AddDuration("send", lt.send)
-	enc.AddObject("tikv", &lt.tikv)
-	enc.AddDuration("tiflash", lt.tiflash)
+	enc.AddObject("cop", &lt.cop)
 	if lt.tx != nil {
 		enc.AddObject("tx", lt.tx)
 	}
