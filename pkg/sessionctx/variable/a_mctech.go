@@ -425,7 +425,9 @@ func (s *SessionVars) LargeLogFormat(logItems *MCLargeLogItems) (string, error) 
 	writeSlowLogItem(&buf, MCLargeLogResultRows, strconv.FormatInt(logItems.ResultRows, 10))
 	writeSlowLogItem(&buf, MCLargeLogSuccStr, strconv.FormatBool(logItems.Succ))
 	writeSlowLogItem(&buf, MCLargeLogSQLLengthStr, strconv.Itoa(len(logItems.SQL)))
-	writeSlowLogItem(&buf, MCLargeLogServiceStr, logItems.Service)
+	if len(logItems.Service) > 0 {
+		writeSlowLogItem(&buf, MCLargeLogServiceStr, logItems.Service)
+	}
 
 	if len(logItems.Plan) != 0 {
 		writeSlowLogItem(&buf, MCLargeLogPlan, logItems.Plan)
