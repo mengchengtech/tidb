@@ -66,7 +66,10 @@ func (r *mctechStatementResolver) PrepareSql(ctx sessionctx.Context, sql string)
 }
 
 func (r *mctechStatementResolver) ResolveStmt(stmt ast.Node, charset string, collation string) error {
-	dbs := r.rewriteStmt(stmt, charset, collation)
+	dbs, err := r.rewriteStmt(stmt, charset, collation)
+	if err != nil {
+		return err
+	}
 	return r.checker.Check(r.context, dbs)
 }
 
@@ -83,10 +86,10 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 	return nil
 }
 
-func (r *mctechStatementResolver) rewriteStmt(stmt ast.Node, charset string, collation string) []string {
-	dbs, skipped := tenant.ApplyTenantIsolation(r.context, stmt, charset, collation)
-	if skipped {
-		return dbs
+func (r *mctechStatementResolver) rewriteStmt(stmt ast.Node, charset string, collation string) ([]string, error) {
+	dbs, skipped, err := tenant.ApplyTenantIsolation(r.context, stmt, charset, collation)
+	if skipped || err != nil {
+		return dbs, err
 	}
 
 	// 此处不能从tableCache.dbs里获取db的列表，应该从tableCache.tables获取
@@ -101,7 +104,7 @@ func (r *mctechStatementResolver) rewriteStmt(stmt ast.Node, charset string, col
 	}
 
 	if !hasGlobalDb {
-		return nil
+		return nil, nil
 	}
 
 	r.context.SetSqlWithGlobalPrefixDB(true)
@@ -109,15 +112,17 @@ func (r *mctechStatementResolver) rewriteStmt(stmt ast.Node, charset string, col
 	if result.Global() {
 		// 启用了global且没有需要排除的租户
 		if len(result.Excludes()) == 0 {
-			return nil
+			if !hasGlobalDb {
+				return nil, nil
+			}
 		}
 	} else {
 		// 未启用global,租户code为空，留到后续Validate步骤统一校验
 		if result.Tenant() == "" {
-			return nil
+			return nil, nil
 		}
 	}
 
 	r.context.SetSqlRewrited(!skipped)
-	return dbs
+	return dbs, nil
 }

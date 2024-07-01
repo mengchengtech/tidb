@@ -2,10 +2,10 @@ package prapared
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 	"github.com/pingcap/tidb/pkg/session"
@@ -94,13 +94,15 @@ func runTestCase(t *testing.T, c *mctechTestCase, session session.Session) error
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
 	resolver.Context().Reset()
 	err = resolver.ResolveStmt(stmt, charset, collation)
-	require.NoErrorf(t, err, "source %v", sql)
+	if err != nil {
+		return err
+	}
 	err = resolver.Validate(session)
 	if err != nil {
 		return err
 	}
 	info := resolver.Context().GetInfoForTest()
-	require.Equal(t, c.expect, info, fmt.Sprintf("db: %s, raw sql:%s,", c.shortDb, c.sql))
+	require.Equal(t, c.expect, info, "source: %s, %s", c.shortDb, c.sql)
 	return nil
 }
 
@@ -111,7 +113,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		//
 		{"pf", "/*& global:!ys2 */ select * from company", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform"}, ""},
 		{"pf", "select * from company /*& global:!ys2,!ys3 */", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform"}, ""},
-		// hint 格式不匹配
+		// // hint 格式不匹配
 		{"pf", "/* global:true */ select * from company", nil, "用户root所属的角色无法确定租户信息"},
 		{"test", "/* global:true */ select * from company", map[string]any{"db": "test"}, ""},
 		// tenant hint
@@ -126,5 +128,21 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pd", "/*& dbPrefix:mock */ select * from company", map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock"}, "db": "public_data"}, ""},
 	}
 
+	doRunTest(t, cases)
+}
+
+func TestStmtResolverDW_WithRoot(t *testing.T) {
+	cases := []*mctechTestCase{
+		// dw
+		{"pd", "/*& global:true */ select * from global_dw.company", nil, "get dw index errors"},
+	}
+	doRunTest(t, cases)
+
+	option := mctech.GetOption()
+	option.DbChecker_ApiPrefix = "http://10.12.6.5:31051/"
+	cases = []*mctechTestCase{
+		// dw
+		{"pd", "/*& global:true */ select * from global_dw.company", map[string]any{"global": map[string]any{"set": true}, "db": "public_data"}, "get dw index errors"},
+	}
 	doRunTest(t, cases)
 }

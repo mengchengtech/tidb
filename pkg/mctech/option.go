@@ -46,9 +46,9 @@ func initMCTechOption() *MCTechOption {
 
 		Encryption_Mock:      opts.Encryption.Mock,
 		Encryption_AccessId:  opts.Encryption.AccessId,
-		Encryption_ApiPrefix: opts.Encryption.ApiPrefix,
+		Encryption_ApiPrefix: formatUrl(opts.Encryption.ApiPrefix),
 
-		DbChecker_ApiPrefix:        opts.DbChecker.ApiPrefix,
+		DbChecker_ApiPrefix:        formatUrl(opts.DbChecker.ApiPrefix),
 		DbChecker_MutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
 		DbChecker_ExcludeAcrossDbs: opts.DbChecker.ExcludeAcrossDbs,
 		DbChecker_AcrossDbGroups:   opts.DbChecker.AcrossDbGroups,
