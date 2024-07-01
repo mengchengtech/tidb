@@ -129,5 +129,5 @@ func (p *SqlPreprocessor) Prepare(ctx sessionctx.Context,
 	if err != nil {
 		return nil, err
 	}
-	return mctech.NewResolveResult(tenant, params), nil
+	return mctech.NewResolveResult(tenant, params)
 }
