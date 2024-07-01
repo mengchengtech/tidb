@@ -28,10 +28,10 @@ type MCTech struct {
 }
 
 type MctechMetrics struct {
-	Exclude    []string   `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
-	SqlLog     SqlLog     `toml:"sql-log" json:"sql-log"`
-	LargeQuery LargeQuery `toml:"large-query" json:"large-query"`
-	SqlTrace   SqlTrace   `toml:"sql-trace" json:"sql-trace"`
+	Exclude  []string `toml:"exclude" json:"exclude"` // 需要排除记录的数据库，使用','分隔
+	SqlLog   SqlLog   `toml:"sql-log" json:"sql-log"`
+	LargeLog LargeLog `toml:"large-log" json:"large-log"`
+	SqlTrace SqlTrace `toml:"sql-trace" json:"sql-trace"`
 }
 
 type SqlTrace struct {
@@ -48,10 +48,13 @@ type SqlLog struct {
 	MaxLength int  `toml:"max-length" json:"max-length"` // 日志里记录的sql最大值
 }
 
-type LargeQuery struct {
-	Enabled   bool     `toml:"enabled" json:"enabled"`     // 是否启用large sql跟踪
-	Threshold int      `toml:"threshold" json:"threshold"` // 超出该长度的sql会记录到数据库某个位置
-	SqlTypes  []string `toml:"sql-types" json:"sql-types"` // 记录的sql类型
+type LargeLog struct {
+	Enabled     bool     `toml:"enabled" json:"enabled"`             // 是否启用large sql跟踪
+	Filename    string   `toml:"file-name" json:"file-name"`         // 日志文件名称
+	FileMaxDays int      `toml:"file-max-days" json:"file-max-days"` // 日志最长保存天数
+	FileMaxSize int      `toml:"file-max-size" json:"file-max-size"` // 单个文件最大长度
+	Threshold   int      `toml:"threshold" json:"threshold"`         // 超出该长度的sql会记录到数据库某个位置
+	SqlTypes    []string `toml:"sql-types" json:"sql-types"`         // 记录的sql类型
 }
 
 // Sequence mctech_sequence functions used
@@ -120,10 +123,12 @@ const (
 	DefaultMetricsSqlLogEnabled   = false
 	DefaultMetricsSqlLogMaxLength = 32 * 1024 // 默认最大记录32K
 
-	DefaultMetricsLargeQueryEnabled   = false
-	DefaultMetricsLargeQueryFilename  = "mctech_large_query_log.log"
-	DefaultMetricsLargeQueryThreshold = 1 * 1024 * 1024
-	DefaultMetricsLargeQueryTypes     = "delete,insert,update,select"
+	DefaultMetricsLargeLogEnabled     = false
+	DefaultMetricsLargeLogFilename    = "mctech_large_query_log.log"
+	DefaultMetricsLargeLogFileMaxDays = 1
+	DefaultMetricsLargeLogFileMaxSize = 1 * 1024 * 1024
+	DefaultMetricsLargeLogThreshold   = 1 * 1024 * 1024
+	DefaultMetricsLargeLogTypes       = "delete,insert,update,select"
 
 	DefaultMetricsSqlTraceEnabled           = false
 	DefaultMetricsSqlTraceFilename          = "mctech_tidb_full_sql.log"
@@ -173,10 +178,13 @@ func newMCTech() MCTech {
 				Enabled:   DefaultMetricsSqlLogEnabled,
 				MaxLength: DefaultMetricsSqlLogMaxLength,
 			},
-			LargeQuery: LargeQuery{
-				Enabled:   DefaultMetricsLargeQueryEnabled,
-				Threshold: DefaultMetricsLargeQueryThreshold,
-				SqlTypes:  StrToSlice(DefaultMetricsLargeQueryTypes, ","),
+			LargeLog: LargeLog{
+				Enabled:     DefaultMetricsLargeLogEnabled,
+				Filename:    DefaultMetricsLargeLogFilename,
+				FileMaxDays: DefaultMetricsLargeLogFileMaxDays,
+				FileMaxSize: DefaultMetricsLargeLogFileMaxSize,
+				Threshold:   DefaultMetricsLargeLogThreshold,
+				SqlTypes:    StrToSlice(DefaultMetricsLargeLogTypes, ","),
 			},
 			SqlTrace: SqlTrace{
 				Enabled:           DefaultMetricsSqlTraceEnabled,
@@ -261,18 +269,31 @@ func storeMCTechConfig(config *Config) {
 
 	sqlTrace := &opts.Metrics.SqlTrace
 	if len(sqlTrace.Filename) == 0 {
-
-	}
-
-	if len(sqlTrace.Filename) == 0 {
+		// 设置sqlTrace 日志文件的默认路径
 		sqlTrace.Filename = DefaultMetricsSqlTraceFilename
 	}
 
-	if !filepath.IsAbs(sqlTrace.Filename) {
-		logFile := config.Log.File.Filename
-		if len(logFile) > 0 {
-			logDir := filepath.Dir(logFile)
-			sqlTrace.Filename = filepath.Join(logDir, DefaultMetricsSqlTraceFilename)
+	largeLog := &opts.Metrics.LargeLog
+	if len(largeLog.Filename) == 0 {
+		// 设置large log 日志文件的路径
+		sqlTrace.Filename = DefaultMetricsLargeLogFilename
+	}
+
+	// 当前方法会多次运行，在第一次运行时 config.Log.File.Filename 不一定有值。
+	// 需要保证在多次运行的情况下路径设置的正确性
+	logFile := config.Log.File.Filename
+	var logDir string
+	if len(logFile) > 0 {
+		logDir = filepath.Dir(logFile)
+	}
+
+	if len(logDir) > 0 {
+		if !filepath.IsAbs(sqlTrace.Filename) {
+			sqlTrace.Filename = filepath.Join(logDir, sqlTrace.Filename)
+		}
+
+		if !filepath.IsAbs(largeLog.Filename) {
+			largeLog.Filename = filepath.Join(logDir, largeLog.Filename)
 		}
 	}
 
@@ -284,7 +305,7 @@ var DefaultSqlTraceExcludeDbs = []string{
 	"mysql", "information_schema", "metrics_schema", "performance_schema",
 }
 
-var AllMetricsLargeQueryTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
+var AllMetricsLargeLogTypes = strings.Split(DefaultMetricsLargeLogTypes, ",")
 
 func formatURL(str string) string {
 	u, err := url.Parse(str)

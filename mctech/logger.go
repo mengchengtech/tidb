@@ -1,6 +1,7 @@
 package mctech
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -8,10 +9,14 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/config"
 	"go.uber.org/zap"
+	"go.uber.org/zap/buffer"
 	"go.uber.org/zap/zapcore"
 )
 
-var fullSqlLogger *zap.Logger
+var (
+	fullSqlLogger,
+	largeSqlLogger *zap.Logger
+)
 
 func F() *zap.Logger {
 	if fullSqlLogger != nil {
@@ -20,8 +25,19 @@ func F() *zap.Logger {
 
 	// 只能懒加载，需要在启动时先加载 config模块
 	once := &sync.Once{}
-	once.Do(initLogger)
+	once.Do(initFullSqlLogger)
 	return fullSqlLogger
+}
+
+func L() *zap.Logger {
+	if largeSqlLogger != nil {
+		return largeSqlLogger
+	}
+
+	// 只能懒加载，需要在启动时先加载 config模块
+	once := &sync.Once{}
+	once.Do(initLargeSqlLogger)
+	return largeSqlLogger
 }
 
 func newZapEncoder(cfg *log.Config) zapcore.Encoder {
@@ -41,7 +57,74 @@ func newZapEncoder(cfg *log.Config) zapcore.Encoder {
 	return zapcore.NewJSONEncoder(cc)
 }
 
-func initLogger() {
+var _pool = buffer.NewPool()
+
+type largeLogEncoder struct{}
+
+func (e *largeLogEncoder) EncodeEntry(entry zapcore.Entry, _ []zapcore.Field) (*buffer.Buffer, error) {
+	b := _pool.Get()
+	fmt.Fprintf(b, "# TIME: %s\n", entry.Time.Format(time.RFC3339Nano))
+	fmt.Fprintf(b, "%s\n", entry.Message)
+	return b, nil
+}
+
+func (e *largeLogEncoder) Clone() zapcore.Encoder                          { return e }
+func (e *largeLogEncoder) AddArray(string, zapcore.ArrayMarshaler) error   { return nil }
+func (e *largeLogEncoder) AddObject(string, zapcore.ObjectMarshaler) error { return nil }
+func (e *largeLogEncoder) AddBinary(string, []byte)                        {}
+func (e *largeLogEncoder) AddByteString(string, []byte)                    {}
+func (e *largeLogEncoder) AddBool(string, bool)                            {}
+func (e *largeLogEncoder) AddComplex128(string, complex128)                {}
+func (e *largeLogEncoder) AddComplex64(string, complex64)                  {}
+func (e *largeLogEncoder) AddDuration(string, time.Duration)               {}
+func (e *largeLogEncoder) AddFloat64(string, float64)                      {}
+func (e *largeLogEncoder) AddFloat32(string, float32)                      {}
+func (e *largeLogEncoder) AddInt(string, int)                              {}
+func (e *largeLogEncoder) AddInt64(string, int64)                          {}
+func (e *largeLogEncoder) AddInt32(string, int32)                          {}
+func (e *largeLogEncoder) AddInt16(string, int16)                          {}
+func (e *largeLogEncoder) AddInt8(string, int8)                            {}
+func (e *largeLogEncoder) AddString(string, string)                        {}
+func (e *largeLogEncoder) AddTime(string, time.Time)                       {}
+func (e *largeLogEncoder) AddUint(string, uint)                            {}
+func (e *largeLogEncoder) AddUint64(string, uint64)                        {}
+func (e *largeLogEncoder) AddUint32(string, uint32)                        {}
+func (e *largeLogEncoder) AddUint16(string, uint16)                        {}
+func (e *largeLogEncoder) AddUint8(string, uint8)                          {}
+func (e *largeLogEncoder) AddUintptr(string, uintptr)                      {}
+func (e *largeLogEncoder) AddReflected(string, interface{}) error          { return nil }
+func (e *largeLogEncoder) OpenNamespace(string)                            {}
+
+func initLargeSqlLogger() {
+	if largeSqlLogger != nil {
+		return
+	}
+
+	globalConfig := config.GetGlobalConfig()
+	largeLogConfig := globalConfig.MCTech.Metrics.LargeLog
+	cfg := globalConfig.Log.ToLogConfig()
+
+	sqConfig := cfg.Config
+	sqConfig.Level = ""
+	sqConfig.File.MaxDays = largeLogConfig.FileMaxDays // default 1 days
+	sqConfig.File.MaxSize = largeLogConfig.FileMaxSize // 1024MB
+	sqConfig.File.Filename = largeLogConfig.Filename
+
+	// create the large log logger
+	logger, prop, err := log.InitLogger(&sqConfig)
+	if err != nil {
+		panic(errors.Trace(err))
+	}
+
+	newCore := log.NewTextCore(&largeLogEncoder{}, prop.Syncer, prop.Level)
+	logger = logger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return newCore
+	}))
+	prop.Core = newCore
+	largeSqlLogger = logger
+}
+
+func initFullSqlLogger() {
 	if fullSqlLogger != nil {
 		return
 	}
@@ -56,7 +139,7 @@ func initLogger() {
 	fsConfig.DisableTimestamp = true
 	fsConfig.DisableStacktrace = true
 	fsConfig.DisableCaller = true
-	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays // default 7 days
+	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays // default 1 days
 	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize // 1024MB
 	fsConfig.File.Filename = sqlTraceConfig.Filename
 

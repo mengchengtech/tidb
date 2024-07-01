@@ -3,16 +3,48 @@
 package variable
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/util/execdetails"
 	"go.uber.org/zap"
 	"golang.org/x/exp/slices"
+)
+
+const (
+	MCLargeLogRowPrefixStr = "# "
+	// MCLargeLogSpaceMarkStr is large log space mark.
+	MCLargeLogSpaceMarkStr   = ": "
+	MCLargeLogSQLSuffixStr   = ";"
+	MCLargeLogStartPrefixStr = MCLargeLogRowPrefixStr + MCLargeLogTimeStr + MCLargeLogSpaceMarkStr
+	// MCLargeLogUserAndHostStr is the user and host field name, which is compatible with MySQL.
+	MCLargeLogUserAndHostStr = "USER@HOST"
+
+	MCLargeLogTimeStr         = "TIME"
+	MCLargeLogUserStr         = "USER"
+	MCLargeLogHostStr         = "HOST"
+	MCLargeLogQueryTimeStr    = "QUERY_TIME"
+	MCLargeLogParseTimeStr    = "PARSE_TIME"
+	MCLargeLogCompileTimeStr  = "COMPILE_TIME"
+	MCLargeLogRewriteTimeStr  = "REWRITE_TIME"
+	MCLargeLogOptimizeTimeStr = "OPTIMIZE_TIME"
+
+	MCLargeLogDBStr      = "DB"
+	MCLargeLogSQLStr     = "SQL"
+	MCLargeLogSuccStr    = "SUCC"
+	MCLargeLogMemMax     = "MEM_MAX"
+	MCLargeLogDiskMax    = "DISK_MAX"
+	MCLargeLogDigestStr  = "DIGEST"
+	MCLargeLogResultRows = "RESULT_ROWS"
+	MCLargeLogPlan       = "PLAN"
 )
 
 const (
@@ -30,9 +62,12 @@ const (
 
 	MCTechMPPDefaultValue = "mctech_mpp_default_value"
 
-	MCTechMetricsLargeQueryEnabled   = "mctech_metrics_large_query_enabled"
-	MCTechMetricsLargeQueryTypes     = "mctech_metrics_large_query_types"
-	MCTechMetricsLargeQueryThreshold = "mctech_metrics_large_query_threshold"
+	MCTechMetricsLargeLogEnabled     = "mctech_metrics_large_log_enabled"
+	MCTechMetricsLargeLogFilename    = "mctech_metrics_large_log_file"
+	MCTechMetricsLargeLogFileMaxDays = "mctech_metrics_large_log_file_max_days"
+	MCTechMetricsLargeLogFileMaxSize = "mctech_metrics_large_log_file_max_size"
+	MCTechMetricsLargeLogTypes       = "mctech_metrics_large_log_types"
+	MCTechMetricsLargeLogThreshold   = "mctech_metrics_large_log_threshold"
 
 	MCTechMetricsSqlLogEnabled   = "mctech_metrics_sql_log_enabled"
 	MCTechMetricsSqlLogMaxLength = "mctech_metrics_sql_log_max_length"
@@ -70,38 +105,41 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsLargeQueryEnabled),
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeLogEnabled, skipInit: true, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsLargeLogEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.LargeQuery.Enabled), nil
+				return BoolToOnOff(config.GetMCTechConfig().Metrics.LargeLog.Enabled), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeQuery.Enabled = TiDBOptOn(val)
+				config.GetMCTechConfig().Metrics.LargeLog.Enabled = TiDBOptOn(val)
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeQueryTypes,
+		{Scope: ScopeNone, Name: MCTechMetricsLargeLogFilename, skipInit: true, Type: TypeBool, Value: config.DefaultMetricsLargeLogFilename},
+		{Scope: ScopeNone, Name: MCTechMetricsLargeLogFileMaxDays, skipInit: true, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeLogFileMaxDays)},
+		{Scope: ScopeNone, Name: MCTechMetricsLargeLogFileMaxSize, skipInit: true, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeLogFileMaxSize)},
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeLogTypes, skipInit: true, Type: TypeStr, Value: config.DefaultMetricsLargeLogTypes,
 			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
-				return validateEnumSet(original, ",", config.AllMetricsLargeQueryTypes)
+				return validateEnumSet(original, ",", config.AllMetricsLargeLogTypes)
 			},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes, ","), nil
+				return strings.Join(config.GetMCTechConfig().Metrics.LargeLog.SqlTypes, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeQuery.SqlTypes = config.StrToSlice(val, ",")
+				config.GetMCTechConfig().Metrics.LargeLog.SqlTypes = config.StrToSlice(val, ",")
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsLargeQueryThreshold),
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeLogThreshold, skipInit: true, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsLargeLogThreshold),
 			MinValue: 4 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.LargeQuery.Threshold), nil
+				return strconv.Itoa(config.GetMCTechConfig().Metrics.LargeLog.Threshold), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
 				num, err := strconv.Atoi(val)
 				if err != nil {
 					return err
 				}
-				config.GetMCTechConfig().Metrics.LargeQuery.Threshold = num
+				config.GetMCTechConfig().Metrics.LargeLog.Threshold = num
 				return nil
 			},
 		},
@@ -183,7 +221,7 @@ func validateEnumSet(input string, sep string, possibleValues []string) (string,
 			continue
 		}
 		if !slices.Contains(possibleValues, part) {
-			return input, ErrWrongValueForVar.GenWithStackByArgs(MCTechMetricsLargeQueryTypes, input)
+			return input, ErrWrongValueForVar.GenWithStackByArgs(MCTechMetricsLargeLogTypes, input)
 		}
 
 		result = append(result, part)
@@ -216,9 +254,12 @@ func LoadMctechSysVars() {
 	SetSysVar(MCTechMetricsSqlLogEnabled, BoolToOnOff(option.Metrics.SqlLog.Enabled))
 	SetSysVar(MCTechMetricsSqlLogMaxLength, strconv.Itoa(option.Metrics.SqlLog.MaxLength))
 
-	SetSysVar(MCTechMetricsLargeQueryEnabled, BoolToOnOff(option.Metrics.LargeQuery.Enabled))
-	SetSysVar(MCTechMetricsLargeQueryTypes, strings.Join(option.Metrics.LargeQuery.SqlTypes, ","))
-	SetSysVar(MCTechMetricsLargeQueryThreshold, strconv.Itoa(option.Metrics.LargeQuery.Threshold))
+	SetSysVar(MCTechMetricsLargeLogEnabled, BoolToOnOff(option.Metrics.LargeLog.Enabled))
+	SetSysVar(MCTechMetricsLargeLogTypes, strings.Join(option.Metrics.LargeLog.SqlTypes, ","))
+	SetSysVar(MCTechMetricsLargeLogThreshold, strconv.Itoa(option.Metrics.LargeLog.Threshold))
+	SetSysVar(MCTechMetricsLargeLogFilename, option.Metrics.LargeLog.Filename)
+	SetSysVar(MCTechMetricsLargeLogFileMaxDays, strconv.Itoa(option.Metrics.LargeLog.FileMaxDays))
+	SetSysVar(MCTechMetricsLargeLogFileMaxSize, strconv.Itoa(option.Metrics.LargeLog.FileMaxSize))
 
 	SetSysVar(MCTechMetricsSqlTraceEnabled, BoolToOnOff(option.Metrics.SqlTrace.Enabled))
 	SetSysVar(MCTechMetricsSqlTraceFilename, option.Metrics.SqlTrace.Filename)
@@ -227,4 +268,101 @@ func LoadMctechSysVars() {
 	SetSysVar(MCTechMetricsSqlTraceCompressThreshold, strconv.Itoa(option.Metrics.SqlTrace.CompressThreshold))
 
 	SetSysVar(MCTechMetricsExcludeDbs, strings.Join(option.Metrics.Exclude, ","))
+}
+
+// MCLargeLogItems is a collection of items that should be included in the
+type MCLargeLogItems struct {
+	Digest            string
+	TimeTotal         time.Duration
+	TimeParse         time.Duration
+	TimeCompile       time.Duration
+	TimeOptimize      time.Duration
+	MemMax            int64
+	DiskMax           int64
+	RewriteInfo       RewritePhaseInfo
+	ExecDetail        execdetails.ExecDetails
+	Plan              string
+	WriteSQLRespTotal time.Duration
+	ResultRows        int64
+	Succ              bool
+	SQL               string
+}
+
+// # TIME: 2019-04-28T15:24:04.309074+08:00
+// # USER@HOST: root[root] @ localhost [127.0.0.1]
+// # QUERY_TIME: 1.527627037
+// # PARSE_TIME: 0.000054933
+// # COMPILE_TIME: 0.000129729
+// # REWRITE_TIME: 0.000000003
+// # OPTIMIZE_TIME: 0.00000001
+// # PROCESS_TIME: 0.07
+// # TOTAL_KEYS: 131073
+// # WRITE_KEYS: 131072
+// # WRITE_SIZE: 3538944
+// # DB: test
+// # DIGEST: 42a1c8aae6f133e934d4bf0147491709a8812ea05ff8819ec522780fe657b772
+// # MEMORY_MAX: 4096
+// # DISK_MAX: 65535
+// # Succ: true
+// # COP_TIME:
+// # WAIT_TIME: 0
+// # RESULT_ROWS: 1
+// # Plan: tidb_decode_plan('ZJAwCTMyXzcJMAkyMAlkYXRhOlRhYmxlU2Nhbl82CjEJMTBfNgkxAR0AdAEY1Dp0LCByYW5nZTpbLWluZiwraW5mXSwga2VlcCBvcmRlcjpmYWxzZSwgc3RhdHM6cHNldWRvCg==')
+// use test;
+// insert into t select * from t;
+func (s *SessionVars) LargeLogFormat(logItems *MCLargeLogItems) string {
+	var buf bytes.Buffer
+
+	if s.User != nil {
+		hostAddress := s.User.Hostname
+		if s.ConnectionInfo != nil {
+			hostAddress = s.ConnectionInfo.ClientIP
+		}
+		writeSlowLogItem(&buf, MCLargeLogUserAndHostStr, fmt.Sprintf("%s[%s] @ %s [%s]", s.User.Username, s.User.Username, s.User.Hostname, hostAddress))
+	}
+	writeSlowLogItem(&buf, MCLargeLogQueryTimeStr, strconv.FormatFloat(logItems.TimeTotal.Seconds(), 'f', -1, 64))
+	writeSlowLogItem(&buf, MCLargeLogParseTimeStr, strconv.FormatFloat(logItems.TimeParse.Seconds(), 'f', -1, 64))
+	writeSlowLogItem(&buf, MCLargeLogCompileTimeStr, strconv.FormatFloat(logItems.TimeCompile.Seconds(), 'f', -1, 64))
+
+	buf.WriteString(MCLargeLogRowPrefixStr + fmt.Sprintf("%v%v%v", MCLargeLogRewriteTimeStr,
+		MCLargeLogSpaceMarkStr, strconv.FormatFloat(logItems.RewriteInfo.DurationRewrite.Seconds(), 'f', -1, 64)))
+	buf.WriteString("\n")
+
+	writeSlowLogItem(&buf, MCLargeLogOptimizeTimeStr, strconv.FormatFloat(logItems.TimeOptimize.Seconds(), 'f', -1, 64))
+
+	if execDetailStr := logItems.ExecDetail.LargeLogString(); len(execDetailStr) > 0 {
+		buf.WriteString(MCLargeLogRowPrefixStr + execDetailStr + "\n")
+	}
+
+	if len(s.CurrentDB) > 0 {
+		writeSlowLogItem(&buf, MCLargeLogDBStr, strings.ToLower(s.CurrentDB))
+	}
+
+	if len(logItems.Digest) > 0 {
+		writeSlowLogItem(&buf, MCLargeLogDigestStr, logItems.Digest)
+	}
+	if logItems.MemMax > 0 {
+		writeSlowLogItem(&buf, MCLargeLogMemMax, strconv.FormatInt(logItems.MemMax, 10))
+	}
+	if logItems.DiskMax > 0 {
+		writeSlowLogItem(&buf, MCLargeLogDiskMax, strconv.FormatInt(logItems.DiskMax, 10))
+	}
+
+	writeSlowLogItem(&buf, MCLargeLogResultRows, strconv.FormatInt(logItems.ResultRows, 10))
+	writeSlowLogItem(&buf, MCLargeLogSuccStr, strconv.FormatBool(logItems.Succ))
+
+	if len(logItems.Plan) != 0 {
+		writeSlowLogItem(&buf, MCLargeLogPlan, logItems.Plan)
+	}
+
+	if s.CurrentDBChanged {
+		buf.WriteString(fmt.Sprintf("use %s;\n", strings.ToLower(s.CurrentDB)))
+		s.CurrentDBChanged = false
+	}
+
+	buf.WriteString(logItems.SQL)
+	if len(logItems.SQL) == 0 || logItems.SQL[len(logItems.SQL)-1] != ';' {
+		buf.WriteString(";")
+	}
+	return buf.String()
 }

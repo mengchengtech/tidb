@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"github.com/pingcap/log"
-	"github.com/pingcap/tidb/pkg/config"
-	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/mctech"
 	_ "github.com/pingcap/tidb/mctech/preps"
+	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
@@ -173,8 +173,8 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		}
 	}()
 
-	if opts.Metrics.LargeQuery.Enabled {
-		cc.logLargeQuery(ctx, stmt)
+	if opts.Metrics.LargeLog.Enabled {
+		cc.logLargeQuery(ctx, stmt, err == nil)
 	}
 	if opts.Metrics.SqlTrace.Enabled {
 		cc.traceFullQuery(ctx, stmt)
@@ -182,10 +182,8 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 }
 
 // 记录超长sql
-func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode) {
+func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode, succ bool) {
 	opts := config.GetMCTechConfig()
-	sessVars := cc.ctx.GetSessionVars()
-	stmtCtx := sessVars.StmtCtx
 	sqlType := "other"
 	switch stmt.(type) {
 	case *ast.SelectStmt, *ast.SetOprStmt:
@@ -198,43 +196,9 @@ func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode) {
 		sqlType = "update"
 	}
 
-	if slices.Contains(opts.Metrics.LargeQuery.SqlTypes, sqlType) {
-		origSql := stmt.OriginalText()
-		sqlLength := len(origSql)
-		if sqlLength > opts.Metrics.LargeQuery.Threshold {
-			_, digest := stmtCtx.SQLDigest() //
-			db, user, _ := sessionctx.ResolveSession(cc.getCtx())
-
-			var service string
-			mctx, err := mctech.GetContext(ctx)
-			if mctx != nil {
-				// TODO: 获取service
-				service = ""
-			}
-			// CREATE TABLE `mctech_large_sql_log` (
-			// 	`hash_id` VARCHAR(100) NOT NULL,
-			// 	`db` VARCHAR(50) DEFAULT NULL,
-			// 	`user` VARCHAR(50) DEFAULT NULL,
-			// 	`service` VARCHAR(100) DEFAULT NULL,
-			// 	`sample_text` TEXT NOT NULL,
-			// 	`max_size` INT(11) NOT NULL,
-			//  `sql_count` INT(11) NOT NULL DEFAULT 1,
-			// 	`created_at` DATETIME NOT NULL,
-			// 	`latest_run_at` TIMESTAMP NULL DEFAULT NULL,
-			// 	PRIMARY KEY (`hash_id`)
-			// )
-			_, err = cc.ctx.ExecuteInternal(ctx,
-				`insert into mysql.mctech_large_sql_log
-				(hash_id, db, user, service, sample_text, max_size, sql_count, lastest_run_at, created_at)
-				values (%?, %?, %?, %?, %?, %?, %?, %?, %?)
-				on duplicate key update
-					db = values(db), user = values(user), service = values(service),
-					sample_text = values(sample_text), max_size = values(max_size),
-					sql_count = sql_count + 1, lastest_run_at = values(latest_run_at)
-				`,
-				digest.String(), db, user, service, origSql, sqlLength, 1, time.Now(), time.Now())
-			panic(err)
-		}
+	if slices.Contains(opts.Metrics.LargeLog.SqlTypes, sqlType) {
+		execStmt := cc.ctx.Value(sessionctx.MCTechExecStmtVarKey).(*executor.ExecStmt)
+		execStmt.SaveLargeLog(succ)
 	}
 }
 
@@ -324,7 +288,7 @@ func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
 					zip = b.Bytes()
-					origSql = normalizedSQL[:128] + fmt.Sprintf("...length(%d)", sqlLen)
+					origSql = normalizedSQL[:128] + fmt.Sprintf("...len(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}
