@@ -15,7 +15,7 @@ import (
 )
 
 type StringFormat interface {
- 	String() string
+	String() string
 }
 
 // Context mctech context interface
@@ -92,7 +92,7 @@ type ModifyContext interface {
 
 // SessionMPPVarsContext interface
 type SessionMPPVarsContext interface {
-	StoreSessionMPPVars(mpp string) (err error)
+	StoreSessionMPPVars(ctx context.Context, mpp string) (err error)
 
 	ReloadSessionMPPVars() (err error)
 
@@ -116,6 +116,8 @@ const (
 	ParamDbPrefix = "dbPrefix"
 	// ParamGlobal custom hint param "global"
 	ParamGlobal = "global"
+	// ParamGlobal custom hint param "mpp"
+	ParamMPP = "mpp"
 )
 
 // GlobalValueInfo from global params
@@ -145,6 +147,9 @@ type PrepareResult struct {
 // NewPrepareResult create PrepareResult
 func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenantCode != ""
+	if _, ok := params[ParamMPP]; !ok {
+		params[ParamMPP] = GetOption().DefaultMPPValue
+	}
 
 	if v, ok := params[ParamTenant]; ok {
 		codeFromParam := strings.TrimSpace(v.(string))
@@ -292,7 +297,7 @@ func (d *baseContext) Session() sessionctx.Context {
 
 // ------------------------------------------------
 
-func (d *baseContext) StoreSessionMPPVars(mpp string) (err error) {
+func (d *baseContext) StoreSessionMPPVars(ctx context.Context, mpp string) (err error) {
 	log.Error("Session: " + string(debug.Stack()))
 	panic(errors.New("[StoreSessionMPPVars] not implemented"))
 }
