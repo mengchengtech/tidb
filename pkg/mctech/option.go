@@ -22,6 +22,8 @@ type Option struct {
 	SequenceBackend int64
 	// sequence服务的调用地址前缀
 	SequenceAPIPrefix string
+	// mpp 开关的默认值
+	DefaultMPPValue string
 
 	// encryption
 	EncryptionMock     bool
@@ -78,6 +80,7 @@ func initMCTechOption() *Option {
 		SequenceMaxFetchCount: opts.Sequence.MaxFetchCount,
 		SequenceBackend:       opts.Sequence.Backend,
 		SequenceAPIPrefix:     formatURL(opts.Sequence.APIPrefix),
+		DefaultMPPValue:       opts.MPP.DefaultValue,
 
 		EncryptionMock:      opts.Encryption.Mock,
 		EncryptionAccessID:  opts.Encryption.AccessID,
@@ -96,6 +99,9 @@ func initMCTechOption() *Option {
 		DDLVersionFilters:       opts.DDL.Version.DbMatches,
 	}
 
+	if option.DefaultMPPValue == "" {
+		option.DefaultMPPValue = "allow"
+	}
 	return option
 }
 

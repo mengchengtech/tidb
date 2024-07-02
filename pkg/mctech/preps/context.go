@@ -68,7 +68,7 @@ func (d *tidbSessionMCTechContext) BaseContext() mctech.Context {
 
 // ------------------------------------------------
 
-func (d *tidbSessionMCTechContext) StoreSessionMPPVars(mpp string) (err error) {
+func (d *tidbSessionMCTechContext) StoreSessionMPPVars(ctx context.Context, mpp string) (err error) {
 	// 根据传入参数转换成会话中添加的mpp相关的参数名和值
 	var defaultVars []*varValue
 	if defaultVars, err = d.getTargetMPPVars(mpp); err != nil {
@@ -80,7 +80,7 @@ func (d *tidbSessionMCTechContext) StoreSessionMPPVars(mpp string) (err error) {
 	// 缓存当前会话中同名参数的值
 	for _, v := range defaultVars {
 		var value string
-		value, err = sessionVars.GetSessionOrGlobalSystemVar(context.Background(), v.name)
+		value, err = sessionVars.GetSessionOrGlobalSystemVar(ctx, v.name)
 		if err != nil {
 			return
 		}
