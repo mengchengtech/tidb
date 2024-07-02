@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/pingcap/tidb/pkg/mctech"
-	"github.com/pingcap/tidb/pkg/mctech/tenant"
+	"github.com/pingcap/tidb/pkg/mctech/visitor"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 )
@@ -89,7 +89,7 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 
 func (r *mctechStatementResolver) rewriteStmt(
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = tenant.ApplyTenantIsolation(r.context, stmt, charset, collation)
+	dbs, skipped, err = visitor.ApplyMCTechExtension(r.context, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, skipped, err
 	}
