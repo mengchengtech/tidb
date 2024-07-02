@@ -15,12 +15,6 @@ var dbMap = map[string]string{
 	"pf": "global_platform",
 }
 
-type mctechTestCase struct {
-	shortDb string
-	src     string
-	expect  string
-}
-
 func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
 	p := parser.New()
 	p.EnableWindowFunc(true)
@@ -34,9 +28,8 @@ func doRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc bool) {
 		restoreSQLs := ""
 		for _, stmt := range stmts {
 			sb.Reset()
-			visitor := NewTenantVisitor(
-				"mock", 1,
-				false, nil, dbMap[tbl.shortDb], "gslq4dev", "", "")
+			context := newTestMCTechContext(dbMap[tbl.shortDb])
+			visitor := NewTenantVisitor(context, "", "")
 			stmt.Accept(visitor)
 			err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
 			require.NoError(t, err, comment)

@@ -66,7 +66,7 @@ import (
 	"github.com/pingcap/tidb/pkg/extension"
 	"github.com/pingcap/tidb/pkg/infoschema"
 	"github.com/pingcap/tidb/pkg/kv"
-	"github.com/pingcap/tidb/pkg/mctech/tenant"
+	"github.com/pingcap/tidb/pkg/mctech/prapared"
 	"github.com/pingcap/tidb/pkg/metrics"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -1697,6 +1697,10 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	sessVars := cc.ctx.GetSessionVars()
 	sc := sessVars.StmtCtx
 	prevWarns := sc.GetWarnings()
+	// add by zhangbing
+	resolver := prapared.NewStatementResolver()
+	sql, err = resolver.PrepareSql(cc.ctx.Session, sql)
+	// add end
 	var stmts []ast.StmtNode
 	cc.ctx.GetSessionVars().SetAlloc(cc.chunkAlloc)
 	if stmts, err = cc.ctx.Parse(ctx, sql); err != nil {
@@ -1708,8 +1712,25 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		return cc.writeOK(ctx)
 	}
 	// add by zhangbing
+	session := cc.ctx.Session
+	charset, collation := session.GetSessionVars().GetCharsetInfo()
+
 	for _, stmt := range stmts {
-		tenant.ApplyTenantIsolation(cc.ctx.TiDBContext, stmt)
+		resolver.Context().Reset()
+		err = resolver.ResolveStmt(stmt, charset, collation)
+		if err != nil {
+			return err
+		}
+
+		// 改写session上的数据库
+		// 必须在解析完成后再改写库名称，否则会存在表无法解析的问题
+		// FIXME: 移植后不再需要？
+		// TQueryCtx ctx = localData.getQueryCtx()
+		// ctx.session.database = ThreadLocalDataManager.ToPysicalDbName(ctx.session.database)
+		err = resolver.Validate(session)
+		if err != nil {
+			return err
+		}
 	}
 	// add end
 
