@@ -18,12 +18,6 @@ type mctechStatementResolver struct {
 	checker *MutexDatabaseChecker
 }
 
-func NewStatementResolver() mctech.StatementResolver {
-	return &mctechStatementResolver{
-		checker: NewMutexDatabaseChecker(),
-	}
-}
-
 func (r *mctechStatementResolver) Context() mctech.MCTechContext {
 	return r.context
 }
@@ -65,12 +59,17 @@ func (r *mctechStatementResolver) PrepareSql(ctx sessionctx.Context, sql string)
 	return preparedSql, nil
 }
 
-func (r *mctechStatementResolver) ResolveStmt(stmt ast.Node, charset string, collation string) error {
+func (r *mctechStatementResolver) ResolveStmt(
+	stmt ast.Node, charset string, collation string) error {
 	dbs, err := r.rewriteStmt(stmt, charset, collation)
 	if err != nil {
 		return err
 	}
-	return r.checker.Check(r.context, dbs)
+	if err = r.checker.Check(r.context, dbs); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
@@ -86,7 +85,8 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 	return nil
 }
 
-func (r *mctechStatementResolver) rewriteStmt(stmt ast.Node, charset string, collation string) ([]string, error) {
+func (r *mctechStatementResolver) rewriteStmt(
+	stmt ast.Node, charset string, collation string) ([]string, error) {
 	dbs, skipped, err := tenant.ApplyTenantIsolation(r.context, stmt, charset, collation)
 	if skipped || err != nil {
 		return dbs, err
