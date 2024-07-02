@@ -24,7 +24,7 @@ func init() {
 	}
 }
 
-func SetRpcClient(client RpcClient) {
+func SetRpcClientForTest(client RpcClient) {
 	apiClient = client
 }
 
