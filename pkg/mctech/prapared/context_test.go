@@ -23,7 +23,7 @@ func (c *testContextCase) Source() any {
 	return c.response
 }
 
-func TestDbSelector_GetDbIndex(t *testing.T) {
+func TestDbSelectorGetDbIndex(t *testing.T) {
 	cases := []*testContextCase{
 		{"gslq", `{"current": ""}`, 1, map[string]any{"background": true}, "cannot unmarshal"},
 		{"gslq", `{"db": ""}`, 1, map[string]any{"requestId": "12345678"}, "cannot unmarshal"},
@@ -38,12 +38,12 @@ func TestDbSelector_GetDbIndex(t *testing.T) {
 }
 
 func contextRunTestCase(t *testing.T, c *testContextCase) error {
-	var rpcClient = mctech.GetRpcClient()
-	mctech.SetRpcClientForTest(&MockClient{})
-	defer mctech.SetRpcClientForTest(rpcClient)
-	GetDoFunc = createGetDoFunc(c.response)
+	var rpcClient = mctech.GetRPCClient()
+	mctech.SetRPCClientForTest(&mockClient{})
+	defer mctech.SetRPCClientForTest(rpcClient)
+	getDoFunc = createGetDoFunc(c.response)
 
-	result, err := mctech.NewResolveResult("gslq", c.params)
+	result, err := mctech.NewPrapareResult("gslq", c.params)
 	if err != nil {
 		return err
 	}

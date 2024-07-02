@@ -93,17 +93,17 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 }
 
 func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, session session.Session) error {
-	processor := NewSqlPreprocessor(c.sql)
+	processor := newSQLPreprocessor(c.sql)
 	result, err := processor.Prepare(session, c.actions, c.params)
 	if err != nil {
 		return err
 	}
 
 	require.Equal(t, c.resultExpect, result.GetInfoForTest(), c.Source())
-	outSql := processor.preparedSql
-	require.NotContains(t, outSql, "{{tenant}}", c.Source())
-	if outSql != c.sql {
-		require.Equal(t, c.sqlExpect, outSql, c.Source())
+	outSQL := processor.preparedSQL
+	require.NotContains(t, outSQL, "{{tenant}}", c.Source())
+	if outSQL != c.sql {
+		require.Equal(t, c.sqlExpect, outSQL, c.Source())
 	}
 	return nil
 }
