@@ -23,6 +23,7 @@ import (
 	"github.com/pingcap/tidb/pkg/executor/internal/exec"
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/infoschema"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
@@ -76,7 +77,13 @@ func NewPrepareExec(ctx sessionctx.Context, sqlTxt string) *PrepareExec {
 }
 
 // Next implements the Executor Next interface.
-func (e *PrepareExec) Next(ctx context.Context, _ *chunk.Chunk) error {
+func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
+	// add by zhangbing
+	option := mctech.GetOption()
+	if option.ForbiddenPrepare {
+		return errors.New("[mctech] PREPARE not allowed")
+	}
+	// add end
 	vars := e.Ctx().GetSessionVars()
 	if e.ID != 0 {
 		// Must be the case when we retry a prepare.
