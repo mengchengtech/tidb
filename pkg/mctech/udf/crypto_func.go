@@ -29,7 +29,7 @@ type AesCryptoClient struct {
 
 func newAesCryptoClientFromService() *AesCryptoClient {
 	c := new(AesCryptoClient)
-	option := mctech.GetMCTechOption()
+	option := mctech.GetOption()
 	c.mock = option.Encryption_Mock
 
 	key, iv, err := loadCryptoParams(option)
