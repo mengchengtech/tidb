@@ -54,7 +54,9 @@ func TestStmtResolverWithRoot(t *testing.T) {
 }
 
 func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
-	resolver := NewStatementResolver()
+	resolver := &mctechStatementResolver{
+		checker: NewMutexDatabaseChecker(),
+	}
 	db, ok := dbMap[c.shortDb]
 	if !ok {
 		db = "test"
@@ -78,6 +80,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 	if err != nil {
 		return err
 	}
+
 	err = resolver.Validate(session)
 	if err != nil {
 		return err
