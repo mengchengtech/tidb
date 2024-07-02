@@ -33,7 +33,7 @@ func TestMCTechStatementsSummary(t *testing.T) {
 	}
 }
 
-func TestForbiddenPrapare(t *testing.T) {
+func TestForbiddenPrepare(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
