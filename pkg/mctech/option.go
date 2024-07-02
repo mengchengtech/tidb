@@ -12,30 +12,32 @@ import (
 	"go.uber.org/zap"
 )
 
-type MCTechOption struct {
-	Sequence_Mock          bool
-	Sequence_Debug         bool
-	Sequence_MaxFetchCount int64
-	Sequence_Backend       int64
-	Sequence_ApiPrefix     string
+// Option mctech option
+type Option struct {
+	SequenceMock          bool
+	SequenceDebug         bool
+	SequenceMaxFetchCount int64
+	SequenceBackend       int64
+	SequenceAPIPrefix     string
 
 	// encryption
-	Encryption_Mock      bool
-	Encryption_AccessId  string
-	Encryption_ApiPrefix string
+	EncryptionMock      bool
+	EncryptionAccessID  string
+	EncryptionAPIPrefix string
 
-	Tenant_Enabled bool
+	TenantEnabled bool
 
-	DbChecker_Enabled          bool
-	DbChecker_ApiPrefix        string
-	DbChecker_MutexAcrossDbs   []string
-	DbChecker_ExcludeAcrossDbs []string
-	DbChecker_AcrossDbGroups   []string
+	DbCheckerEnabled          bool
+	DbCheckerAPIPrefix        string
+	DbCheckerMutexAcrossDbs   []string
+	DbCheckerExcludeAcrossDbs []string
+	DbCheckerAcrossDbGroups   []string
 }
 
-var mctechOpts *MCTechOption
+var mctechOpts *Option
 
-func GetOption() *MCTechOption {
+// GetOption get mctech option
+func GetOption() *Option {
 	// 只能懒加载，需要在启动时先加载 config模块
 	once := &sync.Once{}
 	once.Do(func() {
@@ -46,29 +48,30 @@ func GetOption() *MCTechOption {
 	return mctechOpts
 }
 
-func SetOptionForTest(option *MCTechOption) {
+// SetOptionForTest for unit test
+func SetOptionForTest(option *Option) {
 	mctechOpts = option
 }
 
-func initMCTechOption() *MCTechOption {
+func initMCTechOption() *Option {
 	opts := config.GetGlobalConfig().MCTech
-	option := &MCTechOption{
-		Sequence_Mock:          opts.Sequence.Mock,
-		Sequence_Debug:         opts.Sequence.Debug,
-		Sequence_MaxFetchCount: opts.Sequence.MaxFetchCount,
-		Sequence_Backend:       opts.Sequence.Backend,
-		Sequence_ApiPrefix:     formatUrl(opts.Sequence.ApiPrefix),
+	option := &Option{
+		SequenceMock:          opts.Sequence.Mock,
+		SequenceDebug:         opts.Sequence.Debug,
+		SequenceMaxFetchCount: opts.Sequence.MaxFetchCount,
+		SequenceBackend:       opts.Sequence.Backend,
+		SequenceAPIPrefix:     formatURL(opts.Sequence.APIPrefix),
 
-		Encryption_Mock:      opts.Encryption.Mock,
-		Encryption_AccessId:  opts.Encryption.AccessId,
-		Encryption_ApiPrefix: formatUrl(opts.Encryption.ApiPrefix),
+		EncryptionMock:      opts.Encryption.Mock,
+		EncryptionAccessID:  opts.Encryption.AccessID,
+		EncryptionAPIPrefix: formatURL(opts.Encryption.APIPrefix),
 
-		Tenant_Enabled:             opts.Tenant.Enabled,
-		DbChecker_Enabled:          opts.DbChecker.Enabled,
-		DbChecker_ApiPrefix:        formatUrl(opts.DbChecker.ApiPrefix),
-		DbChecker_MutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
-		DbChecker_ExcludeAcrossDbs: opts.DbChecker.ExcludeAcrossDbs,
-		DbChecker_AcrossDbGroups:   opts.DbChecker.AcrossDbGroups,
+		TenantEnabled:             opts.Tenant.Enabled,
+		DbCheckerEnabled:          opts.DbChecker.Enabled,
+		DbCheckerAPIPrefix:        formatURL(opts.DbChecker.APIPrefix),
+		DbCheckerMutexAcrossDbs:   opts.DbChecker.MutexAcrossDbs,
+		DbCheckerExcludeAcrossDbs: opts.DbChecker.ExcludeAcrossDbs,
+		DbCheckerAcrossDbGroups:   opts.DbChecker.AcrossDbGroups,
 	}
 
 	content, err := json.Marshal(option)
@@ -80,7 +83,7 @@ func initMCTechOption() *MCTechOption {
 	return option
 }
 
-func formatUrl(str string) string {
+func formatURL(str string) string {
 	u, err := url.Parse(str)
 	if err != nil {
 		log.Error("apiPrefix format error.", zap.String("apiPrefix", str), zap.Error(err))

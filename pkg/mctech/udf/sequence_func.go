@@ -104,8 +104,8 @@ func newSegmentRange(value string) (*segmentRange, error) {
 		sz += sg.size()
 	}
 	r.size = sz
-	const CACHE_EXPIRED_MS int64 = 1000
-	r.expiredAt = nowUnixMilli() + CACHE_EXPIRED_MS
+	const cacheExpiredMs int64 = 1000
+	r.expiredAt = nowUnixMilli() + cacheExpiredMs
 	return r, nil
 }
 
@@ -126,16 +126,15 @@ func (r *segmentRange) Next() int64 {
 			// seq的值小于当前段的起始值时，可直接把当前序列值设置为给定段的起始值
 			r.seq = r.segment.start
 			break
-		} else {
-			r.seq++
-			if r.seq <= r.segment.end {
-				// 下一个值仍然在当前段内部，获取成功，跳出循环
-				break
-			} else {
-				// 当前段已经用完，获取下一段
-				r.segment = nil
-			}
 		}
+
+		r.seq++
+		if r.seq <= r.segment.end {
+			// 下一个值仍然在当前段内部，获取成功，跳出循环
+			break
+		}
+		// 当前段已经用完，获取下一段
+		r.segment = nil
 	}
 	r.fetched++
 	return r.seq
@@ -241,20 +240,21 @@ func (r *compositeRange) Available() bool {
 	return r.current != nil
 }
 
-type SequenceMetrics struct {
+type sequenceMetrics struct {
 	Direct          int64 // 直接下载的次数
 	Backend         int64 // 后台下载的次数
 	TotalFetchCount int64 // 总共被取走的序列数
 }
 
+// SequenceCache sequence client(Cached)
 type SequenceCache struct {
 	frange *compositeRange
 	// 定义后端获取序列的线程资源锁
 	sem *semaphore.Weighted
 	// 统计信息
-	metrics SequenceMetrics
+	metrics sequenceMetrics
 	// 服务地址前缀 'http://xxxx/'
-	serviceUrlPrefix string
+	serviceURLPrefix string
 	// 每次最大取回的序列数
 	maxFetchCount int64
 	// 激活后台取序列的阈值
@@ -269,29 +269,31 @@ func newSequenceCache() *SequenceCache {
 	option := mctech.GetOption()
 	sc.frange = newCompositeRange()
 
-	sc.mock = option.Sequence_Mock
-	sc.debug = option.Sequence_Debug
+	sc.mock = option.SequenceMock
+	sc.debug = option.SequenceDebug
 
 	// 后台取序列的最大线程数
-	backendCount := option.Sequence_Backend
-	sc.maxFetchCount = option.Sequence_MaxFetchCount
+	backendCount := option.SequenceBackend
+	sc.maxFetchCount = option.SequenceMaxFetchCount
 	sc.sem = semaphore.NewWeighted(backendCount)
-	sc.serviceUrlPrefix = option.Sequence_ApiPrefix
+	sc.serviceURLPrefix = option.SequenceAPIPrefix
 	sc.backendThreshold = (sc.maxFetchCount * backendCount * 2) / 3
 	return sc
 }
 
-func (s *SequenceCache) GetMetrics() *SequenceMetrics {
+// GetMetrics get metrics
+func (s *SequenceCache) GetMetrics() *sequenceMetrics {
 	return &s.metrics
 }
 
+// VersionJustPass versionJustPass
 func (s *SequenceCache) VersionJustPass() (int64, error) {
 	if s.mock {
 		// 用于调试场景
 		return 0, nil
 	}
 
-	url := s.serviceUrlPrefix + "version"
+	url := s.serviceURLPrefix + "version"
 	log.Debug("version just pass url", zap.String("url", url))
 	post, err := http.NewRequest(
 		"POST", url, strings.NewReader("{ \"diff\": -3 }"))
@@ -312,6 +314,7 @@ func (s *SequenceCache) VersionJustPass() (int64, error) {
 	return strconv.ParseInt(text, 10, 64)
 }
 
+// Next next
 func (s *SequenceCache) Next() (int64, error) {
 	if s.mock {
 		// 用于调试场景
@@ -364,7 +367,7 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 }
 
 func (s *SequenceCache) loadSequence(count int64) error {
-	url := s.serviceUrlPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
+	url := s.serviceURLPrefix + "nexts?count=" + strconv.FormatInt(count, 10)
 	log.Debug("next sequence url", zap.String("url", url))
 	post, err := http.NewRequest("POST", url, &strings.Reader{})
 	if err != nil {
@@ -388,6 +391,7 @@ func (s *SequenceCache) loadSequence(count int64) error {
 var cache *SequenceCache
 var sequenceInitOnce sync.Once
 
+// GetCache 获取带缓存的序列服务客户端
 func GetCache() *SequenceCache {
 	sequenceInitOnce.Do(func() {
 		cache = newSequenceCache()

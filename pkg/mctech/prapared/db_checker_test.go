@@ -54,11 +54,11 @@ func (c *testDatabaseCheckerCase) Source() any {
 	return fmt.Sprintf("%s -> %v", c.tenant, c.dbs)
 }
 
-func newTestMCTechContext(tenant string) (mctech.MCTechContext, error) {
-	result, err := mctech.NewResolveResult(tenant, map[string]any{
+func newTestMCTechContext(tenant string) (mctech.Context, error) {
+	result, err := mctech.NewPrapareResult(tenant, map[string]any{
 		"global": &mctech.GlobalValueInfo{},
 	})
-	context := mctech.NewBaseMCTechContext(result, nil)
+	context := mctech.NewBaseContext(result, nil)
 	return context, err
 }
 
@@ -86,14 +86,14 @@ func TestDatabaseChecker(t *testing.T) {
 }
 
 func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
-	checker := NewMutexDatabaseCheckerWithParams(nil, nil, nil)
+	checker := newMutexDatabaseCheckerWithParams(nil, nil, nil)
 
 	context, _ := newTestMCTechContext(c.tenant)
 	return checker.Check(context, c.dbs)
 }
 
 func filterRunTestCase(t *testing.T, c *testStringFilterCase) error {
-	p := NewStringFilter(c.pattern)
+	p := newStringFilter(c.pattern)
 	success, err := p.Match(c.target)
 	if err != nil {
 		return err
