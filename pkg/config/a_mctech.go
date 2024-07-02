@@ -9,6 +9,7 @@ type MCTech struct {
 	DbChecker  DbChecker  `toml:"db-checker" json:"db-checker"`
 	Tenant     Tenant     `toml:"tenant" json:"tenant"`
 	DDL        DDL        `toml:"ddl" json:"ddl"`
+	MPP        MPP        `toml:"mpp" json:"mpp"`
 }
 
 // Sequence mctech_sequence functions used
@@ -45,6 +46,11 @@ type Encryption struct {
 // DDL custom ddl config
 type DDL struct {
 	Version VersionColumn `toml:"version" json:"version"`
+}
+
+// MPP custom ddl config
+type MPP struct {
+	DefaultValue string `toml:"default-value" json:"default-value"`
 }
 
 // VersionColumn auto add version column
@@ -84,6 +90,9 @@ func init() {
 				Enabled: true,
 				Name:    "__version",
 			},
+		},
+		MPP: MPP{
+			DefaultValue: "allow",
 		},
 	}
 }
