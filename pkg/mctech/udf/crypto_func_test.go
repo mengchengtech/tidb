@@ -16,14 +16,33 @@ type encryptionTestCases struct {
 }
 
 func TestMCTechCrypto(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Encryption.Mock": false}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/pkg/tidb/pkg/config/GetMCTechConfig")
 	cases := []*encryptionTestCases{
 		{true, "13511868785", "{crypto}HMvlbGus4V3geqwFULvOUw==", ""},
 		{false, "{crypto}HMvlbGus4V3geqwFULvOUw==", "13511868785", ""},
 		{false, "{crypto}YEsSIc6gxBu7NJt8De3fxg=", "", "illegal base64 data at input byte"},
+	}
+
+	doRunCryptoTest(t, cases)
+}
+
+func TestMCTechCryptoUnpaddingFail(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Encryption.Mock": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/udf/pkcs7Unpadding",
+		mock.M(t, "true"),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/udf/pkcs7Unpadding")
+	}()
+
+	cases := []*encryptionTestCases{
+		{false, "{crypto}XGhHgHevnICYzqxUPS26lw==", "", "mctech decrypt failure. '{crypto}XGhHgHevnICYzqxUPS26lw=='"},
 	}
 
 	doRunCryptoTest(t, cases)
