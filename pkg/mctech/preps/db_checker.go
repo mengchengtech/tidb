@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
 )
 
@@ -115,7 +116,7 @@ func getDatabaseChecker() DatabaseChecker {
 	}
 
 	dbCheckerInitOne.Do(func() {
-		option := mctech.GetOption()
+		option := config.GetOption()
 		dbChecker = newMutexDatabaseCheckerWithParams(
 			option.DbCheckerMutexAcrossDbs,
 			option.DbCheckerExcludeAcrossDbs,
