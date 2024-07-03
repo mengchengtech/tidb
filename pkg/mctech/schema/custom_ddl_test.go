@@ -35,10 +35,10 @@ var createTableSQL = strings.Join([]string{
 }, "\n")
 
 func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
 		mock.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
@@ -119,10 +119,10 @@ func TestMCTechSequenceDefaultValueAlterSchemaTest(t *testing.T) {
 }
 
 func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
 		mock.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
