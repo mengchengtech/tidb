@@ -42,9 +42,12 @@ func (h *MctechHandler) ResolveAndValidate(stmts []ast.StmtNode) error {
 	charset, collation := h.session.GetSessionVars().GetCharsetInfo()
 	for _, stmt := range stmts {
 		h.resolver.Context().Reset()
-		err := h.resolver.ResolveStmt(stmt, charset, collation)
+		skipped, err := h.resolver.ResolveStmt(stmt, charset, collation)
 		if err != nil {
 			return err
+		}
+		if skipped {
+			continue
 		}
 
 		err = h.resolver.Validate(h.session)
