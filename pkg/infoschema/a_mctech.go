@@ -55,6 +55,8 @@ var mcTechTableTTLInfoCols = []columnInfo{
 	{name: "TABLE_NAME", tp: mysql.TypeVarchar, size: 64},
 	{name: "TIDB_TABLE_ID", tp: mysql.TypeLonglong, size: 21},
 	{name: "TTL_COLUMN_NAME", tp: mysql.TypeVarchar, size: 64},
+	{name: "TTL_COLUMN_TYPE", tp: mysql.TypeBlob, size: 196606},
+	{name: "TTL_COLUMN_GENERATED_EXPR", tp: mysql.TypeVarchar, size: 512},
 	{name: "TTL", tp: mysql.TypeVarchar, size: 64},
 	{name: "TTL_UNIT", tp: mysql.TypeVarchar, size: 64},
 	{name: "TTL_ENABLE", tp: mysql.TypeVarchar, size: 21},
