@@ -16,10 +16,10 @@ type encryptionTestCases struct {
 }
 
 func TestMCTechCrypto(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
 		mock.M(t, map[string]bool{"EncryptionMock": false}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
 	cases := []*encryptionTestCases{
 		{true, "13511868785", "{crypto}HMvlbGus4V3geqwFULvOUw==", ""},
 		{false, "{crypto}HMvlbGus4V3geqwFULvOUw==", "13511868785", ""},
