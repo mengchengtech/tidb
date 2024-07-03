@@ -3,6 +3,7 @@
 package infoschema
 
 import (
+	"github.com/pingcap/tidb/pkg/meta/autoid"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/types"
@@ -64,7 +65,7 @@ var mcTechTableTTLInfoCols = []columnInfo{
 }
 
 func init() {
-	const mctechInformationSchemaDBID = 100000000
+	const mctechInformationSchemaDBID = autoid.InformationSchemaDBID + 9900
 	memTableToAllTiDBClusterTables[TableMCTechLargeQuery] = ClusterTableMCTechLargeQuery
 
 	tableIDMap[TableMCTechLargeQuery] = mctechInformationSchemaDBID + 1
