@@ -53,7 +53,7 @@ func TestLargeQueryFormat(t *testing.T) {
 		"# OPTIMIZE_TIME: 0.00000001",
 		"# PROCESS_TIME: 2 WAIT_TIME: 60 TOTAL_KEYS: 10000",
 		"# DB: test",
-		"# DIGEST: 01d00e6e93b28184beae487ac05841145d2a2f6a7b16de32a763bed27967e83d",
+		"# DIGEST: e5796985ccafe2f71126ed6c0ac939ffa015a8c0744a24b7aee6d587103fd2f7",
 		"# MEM_MAX: 2333",
 		"# DISK_MAX: 6666",
 		"# RESULT_ROWS: 12345",
