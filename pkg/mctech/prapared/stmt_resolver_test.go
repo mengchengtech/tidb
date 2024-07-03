@@ -26,8 +26,11 @@ func (m *mctechStmtResolverTestCase) Source() any {
 func TestStmtResolverWithRoot(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*mctechStmtResolverTestCase{
+		{"test", "describe company", map[string]any{"db": "test"}, ""},
 		{"test", "select * from company /*& global:true */", map[string]any{"global": map[string]any{"set": true}, "db": "test"}, ""},
 		//
+		{"pf", "/*& global:true */ select * from company", map[string]any{"global": map[string]any{"set": true}, "db": "global_platform"}, ""},
+		{"test", "/*& global:true */ select * from company", map[string]any{"global": map[string]any{"set": true}, "db": "test"}, ""},
 		{"pf", "/*& global:!ys2 */ select * from company", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform"}, ""},
 		{"pf", "select * from company /*& global:!ys2,!ys3 */", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform"}, ""},
 		// hint 格式不匹配
@@ -76,14 +79,15 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session
 	stmt := stmts[0]
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
 	resolver.Context().Reset()
-	err = resolver.ResolveStmt(stmt, charset, collation)
+	skipped, err := resolver.ResolveStmt(stmt, charset, collation)
 	if err != nil {
 		return err
 	}
-
-	err = resolver.Validate(session)
-	if err != nil {
-		return err
+	if !skipped {
+		err = resolver.Validate(session)
+		if err != nil {
+			return err
+		}
 	}
 	info := resolver.Context().GetInfoForTest()
 	require.Equal(t, c.expect, info, c.Source())
