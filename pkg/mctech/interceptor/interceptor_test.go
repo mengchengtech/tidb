@@ -216,6 +216,9 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/executor/CreateeWarnings",
+		mock.M(t, "true"),
+	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
 		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
@@ -224,6 +227,7 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/executor/CreateeWarnings")
 		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
@@ -252,9 +256,10 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 		"tx":  map[string]any{"affected": float64(0), "keys": float64(2), "size": float64(122)},
 		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
 		"mem": float64(15300), "disk": float64(25300),
-		"rows":   float64(0),
-		"digest": "9505cacb7c710ed17125fcc6cb3669e8ddca6c8cd8af6a31f6b3cd64604c3098",
-		"sql":    "commit",
+		"rows":     float64(0),
+		"digest":   "9505cacb7c710ed17125fcc6cb3669e8ddca6c8cd8af6a31f6b3cd64604c3098",
+		"warnings": map[string]any{"topN": []any{map[string]any{"msg": "this is for test warning", "extra": false}}, "total": float64(1)},
+		"sql":      "commit",
 	}, logData)
 }
 
