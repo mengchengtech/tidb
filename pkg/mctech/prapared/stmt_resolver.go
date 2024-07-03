@@ -61,16 +61,17 @@ func (r *mctechStatementResolver) PrepareSql(ctx sessionctx.Context, sql string)
 }
 
 func (r *mctechStatementResolver) ResolveStmt(
-	stmt ast.Node, charset string, collation string) (skipped bool, err error) {
-	dbs, skipped, err := r.rewriteStmt(stmt, charset, collation)
+	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
+	dbs, skipped, err = r.rewriteStmt(stmt, charset, collation)
 	if err != nil {
-		return false, err
-	}
-	if err = r.checker.Check(r.context, dbs); err != nil {
-		return false, err
+		return nil, false, err
 	}
 
-	return skipped, nil
+	return dbs, skipped, nil
+}
+
+func (r *mctechStatementResolver) CheckDB(dbs []string) error {
+	return r.checker.Check(r.context, dbs)
 }
 
 func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
