@@ -16,14 +16,12 @@ package executor
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/errors"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/executor/internal/exec"
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/infoschema"
-	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
@@ -37,7 +35,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/dbterror/exeerrors"
 	"github.com/pingcap/tidb/pkg/util/dbterror/plannererrors"
-	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/pingcap/tidb/pkg/util/topsql"
 	topsqlstate "github.com/pingcap/tidb/pkg/util/topsql/state"
@@ -82,9 +79,8 @@ func NewPrepareExec(ctx sessionctx.Context, sqlTxt string) *PrepareExec {
 // Next implements the Executor Next interface.
 func (e *PrepareExec) Next(ctx context.Context, _ *chunk.Chunk) error {
 	// add by zhangbing
-	option := mctech.GetOption()
-	if option.ForbiddenPrepare {
-		return errors.New("[mctech] PREPARE not allowed")
+	if err := e.beforePrepare(ctx); err != nil {
+		return err
 	}
 	// add end
 	vars := e.Ctx().GetSessionVars()
@@ -124,22 +120,8 @@ func (e *PrepareExec) Next(ctx context.Context, _ *chunk.Chunk) error {
 		return exeerrors.ErrPrepareMulti
 	}
 	// add by zhangbing
-	handler := mctech.GetHandler()
-	var mctx mctech.Context
-	mctx, err = mctech.GetContext(ctx)
-	if err != nil {
+	if err = e.afterParseSql(ctx, stmts); err != nil {
 		return err
-	}
-
-	if mctx != nil {
-		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-		modifyCtx.SetUsingTenantParam(true)
-		if _, err = handler.ApplyAndCheck(mctx, stmts); err != nil {
-			if strFmt, ok := e.Ctx().(fmt.Stringer); ok {
-				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", e.sqlText))
-			}
-			return err
-		}
 	}
 	// add end
 	stmt0 := stmts[0]
