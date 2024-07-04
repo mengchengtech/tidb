@@ -293,6 +293,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		queryTime         time.Duration  // 执行 SQL 耗费的自然时间
 		parseTime         time.Duration  // 解析耗时
 		compileTime       time.Duration  // 生成执行计划耗时
+		tidbTime          time.Duration  // tidb-server里用时
 		copTime           time.Duration  // Coprocessor 执行耗时
 		memMax            int64          // 该 SQL 查询执行时占用的最大内存空间
 		diskMax           int64          // 该 SQL 查询执行时占用的最大磁盘空间
@@ -325,6 +326,16 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			if plan, ok := stmtCtx.GetPlan().(core.Plan); ok {
 				resultRows = executor.GetResultRowsCount(stmtCtx, plan)
 			}
+			// 添加开发辅助代码
+			if stmtCtx.RuntimeStatsColl != nil {
+				flat := executor.GetFlatPlan(stmtCtx)
+				collector := planStatCollector{
+					renderDetails:    false,
+					runtimeStatsColl: stmtCtx.RuntimeStatsColl,
+				}
+				tidbTime = collector.collectCPUTime(flat)
+			}
+
 			execDetails := stmtCtx.GetExecDetails()
 			copTime = execDetails.CopTime
 			memMax = stmtCtx.MemTracker.MaxConsumed()
@@ -357,6 +368,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			case "startedAt":
 				if t, err := time.ParseInLocation("2006-01-02 15:04:05.000", v.(string), time.Local); err == nil {
 					timeStart = t
+					tidbTime, _ = time.ParseDuration("11s201ms")
 					queryTime, _ = time.ParseDuration("3.315821ms")
 					parseTime, _ = time.ParseDuration("176.943µs")
 					compileTime, _ = time.ParseDuration("1.417613ms")
@@ -427,6 +439,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			parse: parseTime,
 			plan:  compileTime,
 			cop:   copTime,
+			tidb:  tidbTime,
 			ready: firstRowReadyTime,
 			send:  writeSQLRespTotal,
 		}),
