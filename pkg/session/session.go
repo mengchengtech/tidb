@@ -2100,6 +2100,12 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 	// add by zhangbing
 	if err == nil {
 		s.SetValue(mctech.MCExecStmtVarKey, stmt)
+		defer func() {
+			// 退出当前方法前保存下RU使用统计信息
+			if ru, ok := ctx.Value(tikvutil.RUDetailsCtxKey).(tikvutil.RUDetails); ok {
+				s.SetValue(mctech.MCRUDetailsCtxKey, ru)
+			}
+		}()
 	}
 	// add end
 	// check if resource group hint is valid, can't do this in planner.Optimize because we can access

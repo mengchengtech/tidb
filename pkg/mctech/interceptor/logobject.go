@@ -8,6 +8,7 @@ import (
 
 var (
 	_ zapcore.ObjectMarshaler = &logTimeObject{}
+	_ zapcore.ObjectMarshaler = &logRUStatObject{}
 )
 
 // logTimeObject time data struct whitch is used for trace log.
@@ -34,5 +35,18 @@ func (lt *logTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("copTF", lt.copTF)
 	enc.AddDuration("ready", lt.ready)
 	enc.AddDuration("send", lt.send)
+	return nil
+}
+
+// logRUStatObject ru stats struct whitch is used for trace log.
+type logRUStatObject struct {
+	RRU float64
+	WRU float64
+}
+
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
+func (lr *logRUStatObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddFloat64("rru", lr.RRU)
+	enc.AddFloat64("wru", lr.WRU)
 	return nil
 }
