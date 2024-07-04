@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -39,7 +38,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctechCtx := preps.NewContext(session)
+	mctechCtx := preps.NewContext(session, false)
 	mctech.SetContextForTest(session, mctechCtx)
 	tk.MustExec(createTableSQL)
 	mctech.SetContextForTest(session, nil)
@@ -54,7 +53,6 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 		"  PRIMARY KEY (`a`) /*T![clustered_index] CLUSTERED */",
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin"}, "\n")
 	require.Equal(t, expected, createSQL)
-	mctech.WithContext(context.Background(), preps.NewContext(session))
 	res = tk.MustQuery("show columns from version_table")
 	lst := []string{}
 	for _, row := range res.Rows() {
@@ -120,7 +118,7 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	tk := initMock(t, store)
 
 	session := tk.Session()
-	mctechCtx := preps.NewContext(session)
+	mctechCtx := preps.NewContext(session, false)
 	mctech.SetContextForTest(session, mctechCtx)
 	tk.MustExec(createTableSQL)
 	mctech.SetContextForTest(session, nil)
@@ -129,7 +127,6 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 		(a, b)
 		values ('a', ifnull(sleep(0.01), 1)), ('b', ifnull(sleep(0.01),2)), ('c', ifnull(sleep(0.01),3)), ('d', ifnull(sleep(0.01),4))
 		`)
-	mctech.WithContext(context.Background(), preps.NewContext(session))
 	res := tk.MustQuery("select * from version_table")
 	seqs := map[string]any{}
 	stamps := map[string]any{}
@@ -141,9 +138,7 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	require.Len(t, seqs, len(rows))
 	require.Len(t, stamps, 1)
 
-	mctech.WithContext(context.Background(), preps.NewContext(session))
 	tk.MustExec("update version_table set b = -1")
-	mctech.WithContext(context.Background(), preps.NewContext(session))
 	res = tk.MustQuery("select * from version_table")
 	rows = res.Rows()
 	time.Sleep(time.Second)

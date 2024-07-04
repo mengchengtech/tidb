@@ -90,7 +90,7 @@ func (g *databaseGrouper) GroupBy(dbNames []string) []dbGroup {
 
 // DatabaseChecker interface
 type DatabaseChecker interface {
-	Check(context mctech.Context, dbs []string) error
+	Check(mctechCtx mctech.Context, dbs []string) error
 }
 
 // mutexDatabaseChecker 检查sql中用到的数据库是否存在互斥的库名
@@ -157,15 +157,15 @@ func newMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDb
 	}
 }
 
-func (c *mutexDatabaseChecker) Check(context mctech.Context, dbs []string) error {
-	result := context.PrepareResult()
+func (c *mutexDatabaseChecker) Check(mctechCtx mctech.Context, dbs []string) error {
+	result := mctechCtx.PrepareResult()
 	if !result.TenantFromRole() {
 		return nil
 	}
 
 	logicNames := make([]string, 0, len(dbs))
 	for _, dbName := range dbs {
-		logicName := context.ToLogicDbName(dbName)
+		logicName := mctechCtx.ToLogicDbName(dbName)
 		matched, err := c.dbPredicate(logicName)
 		if err != nil {
 			return err

@@ -47,6 +47,14 @@ type Context interface {
 	// @title SQLHasGlobalDB
 	// @description sql中是否包含global类的库
 	SQLHasGlobalDB() bool
+
+	// @title NewApplyExpr
+	// @description 创建租户条件用到的表达式
+	CreateTenantExpr(value string, charset string, collate string) ast.ValueExpr
+
+	// @title UsingTenantParam
+	// @description 租户过滤条件是否使用参数
+	UsingTenantParam() bool
 }
 
 // ContextForTest interface
@@ -58,6 +66,8 @@ type ContextForTest interface {
 
 // ModifyContext interface
 type ModifyContext interface {
+	// 设置创建租户条件表达式是否使用参数化方式
+	SetUsingTenantParam(val bool)
 	// @title Reset
 	// @description 重置是否改写状态，用于支持一次执行多条sql语句时
 	Reset()
@@ -225,11 +235,12 @@ func (r *PrepareResult) DbPrefix() string {
 }
 
 type baseContext struct {
-	inPrepareStmt  bool
-	selector       DBSelector
-	prepareResult  *PrepareResult
-	sqlRewrited    bool
-	sqlHasGlobalDB bool
+	inPrepareStmt    bool
+	selector         DBSelector
+	prepareResult    *PrepareResult
+	sqlRewrited      bool
+	sqlHasGlobalDB   bool
+	usingTenantParam bool
 }
 
 // DbPublicPrefix public类数据库前缀
@@ -245,12 +256,8 @@ const DbGlobalPrefix = "global_"
 const DbCustomSuffix = "_custom"
 
 // NewBaseContext create mctechContext (Context)
-func NewBaseContext() Context {
-	return &baseContext{}
-}
-
-func (d *baseContext) GetInfoForTest() map[string]any {
-	return d.prepareResult.GetInfoForTest()
+func NewBaseContext(usingTenantParam bool) Context {
+	return &baseContext{usingTenantParam: usingTenantParam}
 }
 
 func (d *baseContext) CurrentDB() string {
@@ -274,6 +281,26 @@ func (d *baseContext) Session() sessionctx.Context {
 }
 
 // ------------------------------------------------
+
+func (d *baseContext) CreateTenantExpr(value string, charset string, collate string) ast.ValueExpr {
+	if d.usingTenantParam {
+		// TODO: 参数化租户条件未完成
+		return ast.NewParamMarkerExpr(-1)
+	}
+	return ast.NewValueExpr(value, charset, collate)
+}
+
+func (d *baseContext) UsingTenantParam() bool {
+	return d.usingTenantParam
+}
+
+func (d *baseContext) SetNewTenantExprFunc(val bool) {
+	d.usingTenantParam = val
+}
+
+func (d *baseContext) GetInfoForTest() map[string]any {
+	return d.prepareResult.GetInfoForTest()
+}
 
 func (d *baseContext) Reset() {
 	d.sqlRewrited = false
@@ -415,7 +442,7 @@ type contextKey struct{}
 var customContextKey = contextKey{}
 
 // NewContext function callback
-var NewContext func(session sessionctx.Context) Context
+var NewContext func(session sessionctx.Context, usingTenantParam bool) Context
 
 // WithContext set mctech context to session
 func WithContext(parent context.Context, cc Context) context.Context {

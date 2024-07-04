@@ -21,9 +21,9 @@ func (r *_msicExtension) Apply(mctechCtx mctech.Context, node ast.Node) (matched
 	return matched, err
 }
 
-func (r *_msicExtension) changeToPhysicalDb(context mctech.Context, n *ast.UseStmt) (err error) {
+func (r *_msicExtension) changeToPhysicalDb(mctechCtx mctech.Context, n *ast.UseStmt) (err error) {
 	var dbName string
-	if dbName, err = context.ToPhysicalDbName(n.DBName); err == nil {
+	if dbName, err = mctechCtx.ToPhysicalDbName(n.DBName); err == nil {
 		n.DBName = dbName
 	}
 
