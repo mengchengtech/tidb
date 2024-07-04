@@ -38,6 +38,7 @@ func TestFullSQLLog(t *testing.T) {
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
 		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "keys": int(100), "rows": int64(1024), "affected": int64(1111),
+		"rru": int(1111), "wru": int(22),
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
@@ -56,6 +57,7 @@ func TestFullSQLLog(t *testing.T) {
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "",
 		"conn": "1", "tp": "select",
 		"at":   now,
+		"ru":   map[string]any{"rru": float64(1111), "wru": float64(22)},
 		"time": map[string]any{"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "cop": "128ms", "copTK": "0s", "copTF": "0s", "ready": "2.315821ms", "send": "1ms"},
 		"mem":  float64(151300), "disk": float64(9527), "keys": float64(100), "affected": float64(1111), "rows": float64(1024),
 		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
