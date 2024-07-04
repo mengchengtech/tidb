@@ -22,6 +22,20 @@ func TestSequence(t *testing.T) {
 	renderSequenceMetrics(now)
 }
 
+func TestSequenceDecodeSuccess(t *testing.T) {
+	var seqId int64 = 1318030351881216
+	unixTime, err := SequenceDecode(seqId)
+	require.NoError(t, err)
+	dt := time.UnixMilli(unixTime)
+	require.Equal(t, dt.String(), "2022-07-18 10:59:52.044 +0800 CST")
+}
+
+func TestSequenceDecodeFailure(t *testing.T) {
+	var seqId int64 = -30351881216
+	_, err := SequenceDecode(seqId)
+	require.Errorf(t, err, "Invalid negative %s specified", -30351881216)
+}
+
 func TestVersionJustPass(t *testing.T) {
 	var rpcClient = mctech.GetRPCClient()
 	mctech.SetRPCClientForTest(&mockClient{})
