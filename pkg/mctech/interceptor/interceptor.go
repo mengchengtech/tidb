@@ -19,6 +19,7 @@ import (
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
 	"github.com/pingcap/tidb/pkg/util/logutil"
+	clientutil "github.com/tikv/client-go/v2/util"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -306,6 +307,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		digest            string         // sql 语句的hash
 		zip               []byte         // 压缩后的sql文本
 		writeKeys         = 0            // 写入 Key 个数
+		ruRead            float64        // sql执行消耗的RRU值
+		ruWrite           float64        // sql执行消耗的WRU值
 		across            string         // sql中指定的跨库查询的数据库
 	)
 
@@ -336,6 +339,10 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 					runtimeStatsColl: stmtCtx.RuntimeStatsColl,
 				}
 				tidbTime, tikvCopTime, tiflashCopTime = collector.collectCPUTime(flat)
+				if ruStats, ok := sctx.Value(mctech.MCRUDetailsCtxKey).(*clientutil.RUDetails); ok {
+					ruRead = ruStats.RRU()
+					ruWrite = ruStats.WRU()
+				}
 			}
 
 			execDetails := stmtCtx.GetExecDetails()
@@ -378,6 +385,10 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 					firstRowReadyTime, _ = time.ParseDuration("2.315821ms")
 					writeSQLRespTotal, _ = time.ParseDuration("1ms")
 				}
+			case "rru":
+				ruRead = v.(float64)
+			case "wru":
+				ruWrite = v.(float64)
 			case "mem":
 				memMax = int64(v.(float64))
 			case "disk":
@@ -448,6 +459,10 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			send:  writeSQLRespTotal,
 		}),
 		zap.String("digest", digest),
+		zap.Object("ru", &logRUStatObject{
+			RRU: ruRead,
+			WRU: ruWrite,
+		}),
 		zap.Int64("mem", memMax),
 		zap.Int64("disk", diskMax),
 		zap.Int("keys", writeKeys),
