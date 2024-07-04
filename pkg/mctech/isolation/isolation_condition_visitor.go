@@ -127,27 +127,27 @@ type isolationConditionVisitor struct {
 const tenantFieldName = "tenant"
 
 func newIsolationConditionVisitor(
-	context mctech.Context,
+	mctechCtx mctech.Context,
 	charset string, collation string) *isolationConditionVisitor {
 	visitor := &isolationConditionVisitor{
 		databaseNameVisitor: &databaseNameVisitor{
-			context: context,
+			context: mctechCtx,
 			dbNames: map[string]bool{},
 		},
 		withClauseScope:     &nodeScope[*cteScopeItem]{items: list.New()},
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
-	result := context.PrepareResult()
+	result := mctechCtx.PrepareResult()
 	if result.Tenant() != "" {
 		visitor.enabled = true
-		visitor.tenant = ast.NewValueExpr(result.Tenant(), charset, collation)
+		visitor.tenant = mctechCtx.CreateTenantExpr(result.Tenant(), charset, collation)
 	} else {
 		length := len(result.Excludes())
 		if length > 0 {
 			visitor.enabled = true
 			exprList := make([]ast.ExprNode, length)
 			for i, str := range result.Excludes() {
-				exprList[i] = ast.NewValueExpr(str, charset, collation)
+				exprList[i] = mctechCtx.CreateTenantExpr(str, charset, collation)
 			}
 			visitor.excludes = exprList
 		}
