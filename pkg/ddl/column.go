@@ -2008,6 +2008,15 @@ func generateOriginDefaultValue(col *model.ColumnInfo, ctx sessionctx.Context) (
 			return nil, errors.Trace(err)
 		}
 	}
+	// add by zhangbing
+	if odValue == strings.ToUpper(ast.MCTechSequence) {
+		if ctx == nil {
+			odValue = 0
+		} else {
+			odValue, _ = expression.GetNextSequence()
+		}
+	}
+	// add end
 	return odValue, nil
 }
 
