@@ -1287,7 +1287,10 @@ func constructResultOfShowCreateTable(ctx sessionctx.Context, dbName *pmodel.CIS
 		for _, col := range fk.Cols {
 			colNames = append(colNames, stringutil.Escape(col.O, sqlMode))
 		}
-		fmt.Fprintf(buf, "(%s)", strings.Join(colNames, ","))
+		// modify by zhangbing
+		// fmt.Fprintf(buf, "(%s)", strings.Join(colNames, ","))
+		fmt.Fprintf(buf, "(%s)", strings.Join(colNames, ", "))
+		// modify end
 		if fk.RefSchema.L != "" && dbName != nil && fk.RefSchema.L != dbName.L {
 			fmt.Fprintf(buf, " REFERENCES %s.%s ", stringutil.Escape(fk.RefSchema.O, sqlMode), stringutil.Escape(fk.RefTable.O, sqlMode))
 		} else {
@@ -1297,7 +1300,10 @@ func constructResultOfShowCreateTable(ctx sessionctx.Context, dbName *pmodel.CIS
 		for _, refCol := range fk.RefCols {
 			refColNames = append(refColNames, stringutil.Escape(refCol.O, sqlMode))
 		}
-		fmt.Fprintf(buf, "(%s)", strings.Join(refColNames, ","))
+		// modify by zhangbing
+		// fmt.Fprintf(buf, "(%s)", strings.Join(refColNames, ","))
+		fmt.Fprintf(buf, "(%s)", strings.Join(refColNames, ", "))
+		// modify end
 		if pmodel.ReferOptionType(fk.OnDelete) != 0 {
 			fmt.Fprintf(buf, " ON DELETE %s", pmodel.ReferOptionType(fk.OnDelete).String())
 		}
