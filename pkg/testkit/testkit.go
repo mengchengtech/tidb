@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/expression"
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/terror"
 	"github.com/pingcap/tidb/pkg/session"
@@ -342,6 +343,18 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 	if len(args) == 0 {
 		sc := tk.session.GetSessionVars().StmtCtx
 		prevWarns := sc.GetWarnings()
+		// add by zhangbing
+		var handler mctech.Handler
+		factory := mctech.GetHandlerFactory(tk.session)
+		if factory != nil {
+			var err error
+			session := tk.session
+			handler = factory.CreateHandler(session, sql)
+			if sql, err = handler.PrapareSQL(); err != nil {
+				return nil, err
+			}
+		}
+		// add end
 		var stmts []ast.StmtNode
 		if len(stmts) == 0 {
 			var err error
@@ -350,6 +363,13 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 				return nil, errors.Trace(err)
 			}
 		}
+		// add by zhangbing
+		if handler != nil {
+			if _, err = handler.ApplyAndCheck(stmts); err != nil {
+				return nil, err
+			}
+		}
+		// add end
 		warns := sc.GetWarnings()
 		parserWarns := warns[len(prevWarns):]
 		tk.Session().GetSessionVars().SetAlloc(tk.alloc)
