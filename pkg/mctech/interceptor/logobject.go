@@ -17,6 +17,8 @@ type logTimeObject struct {
 	plan  time.Duration // 生成执行计划用时
 	tidb  time.Duration // 除cop任务外用时（一般发生在tidb节点）
 	cop   time.Duration // cop用时（一般发生在tikv和tiflash节点）
+	copTK time.Duration // tikv cop用时
+	copTF time.Duration // tiflash cop用时
 	ready time.Duration // 首行准备好用时
 	send  time.Duration // 发送到客户端用时
 }
@@ -28,6 +30,8 @@ func (lt *logTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("plan", lt.plan)
 	enc.AddDuration("tidb", lt.tidb)
 	enc.AddDuration("cop", lt.cop)
+	enc.AddDuration("copTK", lt.copTK)
+	enc.AddDuration("copTF", lt.copTF)
 	enc.AddDuration("ready", lt.ready)
 	enc.AddDuration("send", lt.send)
 	return nil
