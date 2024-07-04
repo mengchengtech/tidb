@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 	"github.com/pingcap/tidb/pkg/session"
@@ -29,7 +30,7 @@ type mctechTestCase interface {
 	Failure() string
 }
 
-func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []string) session.Session {
+func createSession(t *testing.T, tk *testkit.TestKit, user string, roles ...string) session.Session {
 	session := tk.Session()
 	vars := session.GetSessionVars()
 	vars.User = &auth.UserIdentity{Username: user, Hostname: "%"}
@@ -41,6 +42,9 @@ func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []strin
 		}
 		vars.ActiveRoles = ar
 	}
+
+	factory := GetHandlerFactory()
+	mctech.SetHandlerFactory(session, factory)
 	return session
 }
 
@@ -72,7 +76,7 @@ func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], c
 func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T, user string, roles ...string) {
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
-	session := createSession(t, tk, user, roles)
+	session := createSession(t, tk, user, roles...)
 
 	for _, c := range cases {
 		err := runTestCase(t, c, session)
