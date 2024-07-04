@@ -1699,9 +1699,10 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	prevWarns := sc.GetWarnings()
 	// add by zhangbing
 	var mctx mctech.Context
-	if ctx, mctx, sql, err = cc.onBeforeParseSQL(ctx, sql); err != nil {
+	if mctx, sql, err = cc.onBeforeParseSQL(sql); err != nil {
 		return err
 	}
+	defer mctx.Clear()
 	// add end
 	var stmts []ast.StmtNode
 	cc.ctx.GetSessionVars().SetAlloc(cc.chunkAlloc)
@@ -1714,11 +1715,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		return cc.writeOK(ctx)
 	}
 	// add by zhangbing
-	mppVarCtx := mctx.(mctech.SessionMPPVarsContext)
-	defer mppVarCtx.ReloadSessionMPPVars()
-	// 清除session中添加的自定义变量
-	defer cc.ctx.ClearValue(mctech.MCExecStmtVarKey)
-	if err = cc.onAfterParseSQL(ctx, mctx, stmts); err != nil {
+	if err = cc.onAfterParseSQL(stmts); err != nil {
 		return err
 	}
 	// add end
@@ -1817,7 +1814,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 			}
 		}
 		// add by zhangbing
-		cc.onAfterHandleStmt(ctx, stmt, err)
+		cc.onAfterHandleStmt(stmt, err)
 		// add end
 	}
 
