@@ -51,3 +51,8 @@ func (d ExecDetails) LargeQueryString() string {
 	}
 	return strings.Join(parts, " ")
 }
+
+// HasStats check if has stats items
+func (crs *CopRuntimeStats) HasStats() bool {
+	return len(crs.stats) > 0
+}
