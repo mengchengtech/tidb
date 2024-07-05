@@ -35,17 +35,17 @@ func (g *SingleDbGroup) String() string {
 	return g.dbName
 }
 
-type DatabaseGrouper struct {
+type databaseGrouper struct {
 	groups []string
 }
 
-func NewDatabaseGrouper(groups []string) *DatabaseGrouper {
-	return &DatabaseGrouper{
+func newDatabaseGrouper(groups []string) *databaseGrouper {
+	return &databaseGrouper{
 		groups: append(make([]string, 0, len(groups)), groups...),
 	}
 }
 
-func (g *DatabaseGrouper) GroupBy(context mctech.MCTechContext, dbNames []string) []DbGroup {
+func (g *databaseGrouper) GroupBy(dbNames []string) []DbGroup {
 	// 合并前数据库只有一个
 	results := make([]DbGroup, 0, 10)
 	used := map[string]bool{}
@@ -140,12 +140,18 @@ func (f *StringFilter) Match(text string) (bool, error) {
 type MutexDatabaseChecker struct {
 	mutexFilters   []*StringFilter
 	excludeFilters []*StringFilter
-	grouper        *DatabaseGrouper
+	grouper        *databaseGrouper
 }
 
 func NewMutexDatabaseChecker() *MutexDatabaseChecker {
 	option := mctech.GetOption()
-	mutexAcrossDbs := option.DbChecker_MutexAcrossDbs
+	return NewMutexDatabaseCheckerWithParams(
+		option.DbChecker_MutexAcrossDbs,
+		option.DbChecker_ExcludeAcrossDbs,
+		option.DbChecker_AcrossDbGroups)
+}
+
+func NewMutexDatabaseCheckerWithParams(mutexAcrossDbs, excludeAcrossDbs, groupDbs []string) *MutexDatabaseChecker {
 	mutexFilters := []*StringFilter{
 		NewStringFilter("starts-with:global_"),
 	}
@@ -164,14 +170,13 @@ func NewMutexDatabaseChecker() *MutexDatabaseChecker {
 		NewStringFilter("global_dwb"),
 	}
 
-	excludeAcrossDbs := option.DbChecker_ExcludeAcrossDbs
 	if len(excludeAcrossDbs) > 0 {
 		for _, t := range excludeAcrossDbs {
 			excludeFilters = append(excludeFilters, NewStringFilter(t))
 		}
 	}
 
-	groupDbs := option.DbChecker_AcrossDbGroups
+	// 数据库分组，组内的数据库可以互机访问
 	groups := []string{"global_mtlp|global_ma"}
 	if len(groupDbs) > 0 {
 		groups = append(groups, groupDbs...)
@@ -180,7 +185,7 @@ func NewMutexDatabaseChecker() *MutexDatabaseChecker {
 	return &MutexDatabaseChecker{
 		mutexFilters:   mutexFilters,
 		excludeFilters: excludeFilters,
-		grouper:        NewDatabaseGrouper(groups),
+		grouper:        newDatabaseGrouper(groups),
 	}
 }
 
@@ -202,7 +207,7 @@ func (c *MutexDatabaseChecker) Check(context mctech.MCTechContext, dbs []string)
 			logicNames = append(logicNames, logicName)
 		}
 	}
-	groupDbs := c.grouper.GroupBy(context, logicNames)
+	groupDbs := c.grouper.GroupBy(logicNames)
 	// 合并后数据库只有一个
 	if len(groupDbs) <= 1 {
 		return nil
