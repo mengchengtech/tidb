@@ -311,6 +311,11 @@ type Config struct {
 	// TiDBEnableExitCheck indicates whether exit-checking in domain for background process
 	TiDBEnableExitCheck bool `toml:"tidb-enable-exit-check" json:"tidb-enable-exit-check"`
 
+	// add by zhangbing
+	// MCTech
+	MCTech MCTech `toml:"mctech" json:"mctech"`
+	// add end
+
 	// InMemSlowQueryTopNNum indicates the number of TopN slow queries stored in memory.
 	InMemSlowQueryTopNNum int `toml:"in-mem-slow-query-topn-num" json:"in-mem-slow-query-topn-num"`
 	// InMemSlowQueryRecentNum indicates the number of recent slow queries stored in memory.
