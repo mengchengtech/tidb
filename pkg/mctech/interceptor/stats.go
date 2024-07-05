@@ -6,9 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/planner/core"
+	"github.com/pingcap/tidb/pkg/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
 	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/texttree"
@@ -45,91 +47,115 @@ import (
 // |         └─TableRowIDScan_32      | task:cop[tikv] | stats:tikv_task:{proc max:76ms, min:4ms, avg: 24ms, p80:40ms, p95:76ms, iters:88, tasks:7}                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 // {"time":{"all":"48.924997165s","parse":"0s","plan":"2.581943ms","cop":"79.810629ms","ready":"48.908635656s","send":"16.361509ms"}
 
-type planStatCollector struct {
-	renderDetails    bool
-	runtimeStatsColl *execdetails.RuntimeStatsColl
-	statRecords      []*shortRuntimeStatsRecord
+type planData struct {
+	tidbTime       time.Duration
+	tikvCopTime    time.Duration
+	tiflashCopTime time.Duration
+	maxActRows     int64
 }
 
-// getOperatorsCPUTime 获取sql执行算子的执行时间信息
-func (c *planStatCollector) collectCPUTime(flat *core.FlatPhysicalPlan) (tidbTime time.Duration, tikvCopTime time.Duration, tiflashCopTime time.Duration) {
+type planStatCollector struct {
+	renderDebug bool
+	stmtCtx     *stmtctx.StatementContext
+	statRecords []*shortRuntimeStatsRecord
+}
+
+func newPlanStatCollector(stmtCtx *stmtctx.StatementContext) *planStatCollector {
+	return &planStatCollector{
+		renderDebug: false,
+		stmtCtx:     stmtCtx,
+	}
+}
+
+// collect 获取sql执行算子的执行时间信息
+func (c *planStatCollector) collect() *planData {
+	ct := &planData{}
 	// 捕获后续执行的异常，不再向外抛出
-	defer func() time.Duration {
+	defer func() *planData {
 		if err := recover(); err != nil {
 			logutil.BgLogger().Warn("[collectCPUTime] 获取cpu运行时间出错", zap.Error(err.(error)), zap.Stack("stack"))
 		}
-		return time.Duration(0)
+		return ct
 	}()
 
-	c.collectFromFlatPlan(flat)
+	c.collectFromFlatPlan()
 
 	var rows []string
 	for _, r := range c.statRecords {
-		if c.renderDetails {
+		if c.renderDebug {
 			rows = append(rows, r.String())
 		}
 		details := r.GetDetails()
+		if ct.maxActRows < details.actRows {
+			ct.maxActRows = details.actRows
+		}
 		if r.isRoot {
 			// root task，在 tidb-server 上执行
 			// 非 root task(cop task)，在 TiKV 或者 TiFlash 上并行执行
 			// 由于从现有的统计信息里不能方便的收集到tidb-server上消耗的时间，因此在这里从执行计划中单独获取
-			tidbTime = tidbTime + details.rootProcTime
+			ct.tidbTime = ct.tidbTime + details.rootProcTime
 		} else {
 			switch r.storeType {
 			case kv.TiKV:
-				tikvCopTime = tikvCopTime + details.copTotalTime
+				ct.tikvCopTime = ct.tikvCopTime + details.copTotalTime
 			case kv.TiFlash:
-				tiflashCopTime = tiflashCopTime + details.copTotalTime
+				ct.tiflashCopTime = ct.tiflashCopTime + details.copTotalTime
 			}
 		}
 	}
-	if c.renderDetails {
-		logutil.BgLogger().Warn("object inspect",
-			zap.Duration("tidbTime", tidbTime), zap.Duration("tikvCopTime",
-				tikvCopTime), zap.Duration("tiflashCopTime", tiflashCopTime),
+	if c.renderDebug {
+		logutil.BgLogger().Warn("object inspect", zap.Duration("tidbTime", ct.tidbTime),
+			zap.Duration("tikvCopTime", ct.tikvCopTime), zap.Duration("tiflashCopTime", ct.tiflashCopTime),
+			zap.Int64("maxActRows", ct.maxActRows),
 			zap.String("explain", strings.Join(rows, "\n")))
+
+		plan, _ := executor.GetEncodedPlan(c.stmtCtx, false)
+		logutil.BgLogger().Warn("encode plan", zap.String("plan", fmt.Sprintf("tidb_encode_plan('%s')", plan)))
 	}
-	return tidbTime, tikvCopTime, tiflashCopTime
+	return ct
 }
 
-func (e *planStatCollector) collectFromFlatPlan(flat *core.FlatPhysicalPlan) {
-	if flat == nil || len(flat.Main) == 0 || flat.InExplain {
+func (c *planStatCollector) collectFromFlatPlan() {
+	flat := executor.GetFlatPlan(c.stmtCtx)
+	if flat == nil || len(flat.Main) == 0 {
 		return
 	}
 	// flat.Main[0] must be the root node of tree
-	e.collectOpRecursively(flat.Main[0], flat.Main)
+	c.encodeFlatPlanTree(flat.Main, 0)
 
 	for _, cte := range flat.CTEs {
-		e.collectOpRecursively(cte[0], cte)
-	}
-}
-
-func (e *planStatCollector) collectOpRecursively(flatOp *core.FlatOperator, flats core.FlatPlanTree) {
-	e.prepareOperatorInfo(flatOp)
-
-	for _, idx := range flatOp.ChildrenIdx {
-		e.collectOpRecursively(flats[idx], flats)
-	}
-}
-
-func (e *planStatCollector) prepareOperatorInfo(flatOp *core.FlatOperator) {
-	var taskType string
-	if e.renderDetails {
-		if flatOp.IsRoot {
-			taskType = "root"
-		} else {
-			taskType = flatOp.ReqType.Name() + "[" + flatOp.StoreType.Name() + "]"
+		c.collectFromFlatOp(cte[0])
+		if len(cte) > 1 {
+			c.encodeFlatPlanTree(cte[1:], 1)
 		}
 	}
+}
 
+func (c *planStatCollector) encodeFlatPlanTree(flatTree core.FlatPlanTree, offset int) {
+	for i := 0; i < len(flatTree); {
+		op := flatTree[i]
+		c.collectFromFlatOp(op)
+		if op.NeedReverseDriverSide {
+			buildSide := flatTree[op.ChildrenIdx[1]-offset : op.ChildrenEndIdx+1-offset]
+			probeSide := flatTree[op.ChildrenIdx[0]-offset : op.ChildrenIdx[1]-offset]
+			c.encodeFlatPlanTree(buildSide, op.ChildrenIdx[1])
+			c.encodeFlatPlanTree(probeSide, op.ChildrenIdx[0])
+			// Skip the children plan tree of the current operator.
+			i = op.ChildrenEndIdx + 1 - offset
+		} else {
+			i++
+		}
+	}
+}
+
+func (c *planStatCollector) collectFromFlatOp(flatOp *core.FlatOperator) {
+	var taskType string
+	if flatOp.IsRoot {
+		taskType = "root"
+	} else {
+		taskType = flatOp.ReqType.Name() + "[" + flatOp.StoreType.Name() + "]"
+	}
 	p := flatOp.Origin
-	if p.ExplainID().String() == "_0" {
-		return
-	}
-
-	if e.runtimeStatsColl == nil {
-		return
-	}
 
 	// "executeInfo": "time:48.2s, loops:37, build_hash_table:{total:131ms, fetch:129.8ms, build:1.17ms}, probe:{concurrency:5, total:3m49.6s, max:48.2s, probe:3m48.7s, fetch:846ms}",
 	// 输出 execute info
@@ -139,11 +165,22 @@ func (e *planStatCollector) prepareOperatorInfo(flatOp *core.FlatOperator) {
 		copStats  *execdetails.CopRuntimeStats
 	)
 
-	rootStats = e.runtimeStatsColl.GetRootStats(p.ID())
-	copStats = e.runtimeStatsColl.GetCopStats(p.ID())
+	sctx := p.SCtx()
+	runtimeStatsColl := sctx.GetSessionVars().StmtCtx.RuntimeStatsColl
+	if runtimeStatsColl == nil {
+		return
+	}
+
+	explainID := p.ID()
+	if runtimeStatsColl.ExistsRootStats(explainID) {
+		rootStats = runtimeStatsColl.GetRootStats(explainID)
+	}
+	if runtimeStatsColl.ExistsCopStats(explainID) {
+		copStats = runtimeStatsColl.GetCopStats(explainID)
+	}
 
 	var textTreeExplainID string
-	if e.renderDetails {
+	if c.renderDebug {
 		explainID := p.ExplainID().String() + flatOp.Label.String()
 		textTreeExplainID = texttree.PrettyIdentifier(explainID, flatOp.TextTreeIndent, flatOp.IsLastChild)
 	}
@@ -156,7 +193,7 @@ func (e *planStatCollector) prepareOperatorInfo(flatOp *core.FlatOperator) {
 		rootStats: rootStats,
 		copStats:  copStats,
 	}
-	e.statRecords = append(e.statRecords, record)
+	c.statRecords = append(c.statRecords, record)
 }
 
 type shortRuntimeStatsRecord struct {
@@ -164,13 +201,16 @@ type shortRuntimeStatsRecord struct {
 	isRoot    bool
 	taskType  string
 	storeType kv.StoreType
+
 	rootStats *execdetails.RootRuntimeStats
 	copStats  *execdetails.CopRuntimeStats
-	details   *shortRuntimeStatsDetails
+
+	details *shortRuntimeStatsDetails
 }
 
 type shortRuntimeStatsDetails struct {
 	rootProcTime    time.Duration
+	actRows         int64
 	copProcTimes    execdetails.Percentile[execdetails.Duration]
 	copTotalTime    time.Duration
 	copTotalTasks   int32
@@ -185,29 +225,41 @@ func (s *shortRuntimeStatsRecord) GetDetails() *shortRuntimeStatsDetails {
 
 	// "executeInfo": "time:48.2s, loops:37, build_hash_table:{total:131ms, fetch:129.8ms, build:1.17ms}, probe:{concurrency:5, total:3m49.6s, max:48.2s, probe:3m48.7s, fetch:846ms}",
 	// 其中 _ 表示主时间轴的时间信息，groups 表示各种详细时间信息
-	_, groups := s.rootStats.MergeStats()
-	var rootProcTime = time.Duration(0)
-	for _, group := range groups {
-		if collector, ok := group.(mctech.CPUTimeCollector); ok {
-			stats := collector.Collect()
-			if stats.Group == mctech.Root {
-				rootProcTime = rootProcTime + stats.Time
+	var (
+		rootProcTime = time.Duration(0)
+		actRows      = int64(0)
+	)
+	if s.rootStats != nil {
+		_, groups := s.rootStats.MergeStats()
+		for _, group := range groups {
+			if collector, ok := group.(mctech.CPUTimeCollector); ok {
+				stats := collector.Collect()
+				if stats.Group == mctech.Root {
+					rootProcTime = rootProcTime + stats.Time
+				}
 			}
 		}
+		actRows = s.rootStats.GetActRows()
 	}
+
 	// "executeInfo": "time:79.9ms, loops:10, cop_task: {num: 8, max: 81.3ms, min: 21.3ms, avg: 34ms, p95: 81.3ms, rpc_num: 8, rpc_time: 271.6ms, copr_cache_hit_ratio: 0.00, build_task_duration: 3.69ms, max_distsql_concurrency: 8}
 	d := &shortRuntimeStatsDetails{
 		rootProcTime: rootProcTime,
+		actRows:      actRows,
 	}
 	s.details = d
-	if s.copStats != nil && s.copStats.HasStats() {
-		d.copProcTimes, d.copTotalTime, d.copTotalTasks, d.copTotalLoops, d.copTotalThreads, _ = s.copStats.MergeBasicStats()
+	if s.copStats != nil {
+		d.actRows = s.copStats.GetActRows()
+		if s.copStats.HasStats() {
+			d.copProcTimes, d.copTotalTime, d.copTotalTasks, d.copTotalLoops, d.copTotalThreads, _ = s.copStats.MergeBasicStats()
+		}
 	}
 	return d
 }
 
 func (s *shortRuntimeStatsRecord) String() string {
-	return fmt.Sprintf("%v | task:%s | stats:%s", s.id, s.taskType, s.StatString())
+	details := s.GetDetails()
+	return fmt.Sprintf("%v | actRows: %d, task:%s | stats:%s", s.id, details.actRows, s.taskType, s.StatString())
 }
 
 func (s *shortRuntimeStatsRecord) StatString() string {
@@ -235,3 +287,6 @@ func (s *shortRuntimeStatsRecord) StatString() string {
 	}
 	return analyzeInfo
 }
+
+// RuntimeStatsWithConcurrencyInfo
+// HashAggRuntimeStats
