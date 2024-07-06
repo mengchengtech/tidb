@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -1082,12 +1083,13 @@ func getLargeQueryColumnValueFactoryByName(sctx sessionctx.Context, colName stri
 		}, nil
 	case variable.MCLargeQueryUserStr, variable.MCLargeQueryHostStr,
 		variable.MCLargeQueryDBStr, variable.MCLargeQueryDigestStr,
-		variable.MCLargeQuerySQLStr:
+		variable.MCLargeQueryServiceStr, variable.MCLargeQuerySQLStr:
 		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			row[columnIdx] = types.NewStringDatum(value)
 			return true, nil
 		}, nil
-	case variable.MCLargeQueryMemMax, variable.MCLargeQueryDiskMax, variable.MCLargeQueryResultRows:
+	case variable.MCLargeQueryMemMax, variable.MCLargeQueryDiskMax,
+		variable.MCLargeQuerySQLLengthStr, variable.MCLargeQueryResultRows:
 		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			v, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
@@ -1131,9 +1133,11 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 	memMax := sessVars.StmtCtx.MemTracker.MaxConsumed()
 	diskMax := sessVars.StmtCtx.DiskTracker.MaxConsumed()
 	sql := a.GetTextToLog(true)
+	service := GetSeriveFromSql(sql)
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCLargeQueryItems{
 		SQL:               sql,
+		Service:           service,
 		Digest:            digest.String(),
 		TimeTotal:         costTime,
 		TimeParse:         sessVars.DurationParse,
@@ -1156,4 +1160,21 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 
 	// 只在没有发生错误的时候才记录大SQL日志
 	mctech.L().Warn(largeQuery)
+}
+
+var pattern = regexp.MustCompile(`(?i)/*\s*from:\s*'([^']+)'`)
+
+// GetSeriveFromSql 尝试从sql中提取服务名称
+func GetSeriveFromSql(sql string) string {
+	sub := sql
+	if len(sql) > 200 {
+		sub = sql[:200]
+	}
+
+	matches := pattern.FindStringSubmatch(sub)
+	if matches == nil {
+		return ""
+	}
+	fmt.Println(matches)
+	return matches[1]
 }
