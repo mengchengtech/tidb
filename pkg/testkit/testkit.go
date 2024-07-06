@@ -47,6 +47,7 @@ import (
 	"github.com/pingcap/tidb/pkg/util"
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/intest"
+	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/metricsutil"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -55,6 +56,7 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/tikvrpc"
 	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 var testKitIDGenerator atomic.Uint64
@@ -423,6 +425,10 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 		// add by zhangbing
 		if mctechCtx != nil {
 			if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
+				if strFmt, ok := tk.session.(mctech.StringFormat); ok {
+					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err),
+						zap.String("session", strFmt.String()), zap.String("SQL", sql))
+				}
 				return nil, err
 			}
 		}
