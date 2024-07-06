@@ -2,12 +2,14 @@ package preps
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"net/http"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 	"github.com/pingcap/tidb/pkg/session"
@@ -43,13 +45,15 @@ func createSession(t *testing.T, tk *testkit.TestKit, user string, roles ...stri
 		vars.ActiveRoles = ar
 	}
 
-	factory := GetHandlerFactory()
-	mctech.SetHandlerFactoryForTest(session, factory)
 	return session
 }
 
-type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, session session.Session) error
+type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, mctechCtx mctech.Context) error
 type runTestCaseType[T mctechTestCase] func(t *testing.T, c T) error
+
+type parser interface {
+	Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
+}
 
 var dbMap = map[string]string{
 	"pf": "global_platform",
@@ -79,7 +83,9 @@ func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCas
 	session := createSession(t, tk, user, roles...)
 
 	for _, c := range cases {
-		err := runTestCase(t, c, session)
+		mctechCtx := NewContext(session)
+		mctech.WithContext(context.Background(), mctechCtx)
+		err := runTestCase(t, c, mctechCtx)
 		if err == nil {
 			continue
 		}
