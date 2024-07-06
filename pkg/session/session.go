@@ -2434,6 +2434,9 @@ func runStmt(ctx context.Context, se *session, s sqlexec.Statement) (rs sqlexec.
 	}
 
 	err = finishStmt(ctx, se, err, s)
+	// add by zhangbing
+	se.SetValue(sessionctx.MCTechExecStmtVarKey, s.(*executor.ExecStmt))
+	// add end
 	if se.hasFileTransInConn() {
 		// The query will be handled later in handleFileTransInConn,
 		// then should call the ExecStmt.FinishExecuteStmt to finish this statement.
