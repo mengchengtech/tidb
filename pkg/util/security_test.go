@@ -252,11 +252,13 @@ func TestCA(t *testing.T) {
 }
 
 // add by zhangbing
-type httpHandler struct {}
+type httpHandler struct{}
+
 func (h *httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("This an example server"))
 }
+
 // add end
 
 func runServer(ctx context.Context, tlsCfg *tls.Config, t *testing.T) (*http.Server, int) {
