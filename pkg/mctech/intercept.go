@@ -1,7 +1,6 @@
 package mctech
 
 import (
-	"context"
 	"errors"
 
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -12,11 +11,11 @@ import (
 // Interceptor mctech enhance interface
 type Interceptor interface {
 	// BeforeParseSQL
-	BeforeParseSQL(ctx context.Context, sess sessionctx.Context, sql string) (context.Context, Context, string, error)
+	BeforeParseSQL(sctx sessionctx.Context, sql string) (Context, string, error)
 	// AfterParseSQL
-	AfterParseSQL(ctx context.Context, sess sessionctx.Context, mctx Context, stmt ast.StmtNode) (err error)
+	AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (err error)
 	// AfterHandleStmt
-	AfterHandleStmt(ctx context.Context, sess sessionctx.Context, stmt ast.StmtNode, err error)
+	AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, err error)
 }
 
 var interceptor Interceptor
