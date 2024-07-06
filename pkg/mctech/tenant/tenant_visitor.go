@@ -62,10 +62,6 @@ type cteScopeItem struct {
 	cteNames  []string
 }
 
-const DB_PUBLIC_DATA = "public_data"
-const DB_ASSET_PREFIX = "asset_"
-const DB_GLOBAL_PREFIX = "global_"
-
 func (v *DatabaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	var err error
 	switch node := n.(type) {
@@ -124,8 +120,10 @@ func (v *DatabaseNameVisitor) leaveTableName(node *ast.TableName) error {
 
 type TenantVisitor struct {
 	*DatabaseNameVisitor
-	tenant              ast.ValueExpr
-	enabled             bool // 是否启用追加租户条件
+	tenant   ast.ValueExpr
+	enabled  bool // 是否启用追加租户条件
+	excludes []ast.ExprNode
+
 	withClauseScope     *NodeScope[*cteScopeItem]
 	columnModifiedScope *NodeScope[bool]
 }
@@ -147,7 +145,18 @@ func NewTenantVisitor(
 	if result.Tenant() != "" {
 		visitor.enabled = true
 		visitor.tenant = ast.NewValueExpr(result.Tenant(), charset, collation)
+	} else {
+		length := len(result.Excludes())
+		if length > 0 {
+			visitor.enabled = true
+			exprList := make([]ast.ExprNode, length)
+			for i, str := range result.Excludes() {
+				exprList[i] = ast.NewValueExpr(str, charset, collation)
+			}
+			visitor.excludes = exprList
+		}
 	}
+
 	return visitor
 }
 
@@ -450,19 +459,11 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 	var condition ast.ExprNode
 	rt := sd.ResolveResult()
 	if rt.Global() {
-		length := len(rt.Excludes())
-		if length > 0 {
-			exprList := make([]ast.ExprNode, length)
-			t := v.tenant.GetType()
-			charset := t.GetCharset()
-			collate := t.GetCollate()
-			for i, str := range rt.Excludes() {
-				exprList[i] = ast.NewValueExpr(str, charset, collate)
-			}
+		if len(v.excludes) > 0 {
 			condition = &ast.PatternInExpr{
 				Expr: tenantField,
 				Not:  true,
-				List: exprList,
+				List: v.excludes,
 			}
 		}
 	} else {
@@ -478,7 +479,7 @@ func (v *TenantVisitor) createTenantConditionFromTable(
 /**
  * 处理insert/upsert的列，添加tenant字段
  */
-func (v *TenantVisitor) processInsertColumns(node *ast.InsertStmt) {
+func (v *TenantVisitor) processInsertColumns(node *ast.InsertStmt) bool {
 	columns := node.Columns
 	if len(columns) == 0 {
 		panic(fmt.Errorf("insert/upsert语句缺少列定义，无法处理租户信息"))
@@ -503,5 +504,5 @@ func (v *TenantVisitor) processInsertColumns(node *ast.InsertStmt) {
 			operands[i] = append(operands[i], v.tenant)
 		}
 	}
-	v.columnModifiedScope.Push(modified)
+	return modified
 }
