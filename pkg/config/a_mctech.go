@@ -4,12 +4,39 @@ package config
 
 // MCTech mctech custom config
 type MCTech struct {
-	Sequence   Sequence   `toml:"sequence" json:"sequence"`
-	Encryption Encryption `toml:"encryption" json:"encryption"`
-	DbChecker  DbChecker  `toml:"db-checker" json:"db-checker"`
-	Tenant     Tenant     `toml:"tenant" json:"tenant"`
-	DDL        DDL        `toml:"ddl" json:"ddl"`
-	MPP        MPP        `toml:"mpp" json:"mpp"`
+	Sequence   Sequence      `toml:"sequence" json:"sequence"`
+	Encryption Encryption    `toml:"encryption" json:"encryption"`
+	DbChecker  DbChecker     `toml:"db-checker" json:"db-checker"`
+	Tenant     Tenant        `toml:"tenant" json:"tenant"`
+	DDL        DDL           `toml:"ddl" json:"ddl"`
+	MPP        MPP           `toml:"mpp" json:"mpp"`
+	Metrics    MctechMetrics `toml:"metrics" json:"metrics"`
+	SqlTrace   SqlTrace      `toml:"sql-trace" json:"sql-trace"`
+}
+
+type SqlTrace struct {
+	Enabled           bool   `toml:"enabled" json:"enabled"`                       // 是否记录所有sql执行结果到独立文件中
+	Filename          string `toml:"file-name" json:"file-name"`                   // 日志文件名称
+	FileMaxDays       int    `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
+	FileMaxSize       int    `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
+	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
+}
+
+type MctechMetrics struct {
+	QueryLog   QueryLog   `toml:"query-log" json:"query-log"`
+	LargeQuery LargeQuery `toml:"large-query" json:"large-query"`
+}
+
+// QueryLog sql log record used
+type QueryLog struct {
+	Enabled   bool `toml:"enabled" json:"enabled"`       // 是否启用日志里记录sql片断
+	MaxLength int  `toml:"max-length" json:"max-length"` // 日志里记录的sql最大值
+}
+
+type LargeQuery struct {
+	Enabled   bool   `toml:"enabled" json:"enabled"`     // 是否启用large sql跟踪
+	Threshold int    `toml:"threshold" json:"threshold"` // 超出该长度的sql会记录到数据库某个位置
+	Types     string `toml:"types" json:"types"`         // 记录的sql类型
 }
 
 // Sequence mctech_sequence functions used
@@ -93,6 +120,23 @@ func init() {
 		},
 		MPP: MPP{
 			DefaultValue: "allow",
+		},
+		Metrics: MctechMetrics{
+			QueryLog: QueryLog{
+				Enabled:   false,
+				MaxLength: 16 * 1024, // 默认最大记录16K
+			},
+			LargeQuery: LargeQuery{
+				Enabled:   false,
+				Threshold: 1 * 1024 * 1024,
+				Types:     "delete,insert,update,select",
+			},
+		},
+		SqlTrace: SqlTrace{
+			Enabled:           false,
+			FileMaxDays:       7,
+			FileMaxSize:       300,
+			CompressThreshold: 64 * 1024,
 		},
 	}
 }
