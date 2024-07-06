@@ -19,7 +19,7 @@ func ApplyTenantIsolation(context mctech.MCTechContext, node ast.Node,
 		}()
 		node.Accept(v)
 
-		dbs = make([]string, len(v.dbNames)+1)
+		dbs = make([]string, 0, len(v.dbNames))
 		for n := range v.dbNames {
 			if n == "" {
 				n = context.CurrentDB()
