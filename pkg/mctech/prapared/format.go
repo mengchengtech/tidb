@@ -67,9 +67,6 @@ func (f *GlobalValueFormatter) format(name string, value string) (*mctech.Global
 		}
 
 		tokens := tokenSplitterPattern.Split(value, -1)
-		if len(tokens) == 0 {
-			return nil, err
-		}
 
 		// 当作要包含或排除的模式处理
 		gv.Global = true
