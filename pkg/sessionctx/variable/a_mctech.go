@@ -70,6 +70,8 @@ const (
 	MCLargeQueryServiceStr = "SERVICE"
 	// MCLargeQueryResultRows is the row count of the SQL result.
 	MCLargeQueryResultRows = "RESULT_ROWS"
+	// MCLargeQuerySQLTypeStr large sql type. (insert/update/delete/select......)
+	MCLargeQuerySQLTypeStr = "SQL_TYPE"
 	// MCLargeQueryPlan is used to record the query plan.
 	MCLargeQueryPlan = "PLAN"
 )
@@ -363,6 +365,7 @@ type MCLargeQueryItems struct {
 	Succ              bool
 	Service           string
 	SQL               string
+	SQLType           string
 }
 
 // # TIME: 2019-04-28T15:24:04.309074+08:00
@@ -377,8 +380,11 @@ type MCLargeQueryItems struct {
 // # DIGEST: 42a1c8aae6f133e934d4bf0147491709a8812ea05ff8819ec522780fe657b772
 // # MEM_MAX: 4096
 // # DISK_MAX: 65535
-// # SUCC: true
 // # RESULT_ROWS: 1
+// # SUCC: true
+// # SQL_LENGTH: 26621
+// # SERVICE: org-service
+// # SQL_TYPE: insert
 // # Plan: tidb_decode_plan('ZJAwCTMyXzcJMAkyMAlkYXRhOlRhYmxlU2Nhbl82CjEJMTBfNgkxAR0AdAEY1Dp0LCByYW5nZTpbLWluZiwraW5mXSwga2VlcCBvcmRlcjpmYWxzZSwgc3RhdHM6cHNldWRvCg==')
 // use test;
 // insert into t select * from t;
@@ -425,6 +431,7 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCLargeQueryItems) (string, err
 	writeSlowLogItem(&buf, MCLargeQueryResultRows, strconv.FormatInt(logItems.ResultRows, 10))
 	writeSlowLogItem(&buf, MCLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
 	writeSlowLogItem(&buf, MCLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
+	writeSlowLogItem(&buf, MCLargeQuerySQLTypeStr, logItems.SQLType)
 	if len(logItems.Service) > 0 {
 		writeSlowLogItem(&buf, MCLargeQueryServiceStr, logItems.Service)
 	}
