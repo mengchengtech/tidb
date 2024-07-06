@@ -174,15 +174,15 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 	}()
 
 	if opts.Metrics.LargeQuery.Enabled {
-		cc.logLargeSql(ctx, stmt)
+		cc.logLargeQuery(ctx, stmt)
 	}
 	if opts.Metrics.SqlTrace.Enabled {
-		cc.traceFullSql(ctx, stmt)
+		cc.traceFullQuery(ctx, stmt)
 	}
 }
 
 // 记录超长sql
-func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
+func (cc *clientConn) logLargeQuery(ctx context.Context, stmt ast.StmtNode) {
 	opts := config.GetMCTechConfig()
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
@@ -239,7 +239,7 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode) {
 }
 
 // 记录全量sql
-func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode) {
+func (cc *clientConn) traceFullQuery(ctx context.Context, stmt ast.StmtNode) {
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	origSql := stmt.OriginalText()

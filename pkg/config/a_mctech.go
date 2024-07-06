@@ -103,25 +103,32 @@ type VersionColumn struct {
 }
 
 const (
-	DefaultSequenceMaxFetchCount      = 1000
-	DefaultSequenceBackend            = 3
-	DefaultDbCheckerEnabled           = false
-	DefaultTenantEnabled              = false
-	DefaultTenantForbiddenPrepare     = false
-	DefaultDDLVersionEnabled          = false
-	DefaultDDLVersionColumnName       = "__version"
-	DefaultDDLVersionDbMatches        = ""
-	DefaultMPPValue                   = "allow"
-	DefaultMetricsQueryLogEnabled     = false
-	DefaultMetricsQueryLogMaxLength   = 32 * 1024 // 默认最大记录32K
+	DefaultSequenceMaxFetchCount = 1000
+	DefaultSequenceBackend       = 3
+
+	DefaultDbCheckerEnabled = false
+
+	DefaultTenantEnabled          = false
+	DefaultTenantForbiddenPrepare = false
+
+	DefaultDDLVersionEnabled    = false
+	DefaultDDLVersionColumnName = "__version"
+	DefaultDDLVersionDbMatches  = ""
+
+	DefaultMPPValue = "allow"
+
+	DefaultMetricsQueryLogEnabled   = false
+	DefaultMetricsQueryLogMaxLength = 32 * 1024 // 默认最大记录32K
+
 	DefaultMetricsLargeQueryEnabled   = false
+	DefaultMetricsLargeQueryFilename  = "mctech_large_query_log.log"
 	DefaultMetricsLargeQueryThreshold = 1 * 1024 * 1024
-	DefaultSqlTraceEnabled            = false
-	DefaultSqlTraceFilename           = "mctech_tidb_full_sql.log"
-	DefaultSqlTraceFileMaxDays        = 1
-	DefaultSqlTraceFileMaxSize        = 1024 // 1024MB
-	DefaultSqlTraceCompressThreshold  = 16 * 1024
-	DefaultMetricsLargeQueryTypes     = "delete,insert,update,select"
+
+	DefaultMetricsSqlTraceEnabled           = false
+	DefaultMetricsSqlTraceFilename          = "mctech_tidb_full_sql.log"
+	DefaultMetricsSqlTraceCompressThreshold = 16 * 1024
+	DefaultMetricsSqlTraceFileMaxDays       = 1
+	DefaultMetricsSqlTraceFileMaxSize       = 1024 // 1024MB
 )
 
 func init() {
@@ -168,13 +175,14 @@ func init() {
 			LargeQuery: LargeQuery{
 				Enabled:   DefaultMetricsLargeQueryEnabled,
 				Threshold: DefaultMetricsLargeQueryThreshold,
-				Types:     StrToSlice(DefaultMetricsLargeQueryTypes, ","),
+				Types:     DefaultAllowMetricsLargeQueryTypes,
 			},
 			SqlTrace: SqlTrace{
-				Enabled:           DefaultSqlTraceEnabled,
-				FileMaxDays:       DefaultSqlTraceFileMaxDays,
-				FileMaxSize:       DefaultSqlTraceFileMaxSize,
-				CompressThreshold: DefaultSqlTraceCompressThreshold,
+				Enabled:           DefaultMetricsSqlTraceEnabled,
+				Filename:          DefaultMetricsSqlTraceFilename,
+				FileMaxDays:       DefaultMetricsSqlTraceFileMaxDays,
+				FileMaxSize:       DefaultMetricsSqlTraceFileMaxSize,
+				CompressThreshold: DefaultMetricsSqlTraceCompressThreshold,
 			},
 		},
 	}
@@ -252,14 +260,14 @@ func storeMCTechConfig(config *Config) {
 
 	sqlTrace := &opts.Metrics.SqlTrace
 	if len(sqlTrace.Filename) == 0 {
-		sqlTrace.Filename = DefaultSqlTraceFilename
+		sqlTrace.Filename = DefaultMetricsSqlTraceFilename
 	}
 
 	if !filepath.IsAbs(sqlTrace.Filename) {
 		logFile := config.Log.File.Filename
 		if len(logFile) > 0 {
 			logDir := filepath.Dir(logFile)
-			sqlTrace.Filename = filepath.Join(logDir, DefaultSqlTraceFilename)
+			sqlTrace.Filename = filepath.Join(logDir, DefaultMetricsSqlTraceFilename)
 		}
 	}
 
@@ -271,7 +279,7 @@ var DefaultSqlTraceExcludeDbs = []string{
 	"mysql", "information_schema", "metrics_schema", "performance_schema",
 }
 
-var AllMetricsLargeQueryTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
+var DefaultAllowMetricsLargeQueryTypes = []string{"delete,insert,update,select"}
 
 func formatURL(str string) string {
 	u, err := url.Parse(str)
