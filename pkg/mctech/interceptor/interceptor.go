@@ -3,7 +3,6 @@ package interceptor
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -29,23 +28,22 @@ func init() {
 	mctech.SetInterceptor(&interceptor{})
 }
 
-func (*interceptor) BeforeParseSQL(ctx context.Context, sess sessionctx.Context, sql string) (context.Context, mctech.Context, string, error) {
-	subCtx, mctx, err := mctech.WithNewContext3(ctx, sess, false)
+func (*interceptor) BeforeParseSQL(sctx sessionctx.Context, sql string) (mctech.Context, string, error) {
+	mctx, err := mctech.WithNewContext(sctx)
 	if err != nil {
-		return subCtx, nil, "", err
+		return nil, "", err
 	}
 
 	handler := mctech.GetHandler()
-	if mctx != nil {
-		if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
-			return subCtx, nil, "", err
-		}
+	if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
+		mctx.Clear()
+		return nil, "", err
 	}
 
-	return subCtx, mctx, sql, nil
+	return mctx, sql, nil
 }
 
-func (*interceptor) AfterParseSQL(ctx context.Context, sess sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode) (err error) {
+func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (err error) {
 	// 判断当前是否是查询语句
 	queryOnly := false
 	switch stmtNode := stmt.(type) {
@@ -58,6 +56,11 @@ func (*interceptor) AfterParseSQL(ctx context.Context, sess sessionctx.Context, 
 	case *ast.PrepareStmt:
 		// prapare 语句不在这里处理，在PrepareExec.Next方法内解析待执行语句时才处理
 		return nil
+	}
+
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(sctx); err != nil {
+		return err
 	}
 
 	// log.Warn(fmt.Sprintf("queryOnly: %t", queryOnly))
@@ -75,7 +78,7 @@ func (*interceptor) AfterParseSQL(ctx context.Context, sess sessionctx.Context, 
 			// log.Warn("mppValue: " + mppValue)
 			if mppValue != "allow" && mppValue != "" {
 				mppVarCtx := mctx.(mctech.SessionMPPVarsContext)
-				if err = mppVarCtx.StoreSessionMPPVars(ctx, mppValue); err != nil {
+				if err = mppVarCtx.StoreSessionMPPVars(mppValue); err != nil {
 					return err
 				}
 				if err = mppVarCtx.SetSessionMPPVars(mppValue); err != nil {
@@ -87,7 +90,7 @@ func (*interceptor) AfterParseSQL(ctx context.Context, sess sessionctx.Context, 
 
 	handler := mctech.GetHandler()
 	if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
-		logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(sess)), zap.String("SQL", stmt.OriginalText()))
+		logutil.BgLogger().Warn("mctech SQL failed", zap.Error(err), zap.Object("session", sessionctx.ShortInfo(sctx)), zap.String("SQL", stmt.OriginalText()))
 		return err
 	}
 
@@ -127,14 +130,14 @@ func (*interceptor) AfterParseSQL(ctx context.Context, sess sessionctx.Context, 
 		if len(origSQL) > opts.Metrics.QueryLog.MaxLength {
 			origSQL = origSQL[0:opts.Metrics.QueryLog.MaxLength]
 		}
-		logutil.Logger(ctx).Warn("(handleQuery) MCTECH SQL QueryLog", zap.Object("session", sessionctx.ShortInfo(sess)), zap.String("SQL", origSQL))
+		logutil.BgLogger().Warn("(handleQuery) MCTECH SQL QueryLog", zap.Object("session", sessionctx.ShortInfo(sctx)), zap.String("SQL", origSQL))
 	}
 
 	return nil
 }
 
-func (*interceptor) AfterHandleStmt(ctx context.Context, sess sessionctx.Context, stmt ast.StmtNode, err error) {
-	if sessVars := sess.GetSessionVars(); sessVars.InRestrictedSQL {
+func (*interceptor) AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, err error) {
+	if sessVars := sctx.GetSessionVars(); sessVars.InRestrictedSQL {
 		// 不记录内部sql
 		return
 	}
@@ -145,17 +148,8 @@ func (*interceptor) AfterHandleStmt(ctx context.Context, sess sessionctx.Context
 		return
 	}
 
-	var mctx mctech.Context
-	var e error
-	mctx, e = mctech.GetContext(ctx)
-	if e != nil {
-		panic(e)
-	}
-	var dbs []string
-	if mctx != nil {
-		dbs = mctx.GetDbs(stmt)
-	}
-
+	mctx := mctech.GetContextStrict(sctx)
+	dbs := mctx.GetDbs(stmt)
 	if dbs != nil {
 		for _, db := range metrics.Exclude {
 			if slices.Contains(dbs, db) {
@@ -166,19 +160,19 @@ func (*interceptor) AfterHandleStmt(ctx context.Context, sess sessionctx.Context
 	}
 
 	if metrics.LargeQuery.Enabled {
-		logLargeQuery(ctx, sess, stmt, err == nil)
+		logLargeQuery(sctx, stmt, err == nil)
 	}
 
 	if err == nil {
 		// 全量sql只记录执行成功的sql
 		if metrics.SQLTrace.Enabled {
-			traceFullQuery(ctx, sess)
+			traceFullQuery(sctx)
 		}
 	}
 }
 
 // 记录超长sql
-func logLargeQuery(ctx context.Context, sess sessionctx.Context, stmt ast.StmtNode, succ bool) {
+func logLargeQuery(sctx sessionctx.Context, stmt ast.StmtNode, succ bool) {
 	opts := config.GetMCTechConfig()
 	sqlType := "other"
 	switch stmt.(type) {
@@ -195,23 +189,23 @@ func logLargeQuery(ctx context.Context, sess sessionctx.Context, stmt ast.StmtNo
 	// 捕获后续执行的异常，不再向外抛出
 	defer func() {
 		if err := recover(); err != nil {
-			logutil.Logger(ctx).Warn("[logLargeQuery] 记录大sql信息出错", zap.Error(err.(error)), zap.Stack("stack"))
+			logutil.BgLogger().Warn("[logLargeQuery] 记录大sql信息出错", zap.Error(err.(error)), zap.Stack("stack"))
 		}
 	}()
 
 	if slices.Contains(opts.Metrics.LargeQuery.Types, sqlType) {
-		execStmt := sess.Value(mctech.MCExecStmtVarKey).(*executor.ExecStmt)
-		execStmt.SaveLargeQuery(ctx, sqlType, succ)
+		execStmt := sctx.Value(mctech.MCExecStmtVarKey).(*executor.ExecStmt)
+		execStmt.SaveLargeQuery(sqlType, succ)
 	}
 }
 
 // 记录全量sql
-func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
-	sessVars := sess.GetSessionVars()
+func traceFullQuery(sctx sessionctx.Context) {
+	sessVars := sctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	origSQL := stmtCtx.OriginalSQL
 
-	execStmt := sess.Value(mctech.MCExecStmtVarKey).(*executor.ExecStmt)
+	execStmt := sctx.Value(mctech.MCExecStmtVarKey).(*executor.ExecStmt)
 	var sqlType string // sql语句类型
 	switch s := execStmt.StmtNode.(type) {
 	case *ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt: // execute
@@ -253,7 +247,7 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 	// 捕获后续执行的异常，不再向外抛出
 	defer func() {
 		if err := recover(); err != nil {
-			logutil.Logger(ctx).Warn("[traceFullQuery] 记录sql执行信息出错", zap.Error(err.(error)), zap.Stack("stack"))
+			logutil.BgLogger().Warn("[traceFullQuery] 记录sql执行信息出错", zap.Error(err.(error)), zap.Stack("stack"))
 		}
 	}()
 
@@ -340,7 +334,7 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 		dbs    string // 执行的sql中用到的所有数据库名称列表。','分隔
 		tenant string // 所属租户信息
 	)
-	if mctx, err := mctech.GetContext(ctx); err != nil {
+	if mctx, err := mctech.GetContext(sctx); err != nil {
 		panic(err)
 	} else {
 		lst := mctx.GetDbs(execStmt.StmtNode)
@@ -352,7 +346,7 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 		}
 	}
 
-	si := sessionctx.ShortInfo(sess)
+	si := sessionctx.ShortInfo(sctx)
 	var fields = []zapcore.Field{
 		zap.String("db", si.GetDB()),
 		zap.String("dbs", dbs),
@@ -382,7 +376,7 @@ func traceFullQuery(ctx context.Context, sess sessionctx.Context) {
 		fields = append(fields, zap.Binary("zip", zip))
 	}
 
-	renderTraceLog(sess, fields)
+	renderTraceLog(sctx, fields)
 }
 
 const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
