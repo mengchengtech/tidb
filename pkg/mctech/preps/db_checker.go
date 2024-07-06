@@ -106,7 +106,7 @@ type DatabaseChecker interface {
 type mutexDatabaseChecker struct {
 	mutexFilters   []mctech.Filter
 	excludeFilters []mctech.Filter
-	grouper        *databaseGrouper
+	acrossGrouper  *databaseGrouper
 }
 
 var dbChecker *mutexDatabaseChecker
@@ -120,16 +120,16 @@ func getDatabaseChecker() DatabaseChecker {
 	dbCheckerInitOne.Do(func() {
 		option := config.GetMCTechConfig()
 		dbChecker = newMutexDatabaseCheckerWithParams(
-			option.DbChecker.MutexDbs,
-			option.DbChecker.ExcludeDbs,
-			option.DbChecker.DbGroups)
+			option.DbChecker.Mutex,
+			option.DbChecker.Exclude,
+			option.DbChecker.Across)
 	})
 	return dbChecker
 }
 
-func newMutexDatabaseCheckerWithParams(mutexDbs, excludeDbs, groupDbs []string) *mutexDatabaseChecker {
+func newMutexDatabaseCheckerWithParams(mutex, exclude, across []string) *mutexDatabaseChecker {
 	var mutexFilters []mctech.Filter
-	for _, t := range mutexDbs {
+	for _, t := range mutex {
 		if filter, ok := mctech.NewStringFilter(t); ok {
 			mutexFilters = append(mutexFilters, filter)
 		}
@@ -137,7 +137,7 @@ func newMutexDatabaseCheckerWithParams(mutexDbs, excludeDbs, groupDbs []string) 
 
 	// 在mutex filters过滤结果中中可与其它数据库共同查询的表
 	var excludeFilters []mctech.Filter
-	for _, t := range excludeDbs {
+	for _, t := range exclude {
 		if filter, ok := mctech.NewStringFilter(t); ok {
 			excludeFilters = append(excludeFilters, filter)
 		}
@@ -146,7 +146,7 @@ func newMutexDatabaseCheckerWithParams(mutexDbs, excludeDbs, groupDbs []string) 
 	return &mutexDatabaseChecker{
 		mutexFilters:   mutexFilters,
 		excludeFilters: excludeFilters,
-		grouper:        newDatabaseGrouper(groupDbs),
+		acrossGrouper:  newDatabaseGrouper(across),
 	}
 }
 
@@ -165,7 +165,7 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, dbs []string) error {
 			logicNames = append(logicNames, logicName)
 		}
 	}
-	groupDbs := c.grouper.GroupBy(logicNames)
+	groupDbs := c.acrossGrouper.GroupBy(logicNames)
 	// 合并后数据库只有一个
 	if len(groupDbs) <= 1 {
 		return nil
