@@ -1088,7 +1088,8 @@ func getLargeQueryColumnValueFactoryByName(sctx sessionctx.Context, colName stri
 		}, nil
 	case variable.MCLargeQueryUserStr, variable.MCLargeQueryHostStr,
 		variable.MCLargeQueryDBStr, variable.MCLargeQueryDigestStr,
-		variable.MCLargeQueryServiceStr, variable.MCLargeQuerySQLStr:
+		variable.MCLargeQueryServiceStr, variable.MCLargeQuerySQLTypeStr,
+		variable.MCLargeQuerySQLStr:
 		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			row[columnIdx] = types.NewStringDatum(value)
 			return true, nil
@@ -1117,7 +1118,7 @@ func getLargeQueryColumnValueFactoryByName(sctx sessionctx.Context, colName stri
 }
 
 // SaveLargeQuery is used to print the large query in the log files.
-func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
+func (a *ExecStmt) SaveLargeQuery(ctx context.Context, sqlType string, succ bool) {
 	sessVars := a.Ctx.GetSessionVars()
 	cfg := config.GetMCTechConfig()
 	threshold := cfg.Metrics.LargeQuery.Threshold
@@ -1141,6 +1142,7 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, succ bool) {
 	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 	largeItems := &variable.MCLargeQueryItems{
 		SQL:               sql,
+		SQLType:           sqlType,
 		Service:           GetSeriveFromSQL(sql),
 		Digest:            digest.String(),
 		TimeTotal:         costTime,
