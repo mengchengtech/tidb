@@ -73,6 +73,7 @@ func TestLargeQueryFormat(t *testing.T) {
 		WriteSQLRespTotal: 1 * time.Second,
 		ResultRows:        12345,
 		Succ:              true,
+		SQLType:           "select",
 		RewriteInfo: variable.RewritePhaseInfo{
 			DurationRewrite: 3,
 		},
@@ -85,6 +86,7 @@ func TestLargeQueryFormat(t *testing.T) {
 	text := strings.Join(append(
 		slices.Clone(resultFields),
 		"# SQL_LENGTH: 16",
+		"# SQL_TYPE: select",
 		"{gzip}H4sIAAAAAAAA/ypOzUlNLlHQUkgrys9VKLEGBAAA///MPyzQEAAAAA==;",
 	), "\n")
 	require.Equal(t, text, logString)
@@ -99,6 +101,7 @@ func TestLargeQueryFormat(t *testing.T) {
 	text = strings.Join(append(
 		slices.Clone(resultFields),
 		"# SQL_LENGTH: 41",
+		"# SQL_TYPE: select",
 		"# SERVICE: org-service",
 		"use test;",
 		"{gzip}H4sIAAAAAAAA/9LXUkgrys+1Us8vStctTi0qy0xOVVfQ0lcoTs1JTS5RgEgrlFgDAgAA//88xCBTKQAAAA==;",
