@@ -165,9 +165,9 @@ func updateFullTiflashTableReplacementPolicy(tblInfo *model.TableInfo, bundles [
 }
 
 func findBundle(bundles []*placement.Bundle, id int64) *placement.Bundle {
-	groupId := placement.GroupID(id)
+	groupID := placement.GroupID(id)
 	for _, b := range bundles {
-		if b.ID == groupId {
+		if b.ID == groupID {
 			return b
 		}
 	}
