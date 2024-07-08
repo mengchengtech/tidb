@@ -93,7 +93,9 @@ func (c *decryptCase) String() string {
 
 func TestMCTechDecryptMask(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mmock.M(t, map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="}),
+		mmock.M(t, map[string]any{
+			"Crypto.AES": map[string]any{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+		}),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/GetCryptoClient", mmock.M(t, "true"))
 	defer func() {

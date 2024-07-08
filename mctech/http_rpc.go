@@ -1,10 +1,12 @@
 package mctech
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/pingcap/failpoint"
@@ -38,8 +40,43 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 
 func do(request *http.Request) ([]byte, error) {
 	failpoint.Inject("MockMctechHttp", func(val failpoint.Value) {
-		bytes := []byte(val.(string))
-		failpoint.Return(bytes, nil)
+		values := make(map[string]any)
+		err := json.Unmarshal([]byte(val.(string)), &values)
+		if err != nil {
+			panic(err)
+		}
+		path := request.URL.Path
+		var (
+			res any
+			ok  bool
+		)
+		switch {
+		case strings.HasSuffix(path, "/db/aes"):
+			res, ok = values["Crypto.AES"]
+		case strings.HasSuffix(path, "/version"):
+			res, ok = values["Sequence.Version"]
+		case strings.HasSuffix(path, "/nexts"):
+			res, ok = values["Sequence.Nexts"]
+		case strings.HasSuffix(path, "/current-db"):
+			res, ok = values["DbIndex.CurrentDB"]
+		case strings.HasPrefix(path, "/db;by-request"):
+			res, ok = values["DbIndex.DBByRequest"]
+		}
+
+		if ok {
+			var data []byte
+			switch x := res.(type) {
+			case string:
+				data = []byte(x)
+			default:
+				data, err = json.Marshal(x)
+				if err != nil {
+					panic(err)
+				}
+			}
+			failpoint.Return(data, nil)
+		}
+		failpoint.Return(nil, nil)
 	})
 
 	response, err := apiClient.Do(request)

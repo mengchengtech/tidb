@@ -17,7 +17,7 @@ func TestSequence(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mock.M(t, "1310341421945856,1310341421945866"),
+		mock.M(t, map[string]any{"Sequence.Nexts": "1310341421945856,1310341421945866"}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
@@ -54,7 +54,7 @@ func TestVersionJustPass(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mock.M(t, "1310341421945866"),
+		mock.M(t, map[string]any{"Sequence.Version": "1310341421945866"}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")

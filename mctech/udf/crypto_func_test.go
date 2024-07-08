@@ -51,7 +51,9 @@ func TestMCTechCryptoUnpaddingFail(t *testing.T) {
 
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mock.M(t, map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="}),
+		mock.M(t, map[string]any{
+			"Crypto.AES": map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+		}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 
