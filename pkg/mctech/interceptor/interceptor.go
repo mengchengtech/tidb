@@ -275,6 +275,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		maxCop *logMaxCopObject // tikv coprocessor相关的信息
 		tx     *logTXObject     // 修改数据相关的信息
 		ru     logRUStatObject  // 当前sql资源消耗信息
+
+		warnings *logWarningObjects // 执行中生成的警告信息
 	)
 
 	txID = sessVars.TxnCtx.StartTS
@@ -309,6 +311,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 					ru.rru, ru.wru = rs.RRU(), rs.WRU()
 				}
 			}
+			warnings = newWarnings(executor.CollectWarnings(stmtCtx))
 			cd := stmtCtx.CopTasksDetails()
 			maxCop = &logMaxCopObject{
 				procAddr: cd.MaxProcessAddress,
@@ -471,6 +474,9 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 	}
 	if tx != nil {
 		fields = append(fields, zap.Object("tx", tx))
+	}
+	if warnings != nil {
+		fields = append(fields, zap.Object("warnings", warnings))
 	}
 	if err != nil {
 		fields = append(fields, zap.String("error", err.Error()))
