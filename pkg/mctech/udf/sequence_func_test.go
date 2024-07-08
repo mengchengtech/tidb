@@ -4,22 +4,33 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSequence(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"SequenceMock": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/udf/ResetSequenceCache",
+		mock.M(t, "true"),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
+		mock.M(t, map[string]any{"Sequence.Nexts": "1310341421945856,1310341421945866"}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/udf/ResetSequenceCache")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
+	}()
 	now := time.Now().UnixNano()
-	var rpcClient = mctech.GetRPCClient()
-	mctech.SetRPCClientForTest(&mockClient{})
-	defer mctech.SetRPCClientForTest(rpcClient)
-	getDoFunc = createGetDoFunc("1310341421945856,1310341421945866")
 	cache := GetCache()
 	id, err := cache.Next()
 	require.NoError(t, err)
 	require.Equal(t, int64(1310341421945856), id)
 	time.Sleep(time.Second)
-	renderSequenceMetrics(now)
+	renderSequenceMetrics(cache, now)
 }
 
 func TestSequenceDecodeSuccess(t *testing.T) {
@@ -37,10 +48,20 @@ func TestSequenceDecodeFailure(t *testing.T) {
 }
 
 func TestVersionJustPass(t *testing.T) {
-	var rpcClient = mctech.GetRPCClient()
-	mctech.SetRPCClientForTest(&mockClient{})
-	defer mctech.SetRPCClientForTest(rpcClient)
-	getDoFunc = createGetDoFunc("1310341421945866")
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"SequenceMock": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/udf/ResetSequenceCache",
+		mock.M(t, "true"),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
+		mock.M(t, map[string]any{"Sequence.Version": "1310341421945866"}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/udf/ResetSequenceCache")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
+	}()
 	cache := GetCache()
 	version, err := cache.VersionJustPass()
 	require.NoError(t, err)
