@@ -8,15 +8,21 @@ import (
 )
 
 const (
-	MCLargeQueryWriteKeysStr   = "WRITE_KEYS"
-	MCLargeQueryWriteSizeStr   = "WRITE_SIZE"
-	MCLargeQueryCopTimeStr     = "COP_TIME"
+	// MCLargeQueryWriteKeysStr means the count of keys in the transaction.
+	MCLargeQueryWriteKeysStr = "WRITE_KEYS"
+	// MCLargeQueryWriteSizeStr means the key/value size in the transaction.
+	MCLargeQueryWriteSizeStr = "WRITE_SIZE"
+	// MCLargeQueryCopTimeStr represents the sum of cop-task time spend in TiDB distSQL.
+	MCLargeQueryCopTimeStr = "COP_TIME"
+	// MCLargeQueryProcessTimeStr represents the sum of process time of all the coprocessor tasks.
 	MCLargeQueryProcessTimeStr = "PROCESS_TIME"
-	MCLargeQueryWaitTimeStr    = "WAIT_TIME"
-	MCLargeQueryTotalKeysStr   = "TOTAL_KEYS"
+	// MCLargeQueryWaitTimeStr means the time of all coprocessor wait.
+	MCLargeQueryWaitTimeStr = "WAIT_TIME"
+	// MCLargeQueryTotalKeysStr means the total scan keys.
+	MCLargeQueryTotalKeysStr = "TOTAL_KEYS"
 )
 
-// String implements the fmt.Stringer interface.
+// LargeQueryString use for Large SQL log recording.
 func (d ExecDetails) LargeQueryString() string {
 	parts := make([]string, 0, 8)
 	if d.CopTime > 0 {
