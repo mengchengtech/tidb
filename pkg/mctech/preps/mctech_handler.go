@@ -47,53 +47,61 @@ func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql stri
 }
 
 // ApplyAndCheck apply tenant isolation and check db policies
-func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode) (changed bool, err error) {
+func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmts []ast.StmtNode) (bool, error) {
 	option := mctech.GetOption()
 	vars := mctx.Session().GetSessionVars()
 	charset, collation := vars.GetCharsetInfo()
 	preprocessor := preprocessor
+
+	// 是否改写过sql
+	var changed bool
 	for _, stmt := range stmts {
-		var (
-			dbs     []string
-			skipped = true
-			matched bool
-		)
-		if matched, err = ddl.ApplyExtension(vars.CurrentDB, stmt); err != nil {
+		if isDDL, err := ddl.ApplyExtension(vars.CurrentDB, stmt); err != nil || isDDL {
+			if err == nil {
+				// ddl语句不再执行后续处理逻辑
+				continue
+			}
 			return false, err
 		}
 
-		if !matched {
-			if matched, err = msic.ApplyExtension(mctx, stmt); err != nil {
-				return false, err
+		// 返回值skip: 是否属于特殊的sql（use/show 等）
+		if isMsic, err := msic.ApplyExtension(mctx, stmt); err != nil || isMsic {
+			if err == nil {
+				// msic语句不再执行后续处理逻辑
+				continue
 			}
+			return false, err
 		}
 
+		var (
+			dbs     []string // sql中用到的数据库
+			skipped = true   // 是否需要跳过后续处理
+			err     error
+		)
 		// ddl 与dml语句不必重复判断
-		if !matched && option.TenantEnabled {
+		if option.TenantEnabled {
 			modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 			modifyCtx.Reset()
 			// 启用租户隔离，改写SQL，添加租户隔离信息
 			if dbs, skipped, err = preprocessor.ResolveStmt(mctx, stmt, charset, collation); err != nil {
 				return false, err
 			}
-		}
-
-		if !skipped {
-			changed = true
-		}
-
-		if option.TenantEnabled && option.DbCheckerEnabled && len(dbs) > 0 {
-			// 启用数据库联合查询规则检查
-			if err = getDatabaseChecker().Check(mctx, dbs); err != nil {
-				return changed, err
+			mctx.SetDbs(stmt, dbs)
+			if !skipped {
+				changed = true
 			}
-		}
 
-		if skipped {
-			continue
-		}
+			if option.DbCheckerEnabled && len(dbs) > 0 {
+				// 启用数据库联合查询规则检查
+				if err = getDatabaseChecker().Check(mctx, dbs); err != nil {
+					return changed, err
+				}
+			}
 
-		if option.TenantEnabled {
+			if skipped {
+				continue
+			}
+
 			// 启用租户隔离，改写SQL，检查租户隔离信息
 			err = preprocessor.Validate(mctx)
 			if err != nil {
