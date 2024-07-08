@@ -1295,6 +1295,20 @@ func (e *indexLookUpJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
 	}
 }
 
+// CollectWarnings for mctech full trace log
+func CollectWarnings(stmtCtx *stmtctx.StatementContext) []variable.JSONSQLWarnForSlowLog {
+	failpoint.Inject("CreateeWarnings", func() {
+		stmtCtx.AppendWarning(errors.New("this is for test warning"))
+	})
+	warnings := stmtCtx.GetWarnings()
+	res := make([]variable.JSONSQLWarnForSlowLog, len(warnings))
+	for i := range warnings {
+		res[i].Level = warnings[i].Level
+		res[i].Message = extractMsgFromSQLWarn(&warnings[i])
+	}
+	return res
+}
+
 var (
 	_ mctech.CPUTimeCollector = &hashJoinRuntimeStats{}
 	_ mctech.CPUTimeCollector = &IndexLookUpRunTimeStats{}
