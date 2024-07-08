@@ -88,6 +88,10 @@ declare interface FullTraceLog {
    */
   tx?: LogTXInfo
   /**
+   * sql执行生成的警告信息
+   */
+  warnings: logWarningObjects
+  /**
    * 执行sql出错时的错误信息
    */
   error?: string
@@ -99,6 +103,16 @@ declare interface FullTraceLog {
    * 当sql保存的内容不完整时，zip保存压缩后的完整sql内容
    */
   zip?: string
+}
+
+declare interface logWarningObjects {
+  topN: logWarningObject[]
+  total: Int
+}
+
+declare interface logWarningObject {
+  msg: string
+  extra: boolean
 }
 
 declare interface LogTXInfo {
@@ -156,7 +170,7 @@ declare interface LogTimeInfo {
    */
   plan: Duration
   /**
-   * tidb-server里用时
+   * 通过执行计划算出的在tidb-server里cpu耗时
    */
   tidb: Duration
   /**
