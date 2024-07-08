@@ -202,6 +202,7 @@ go_test(
         "//pkg/errctx",
         "//pkg/errno",
         "//pkg/kv",
+        "//pkg/mctech/mock",
         "//pkg/parser",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
