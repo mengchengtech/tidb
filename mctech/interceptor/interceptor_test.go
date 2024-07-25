@@ -1,7 +1,6 @@
 package interceptor_test
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -40,14 +39,20 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	failpoint.Enable("github.com/pingcap/tidb/mctech/StartedAt", mock.M(t, now))
+	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "rows": int64(1024), "maxAct": int64(2024),
+		"rru": int(1111), "wru": int(22),
+		"err": "mock sql error",
+	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
-		failpoint.Disable("github.com/pingcap/tidb/mctech/StartedAt")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
 
 	sql := createSelectTestSQL()
 	tk.MustExec(sql)
@@ -56,25 +61,24 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
-	tikvTimes := times["cop"].(map[string]any)
-	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	require.NotContains(t, times, "tx")
 	require.NotContains(t, logData, "tx")
 
-	deleteKeys(t, logData, "txId", "times")
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
-		"at":   now,
-		"conn": interceptor.EncodeForTest(tk.Session().GetSessionVars().ConnectionID),
-		"cat":  "dml", "tp": "select", "inTX": false, "maxAct": float64(0),
-		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
-		"maxCop": map[string]any{"procAddr": "", "procTime": "0s", "tasks": float64(0)},
-		"ru":     map[string]any{"rru": float64(0), "wru": float64(0)},
-		"mem":    float64(151300), "disk": float64(0),
-		"rows":   float64(0),
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+		},
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem":    float64(151300), "disk": float64(9527), "rows": float64(1024),
 		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
 		"sql":    sql,
+		"error":  "mock sql error",
 	}, logData)
 }
 
@@ -86,14 +90,19 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	failpoint.Enable("github.com/pingcap/tidb/mctech/StartedAt", mock.M(t, now))
+	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "rows": int64(1024), "maxAct": int64(2024),
+		"rru": int(1111), "wru": int(22),
+	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
-		failpoint.Disable("github.com/pingcap/tidb/mctech/StartedAt")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
 
 	sql := createSelectTestSQL()
 	tk.MustExec("begin")
@@ -104,23 +113,21 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 	require.NotNil(t, logData)
 
 	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
-	tikvTimes := times["cop"].(map[string]any)
-	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
 	require.NotContains(t, times, "tx")
 	require.NotContains(t, logData, "tx")
 
-	deleteKeys(t, logData, "txId", "times")
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
-		"at":   now,
-		"conn": interceptor.EncodeForTest(tk.Session().GetSessionVars().ConnectionID),
-		"cat":  "dml", "tp": "select", "inTX": true, "maxAct": float64(0),
-		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
-		"maxCop": map[string]any{"procAddr": "", "procTime": "0s", "tasks": float64(0)},
-		"ru":     map[string]any{"rru": float64(0), "wru": float64(0)},
-		"mem":    float64(151300), "disk": float64(0),
-		"rows":   float64(0),
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "dml", "tp": "select", "inTX": true, "maxAct": float64(2024),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+		},
+		"mem": float64(151300), "disk": float64(9527), "rows": float64(1024),
 		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
 		"sql":    sql,
 	}, logData)
@@ -134,14 +141,19 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	failpoint.Enable("github.com/pingcap/tidb/mctech/StartedAt", mock.M(t, now))
+	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(45832), "disk": int64(9527),
+		"rru": int(1111), "wru": int(22),
+	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
-		failpoint.Disable("github.com/pingcap/tidb/mctech/StartedAt")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
 
 	sql := createUpdateTestSQL()
 	tk.MustExec(sql)
@@ -149,23 +161,20 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, logData)
 
-	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
-	tikvTimes := times["cop"].(map[string]any)
-	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
-	txTimes := times["tx"].(map[string]any)
-	checkTimes(t, txTimes, "prewrite", "commit")
-	deleteKeys(t, logData, "txId", "times")
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq", "across": "",
-		"at":   now,
-		"conn": interceptor.EncodeForTest(tk.Session().GetSessionVars().ConnectionID),
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
 		"cat":  "dml", "tp": "update", "inTX": false, "maxAct": float64(1),
-		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
-		"maxCop": map[string]any{"procAddr": "store1", "procTime": "0s", "tasks": float64(2)},
-		"tx":     map[string]any{"affected": float64(1), "keys": float64(1), "size": float64(44)},
-		"ru":     map[string]any{"rru": float64(0), "wru": float64(0)},
-		"mem":    float64(45832), "disk": float64(0),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+			"tx":  map[string]any{"prewrite": "1.032s", "commit": "100ms"},
+		},
+		"tx":  map[string]any{"affected": float64(1), "keys": float64(1), "size": float64(44)},
+		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem": float64(45832), "disk": float64(9527),
 		"rows":   float64(0),
 		"digest": "5e4bdd67e44582ea529c3e9b28973aa072ad15377afcf552dea969e320ae5940",
 		"sql":    sql,
@@ -180,14 +189,19 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	failpoint.Enable("github.com/pingcap/tidb/mctech/StartedAt", mock.M(t, now))
+	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(45832), "disk": int64(9527),
+		"rru": int(1111), "wru": int(22),
+	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
-		failpoint.Disable("github.com/pingcap/tidb/mctech/StartedAt")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
 
 	sql := createUpdateTestSQL()
 	tk.MustExec("begin")
@@ -197,22 +211,19 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, logData)
 
-	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
-	tikvTimes := times["cop"].(map[string]any)
-	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
-	require.NotContains(t, times, "tx")
-	deleteKeys(t, logData, "txId", "times")
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq", "across": "",
-		"at":   now,
-		"conn": interceptor.EncodeForTest(tk.Session().GetSessionVars().ConnectionID),
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
 		"cat":  "dml", "tp": "update", "inTX": true, "maxAct": float64(1),
-		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
-		"maxCop": map[string]any{"procAddr": "store1", "procTime": "0s", "tasks": float64(2)},
-		"tx":     map[string]any{"affected": float64(1), "keys": float64(0), "size": float64(0)},
-		"ru":     map[string]any{"rru": float64(0), "wru": float64(0)},
-		"mem":    float64(45832), "disk": float64(0),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+		},
+		"tx":  map[string]any{"affected": float64(1), "keys": float64(0), "size": float64(0)},
+		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem": float64(45832), "disk": float64(9527),
 		"rows":   float64(0),
 		"digest": "5e4bdd67e44582ea529c3e9b28973aa072ad15377afcf552dea969e320ae5940",
 		"sql":    sql,
@@ -230,15 +241,20 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 		mock.M(t, "true"),
 	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
-	failpoint.Enable("github.com/pingcap/tidb/mctech/StartedAt", mock.M(t, now))
+	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(15300), "disk": int64(25300),
+		"rru": int(1111), "wru": int(22),
+	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateeWarnings")
-		failpoint.Disable("github.com/pingcap/tidb/mctech/StartedAt")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
 
 	sql := createUpdateTestSQL()
 	tk.MustExec("begin")
@@ -248,23 +264,20 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, logData)
 
-	times := logData["times"].(map[string]any)
-	checkTimes(t, times, "all", "parse", "plan", "tidb", "ready", "send")
-	tikvTimes := times["cop"].(map[string]any)
-	checkTimes(t, tikvTimes, "wall", "tikv", "tiflash")
-	txTimes := times["tx"].(map[string]any)
-	checkTimes(t, txTimes, "prewrite", "commit")
-	deleteKeys(t, logData, "txId", "times")
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "", "usr": "root", "tenant": "", "across": "",
-		"at":   now,
-		"conn": interceptor.EncodeForTest(tk.Session().GetSessionVars().ConnectionID),
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
 		"cat":  "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
-		// "time": map[string]string{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "0s", "ready": "3.315821ms", "send": "0s"},
-		"maxCop": map[string]any{"procAddr": "", "procTime": "0s", "tasks": float64(0)},
-		"tx":     map[string]any{"affected": float64(0), "keys": float64(2), "size": float64(122)},
-		"ru":     map[string]any{"rru": float64(0), "wru": float64(0)},
-		"mem":    float64(0), "disk": float64(0),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
+			"tx":  map[string]any{"prewrite": "1.032s", "commit": "100ms"},
+		},
+		"tx":  map[string]any{"affected": float64(0), "keys": float64(2), "size": float64(122)},
+		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem": float64(15300), "disk": float64(25300),
 		"rows":     float64(0),
 		"digest":   "9505cacb7c710ed17125fcc6cb3669e8ddca6c8cd8af6a31f6b3cd64604c3098",
 		"warnings": map[string]any{"topN": []any{map[string]any{"msg": "this is for test warning", "extra": false}}, "total": float64(1)},
@@ -280,24 +293,6 @@ func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 	s := tk.Session()
 	s.GetSessionVars().User = &auth.UserIdentity{Username: "root", Hostname: "%"}
 	return tk
-}
-
-func deleteKeys(t *testing.T, m map[string]any, keys ...string) {
-	for _, key := range keys {
-		require.Contains(t, m, key)
-		delete(m, key)
-	}
-}
-
-func checkTimes(t *testing.T, times map[string]any, keys ...string) {
-	for _, key := range keys {
-		require.Contains(t, times, key)
-		val := times[key]
-		require.IsType(t, val, "")
-		cop, err := time.ParseDuration(val.(string))
-		require.NoError(t, err)
-		require.GreaterOrEqual(t, cop, time.Duration(0), fmt.Sprintf(`[%s(%s)] %s, is not greater than or equal to "0s"`, key, val, cop))
-	}
 }
 
 func initDbAndData(t *testing.T, store kv.Storage) *testkit.TestKit {

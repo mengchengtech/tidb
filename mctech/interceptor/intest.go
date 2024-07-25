@@ -8,6 +8,7 @@ import (
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/sessionctx"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -20,7 +21,7 @@ func (k traceFullQueryKeyType) String() string {
 // 单元测试代码使用
 const traceFullQueryKey traceFullQueryKeyType = 0
 
-func renderTraceLog(sctx sessionctx.Context, fields []zapcore.Field) {
+func renderTraceLog(sctx sessionctx.Context, traceLog *logSQLTraceObject) {
 	cc := zapcore.EncoderConfig{
 		TimeKey:        "", // 不记录生成日志时的time
 		LevelKey:       "", // 不记录日志级别
@@ -41,7 +42,7 @@ func renderTraceLog(sctx sessionctx.Context, fields []zapcore.Field) {
 		Level:      zapcore.InfoLevel,
 		Message:    "",
 	}
-	if buf, err := encoder.EncodeEntry(ent, fields); err != nil {
+	if buf, err := encoder.EncodeEntry(ent, []zap.Field{zap.Inline(traceLog)}); err != nil {
 		panic(err)
 	} else {
 		sctx.SetValue(traceFullQueryKey, buf.Bytes())
