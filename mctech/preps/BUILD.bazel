@@ -21,7 +21,7 @@ go_library(
         "//mctech/ddl",
         "//mctech/interceptor",
         "//mctech/isolation",
-        "//mctech/msic",
+        "//mctech/misc",
         "//parser/ast",
         "//sessionctx",
         "//sessionctx/variable",
