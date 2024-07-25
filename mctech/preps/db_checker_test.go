@@ -45,7 +45,7 @@ func TestStringFilter(t *testing.T) {
 
 type testDatabaseCheckerCase struct {
 	tenantOnly bool
-	across      string
+	across     string
 	dbs        []string
 	failure    string
 }
@@ -61,7 +61,7 @@ func (c *testDatabaseCheckerCase) Source() any {
 func newTestMCTechContext(tenantOnly bool, across string) (mctech.Context, error) {
 	result, err := mctech.NewPrepareResult("gslq", tenantOnly, map[string]any{
 		"global": &mctech.GlobalValueInfo{},
-		"across":  across,
+		"across": across,
 	})
 	context := mctech.NewBaseContext(false)
 	context.(mctech.ModifyContext).SetPrepareResult(result)
@@ -72,7 +72,7 @@ func TestDatabaseChecker(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]any{
 			"DbChecker.Compatible": false,
-			"DbChecker.Across":      []string{"global_mtlp|global_ma", "global_cq3|global_qa"},
+			"DbChecker.Across":     []string{"global_mtlp|global_ma", "global_cq3|global_qa"},
 		}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")

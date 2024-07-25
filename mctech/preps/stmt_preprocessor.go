@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/isolation"
 	"github.com/pingcap/tidb/parser/ast"
@@ -96,6 +97,7 @@ func (r *mctechStatementPreprocessor) ResolveStmt(mctx mctech.Context,
 		return nil, false, err
 	}
 
+	dbs = normalize(dbs)
 	return dbs, skipped, nil
 }
 
@@ -115,6 +117,12 @@ func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
 func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
 	dbs, skipped, err = isolation.ApplyExtension(mctx, stmt, charset, collation)
+
+	failpoint.Inject("SetSQLDBS", func(v failpoint.Value) {
+		str := v.(string)
+		dbs = strings.Split(str, ",")
+	})
+
 	if skipped || err != nil {
 		return dbs, skipped, err
 	}
@@ -143,6 +151,20 @@ func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 
 	modifyCtx.SetSQLRewrited(!skipped)
 	return dbs, false, nil
+}
+
+// normalize 对db列表排序，去重
+func normalize(dbs []string) []string {
+	slices.Sort(dbs)
+
+	newDbs := make([]string, 0, len(dbs))
+	for _, db := range dbs {
+		if slices.Contains(newDbs, db) {
+			continue
+		}
+		newDbs = append(newDbs, db)
+	}
+	return newDbs
 }
 
 var preprocessor StatementPreprocessor = &mctechStatementPreprocessor{}
