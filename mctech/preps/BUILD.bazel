@@ -4,6 +4,7 @@ go_library(
     name = "preps",
     srcs = [
         "cache.go",
+        "comment.go",
         "context.go",
         "db_checker.go",
         "db_index.go",
@@ -51,7 +52,7 @@ go_test(
     ],
     embed = [":preps"],
     flaky = True,
-    shard_count = 19,
+    shard_count = 20,
     deps = [
         "//config",
         "//kv",

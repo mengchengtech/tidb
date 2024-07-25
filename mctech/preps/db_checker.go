@@ -119,7 +119,11 @@ func newMutexDatabaseCheckerWithParams(mutex, exclude, across []string) *mutexDa
 
 func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, dbs []string) error {
 	result := mctx.PrepareResult()
-	if !result.TenantOnlyRole() {
+	if !result.Roles().TenantOnly() {
+		return nil
+	}
+
+	if checkExcepts(result) {
 		return nil
 	}
 
@@ -186,5 +190,37 @@ func (c *mutexDatabaseChecker) dbPredicate(dbName string) bool {
 		return true
 	}
 	// 不符合互斥数据库
+	return false
+}
+
+func checkExcepts(result *mctech.PrepareResult) bool {
+	excepts := config.GetMCTechConfig().DbChecker.Excepts
+	comments := result.Comments()
+	for _, except := range excepts {
+		pkg := comments.Package()
+		if pkg != nil {
+			// 依赖包名称
+			if except == pkg.Name() {
+				return true
+			}
+		}
+
+		svc := comments.Service()
+		if svc != nil {
+			// 服务名称比较
+			if strings.Contains(except, ".") {
+				// 包含产品线的服务完整名称
+				if svc.From() == except {
+					return true
+				}
+			} else {
+				// 只包含服务名称
+				if svc.AppName() == except {
+					return true
+				}
+			}
+		}
+	}
+
 	return false
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/isolation"
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/parser"
 	. "github.com/pingcap/tidb/parser/format"
 	"github.com/stretchr/testify/require"
@@ -63,7 +64,7 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	if !global {
 		tenant = "gslq4dev"
 	}
-	result, err := mctech.NewPrepareResult(tenant, true, map[string]any{
+	result, err := mctech.NewPrepareResult(tenant, preps.NewFlagRoles(true, false), nil, map[string]any{
 		"dbPrefix": "mock",
 		"global":   &mctech.GlobalValueInfo{Global: global, Excludes: excludes},
 	})

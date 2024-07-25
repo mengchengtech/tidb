@@ -33,8 +33,8 @@ type tidbSessionMCTechContext struct {
 	storedVars []varValue
 }
 
-// NewContext function
-func NewContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
+// newContext function
+func newContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
 	baseCtx := mctech.NewBaseContext(usingTenantParam)
 	return &tidbSessionMCTechContext{
 		Context: baseCtx,
@@ -47,7 +47,7 @@ var (
 )
 
 func init() {
-	mctech.NewContext = NewContext
+	mctech.NewContext = newContext
 }
 
 func (d *tidbSessionMCTechContext) CurrentDB() string {
@@ -132,4 +132,30 @@ func (d *tidbSessionMCTechContext) Clear() {
 	d.session.ClearValue(mctech.MCExecStmtVarKey)
 	d.session.ClearValue(mctech.MCContextVarKey)
 	d.session.ClearValue(mctech.MCRUDetailsCtxKey)
+}
+
+// FlagRoles custom roles
+type mctechFlagRoles struct {
+	tenantOnly bool // 是否包含tenan_only 角色
+	acrossDB   bool // 是否包含 across_db 角色。保留字段，暂时没有使用
+}
+
+func (r *mctechFlagRoles) TenantOnly() bool {
+	return r.tenantOnly
+}
+
+func (r *mctechFlagRoles) SetTenantOnly(tenantOnly bool) {
+	r.tenantOnly = tenantOnly
+}
+
+func (r *mctechFlagRoles) AcrossDB() bool {
+	return r.acrossDB
+}
+
+// NewFlagRoles create new MCTechRoles instance
+func NewFlagRoles(tenantOnly, acrossDB bool) mctech.FlagRoles {
+	return &mctechFlagRoles{
+		tenantOnly: tenantOnly,
+		acrossDB:   acrossDB,
+	}
 }

@@ -98,6 +98,7 @@ go_test(
         "//config",
         "//executor",
         "//kv",
+        "//mctech/preps",
         "//parser",
         "//parser/auth",
         "//parser/mysql",
@@ -118,7 +119,6 @@ go_test(
         "@com_github_stretchr_testify//require",
         "@com_github_tikv_client_go_v2//util",
         "@io_opencensus_go//stats/view",
-        "@org_golang_x_exp//slices",
         "@org_uber_go_goleak//:goleak",
     ],
 )

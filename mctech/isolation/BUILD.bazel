@@ -27,6 +27,7 @@ go_test(
     deps = [
         ":isolation",
         "//mctech",
+        "//mctech/preps",
         "//parser",
         "//parser/format",
         "//parser/test_driver",
