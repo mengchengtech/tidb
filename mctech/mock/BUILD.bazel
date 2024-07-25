@@ -5,4 +5,5 @@ go_library(
     srcs = ["mock.go"],
     importpath = "github.com/pingcap/tidb/mctech/mock",
     visibility = ["//visibility:public"],
+    deps = ["@com_github_stretchr_testify//require"],
 )

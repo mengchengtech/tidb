@@ -6,10 +6,11 @@ package mock
 
 import (
 	"errors"
-	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // M check if in testing mode
-func M(t *testing.T, v interface{}) string {
+func M(t require.TestingT, v interface{}) string {
 	panic(errors.New("SHOULD NOT call out of test"))
 }
