@@ -158,6 +158,7 @@ type FlagRoles interface {
 type Comments interface {
 	Service() ServiceComment // 执行sql的服务名称
 	Package() PackageComment // 执行sql所属的依赖包名称（公共包中执行的sql）
+	String() string
 }
 
 // ServiceComment service comment
@@ -527,7 +528,7 @@ func (d *baseContext) IsGlobalDb(db string) bool {
 func (d *baseContext) GetDbIndex() (DbIndex, error) {
 	sel := d.selector
 	if sel == nil {
-		return -1, errors.New("db selector is nil")
+		return DbIndexNone, errors.New("db selector is nil")
 	}
 	return sel.GetDbIndex()
 }
@@ -559,10 +560,12 @@ func isProductDatabase(logicDb string) bool {
 type DbIndex int
 
 const (
-	// FIRST global_dw_*库的序号为1的索引
-	FIRST DbIndex = 0x01 //0x01
-	// SECOND global_dw_*库的序号为2的索引
-	SECOND // 0x02
+	// DbIndexNone 表示空值
+	DbIndexNone DbIndex = -1
+	// DbIndexFirst global_dw_*库的序号为1的索引
+	DbIndexFirst DbIndex = 1
+	// DbIndexSecond global_dw_*库的序号为2的索引
+	DbIndexSecond DbIndex = 2
 )
 
 // NewContext function callback
