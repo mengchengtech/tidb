@@ -36,7 +36,7 @@ func TestMCTechStatementsSummary(t *testing.T) {
 	tk.MustExec("use test")
 
 	cases := []*mctechStmtCases{
-		{"mctech select * from information_schema.statements_summary", "0  |none test 18446744073709551615|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
+		{"mctech select * from information_schema.statements_summary", "0||{}||none|test|18446744073709551615|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
 	}
 
 	for _, c := range cases {
@@ -236,11 +236,6 @@ org_type = ? AND ext_type = ? AND is_removed = FALSE
 		)
 )SELECT * FROM orgs`
 	return tk, sql
-}
-
-type getServiceCase struct {
-	sql     string
-	service string
 }
 
 func TestTableTTLInfoNormalColumn(t *testing.T) {

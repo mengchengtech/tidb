@@ -27,7 +27,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-func (b *PlanBuilder) buildMCTech(ctx context.Context, stmt *ast.MCTechStmt) (Plan, error) {
+func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan, error) {
 	p := &MCTech{
 		Format:   stmt.Format,
 		ExecStmt: stmt.Stmt,
@@ -59,6 +59,7 @@ var (
 var columnDefs = []*columnDef{
 	{"global", mysql.TypeLonglong, longlongSize},
 	{"excludes", mysql.TypeVarchar, 128},
+	{"comments", mysql.TypeVarchar, 512},
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
 	{"db", mysql.TypeVarchar, 50},
@@ -125,11 +126,12 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var (
 		global     = false
 		excludes   = []string{}
-		tenantCode string
+		comments   = "{}"
+		tenant     string
 		tenantFrom = "none"
 		params     = map[string]any{}
 		db         = e.ctx.GetSessionVars().CurrentDB
-		index      = mctech.DbIndex(-1)
+		index      = mctech.DbIndexNone
 		restoreSQL = sb.String()
 	)
 
@@ -139,8 +141,9 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 			global = result.Global()
 			params = result.Params()
 			excludes = result.Excludes()
-			tenantCode = result.Tenant().Code()
-			if tenantCode != "" {
+			comments = result.Comments().String()
+			tenant = result.Tenant().Code()
+			if tenant != "" {
 				if result.Tenant().FromRole() {
 					tenantFrom = "role"
 				} else {
@@ -150,7 +153,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		}
 		index, err = mctx.GetDbIndex()
 		if err != nil {
-			index = -1
+			index = mctech.DbIndexNone
 		}
 	}
 
@@ -162,7 +165,8 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var row = []*types.Datum{
 		createDatum(global),
 		createDatum(strings.Join(excludes, ",")),
-		createDatum(tenantCode),
+		createDatum(comments),
+		createDatum(tenant),
 		createDatum(tenantFrom),
 		createDatum(db),
 		createDatum(int(index)),
