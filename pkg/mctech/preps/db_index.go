@@ -40,7 +40,7 @@ func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
 	result := d.result
 	params := result.Params()
 	env := result.DbPrefix()
-	var dbIndex mctech.DbIndex = -1
+	var dbIndex = mctech.DbIndexNone
 	var err error
 	_, forceBackground := params[paramBackgroundKey]
 	if forceBackground {
@@ -54,7 +54,7 @@ func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
 	}
 
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 
 	if dbIndex < 0 {
@@ -72,7 +72,7 @@ func (d *dbSelector) forceBackground(env string) (mctech.DbIndex, error) {
 	// 从缓存中取取的当前正在用的库的索引
 	indexFromRedis, err := d.getDbIndex(false, env)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 	// 取后端库
 	bgIndex := indexFromRedis ^ 0x0003
@@ -87,7 +87,7 @@ func (d *dbSelector) getDbIndexByTicket(env string, requestID string) (mctech.Db
 
 	value, err := d.getDbIndexByTicketFromService(env, requestID)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 	ticketMap.Set(requestID, value)
 	return value, nil
@@ -104,7 +104,7 @@ func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) 
 	// 本地缓存不存在，从远程服务中获取
 	index, err := d.getDbIndexFromService(env)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 
 	currentMap.Set(localCacheKey, index)
@@ -116,18 +116,18 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	apiURL := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, env)
 	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 
 	body, err := mctech.DoRequest(get)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, errors.Wrap(err, "get dw index errors")
+		return mctech.DbIndexNone, errors.Wrap(err, "get dw index errors")
 	}
 	return js["current"], nil
 }
@@ -138,18 +138,18 @@ func (d *dbSelector) getDbIndexByTicketFromService(env string, requestID string)
 	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestID)
 	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 
 	body, err := mctech.DoRequest(get)
 	if err != nil {
-		return -1, err
+		return mctech.DbIndexNone, err
 	}
 
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, errors.Wrap(err, "get dw index by request errors")
+		return mctech.DbIndexNone, errors.Wrap(err, "get dw index by request errors")
 	}
 
 	return js["db"], nil

@@ -341,11 +341,14 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...interface{}) (rs sqlexec.RecordSet, err error) {
 	defer tk.Session().GetSessionVars().ClearAlloc(&tk.alloc, err != nil)
 	// add by zhangbing
-	var mctx mctech.Context
-	if mctx, sql, err = tk.onBeforeParseSQL(sql); err != nil {
+	// 清理上一次残留的上下文信息
+	mctx, err := mctech.GetContext(tk.Session())
+	if err == nil && mctx != nil {
+		mctx.Clear()
+	}
+	if _, sql, err = tk.onBeforeParseSQL(sql); err != nil {
 		return nil, err
 	}
-	defer mctx.Clear()
 	// add end
 	if len(args) == 0 {
 		sc := tk.session.GetSessionVars().StmtCtx
