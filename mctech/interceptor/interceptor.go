@@ -359,7 +359,7 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		traceLog.dbs = strings.Join(lst, ",")
 	}
 	if result := mctx.PrepareResult(); result != nil {
-		traceLog.tenant = result.Tenant()
+		traceLog.tenant = result.Tenant().Code()
 		if params := result.Params(); params != nil {
 			if v, ok := params[mctech.ParamAcross].(string); ok {
 				traceLog.across = v

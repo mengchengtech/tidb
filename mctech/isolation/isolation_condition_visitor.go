@@ -152,7 +152,7 @@ func newIsolationConditionVisitor(
 		}
 	} else if !visitor.usingParam {
 		// 非参数化租户过滤条件，且tenant不为空时
-		tenant := result.Tenant()
+		tenant := result.Tenant().Code()
 		if tenant != "" {
 			visitor.tenant = ast.NewValueExpr(tenant, charset, collation)
 		}

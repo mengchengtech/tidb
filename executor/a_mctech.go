@@ -1093,6 +1093,7 @@ func (a *ExecStmt) SaveLargeQuery(mctx mctech.Context, sqlType string, succ bool
 	mctech.L().Warn(largeLog)
 }
 
+// CreateLargeLogItems create large log items
 func CreateLargeLogItems(ctx context.Context, sql string, sqlType string, succ bool, resultRows int64,
 	sessVars *variable.SessionVars, comments mctech.Comments) *variable.MCTechLargeQueryLogItems {
 	stmtCtx := sessVars.StmtCtx

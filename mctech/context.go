@@ -172,16 +172,42 @@ type PackageComment interface {
 	Name() string
 }
 
+// TenantInfo tenant info
+type TenantInfo interface {
+	Code() string   // 当前租户code
+	FromRole() bool // 租户code是否来自角色
+	String() string
+}
+
+// TenantValueInfo tenant info
+type TenantValueInfo struct {
+	code     string // 当前租户code
+	fromRole bool   // 租户code是否来自角色
+}
+
+// Code tenant code
+func (ti *TenantValueInfo) Code() string {
+	return ti.code
+}
+
+// FromRole tenant code is from role?
+func (ti *TenantValueInfo) FromRole() bool {
+	return ti.fromRole
+}
+
+func (ti *TenantValueInfo) String() string {
+	return fmt.Sprintf("{%s,%t}", ti.code, ti.fromRole)
+}
+
 // PrepareResult sql resolve result
 type PrepareResult struct {
 	// Deprecated: 已废弃
-	dbPrefix       string           // 自定义hint，数据库前缀。'dev', 'test'
-	params         map[string]any   // 自定义hint的一般参数
-	tenant         string           // 当前租户code
-	globalInfo     *GlobalValueInfo // global hint 解析后的值
-	tenantFromRole bool             // 租户code是否来自角色
-	roles          FlagRoles        // 当前执行账号的特殊角色信息
-	comments       Comments         // 从特殊注释中提取的一些信息
+	dbPrefix   string           // 自定义hint，数据库前缀。'dev', 'test'
+	params     map[string]any   // 自定义hint的一般参数
+	globalInfo *GlobalValueInfo // global hint 解析后的值
+	tenant     TenantInfo       // 当前sql执行时的租户信息
+	roles      FlagRoles        // 当前执行账号的特殊角色信息
+	comments   Comments         // 从特殊注释中提取的一些信息
 }
 
 // NewPrepareResult create PrepareResult
@@ -229,13 +255,15 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 	}
 
 	r := &PrepareResult{
-		comments:       comments,
-		tenantFromRole: fromRole,
-		roles:          roles,
-		tenant:         tenantCode,
-		dbPrefix:       dbPrefix,
-		globalInfo:     globalInfo,
-		params:         newParams,
+		comments: comments,
+		roles:    roles,
+		tenant: &TenantValueInfo{
+			code:     tenantCode,
+			fromRole: fromRole,
+		},
+		dbPrefix:   dbPrefix,
+		globalInfo: globalInfo,
+		params:     newParams,
 	}
 	return r, nil
 }
@@ -251,18 +279,12 @@ func (r *PrepareResult) String() string {
 			paramList = append(paramList, fmt.Sprintf("{%s,%s}", k, r.params[k]))
 		}
 	}
-	return fmt.Sprintf("%s{%s,%s,%t,%s,%s}", r.comments,
-		r.dbPrefix, r.tenant, r.tenantFromRole, paramList, r.globalInfo)
+	return fmt.Sprintf("%s{%s,%v,%s,%s}", r.comments, r.dbPrefix, r.tenant, paramList, r.globalInfo)
 }
 
 // Tenant current tenant
-func (r *PrepareResult) Tenant() string {
+func (r *PrepareResult) Tenant() TenantInfo {
 	return r.tenant
-}
-
-// TenantFromRole tenant is from role
-func (r *PrepareResult) TenantFromRole() bool {
-	return r.tenantFromRole
 }
 
 // Roles current user has some roles
