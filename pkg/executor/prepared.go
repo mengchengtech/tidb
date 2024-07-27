@@ -79,7 +79,7 @@ func NewPrepareExec(ctx sessionctx.Context, sqlTxt string) *PrepareExec {
 // Next implements the Executor Next interface.
 func (e *PrepareExec) Next(ctx context.Context, _ *chunk.Chunk) error {
 	// add by zhangbing
-	if err := e.checkPrepare(ctx); err != nil {
+	if err := e.onCheckPrepare(ctx); err != nil {
 		return err
 	}
 	// add end
@@ -121,7 +121,7 @@ func (e *PrepareExec) Next(ctx context.Context, _ *chunk.Chunk) error {
 	}
 	stmt0 := stmts[0]
 	// add by zhangbing
-	if err = e.afterParseSQL(ctx, stmt0); err != nil {
+	if err = e.onAfterParseSQL(ctx, stmt0); err != nil {
 		return err
 	}
 	// add end

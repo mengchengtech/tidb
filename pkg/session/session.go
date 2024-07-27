@@ -2097,6 +2097,11 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 	// Transform abstract syntax tree to a physical plan(stored in executor.ExecStmt).
 	compiler := executor.Compiler{Ctx: s}
 	stmt, err := compiler.Compile(ctx, stmtNode)
+	// add by zhangbing
+	if err == nil {
+		s.SetValue(mctech.MCExecStmtVarKey, stmt)
+	}
+	// add end
 	// check if resource group hint is valid, can't do this in planner.Optimize because we can access
 	// infoschema there.
 	if sessVars.StmtCtx.ResourceGroupName != sessVars.ResourceGroupName {
@@ -2301,9 +2306,6 @@ func runStmt(ctx context.Context, se *session, s sqlexec.Statement) (rs sqlexec.
 	}
 
 	sessVars.TxnCtx.StatementCount++
-	// add by zhangbing
-	se.SetValue(sessionctx.MCTechExecStmtVarKey, s.(*executor.ExecStmt))
-	// add end
 	if rs != nil {
 		if se.GetSessionVars().StmtCtx.IsExplainAnalyzeDML {
 			if !sessVars.InTxn() {
@@ -2469,18 +2471,7 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 		return
 	}
 	// add by zhangbing
-	handler := mctech.GetHandler()
-	ctx, mctx, e := mctech.WithNewContext3(ctx, s, true)
-	if e != nil {
-		err = e
-		return
-	}
-
-	if mctx != nil {
-		if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
-			return
-		}
-	}
+	ctx, _, sql, err = mctech.GetInterceptor().BeforeParseSQL(ctx, s, sql)
 	// add end
 	prepareExec := executor.NewPrepareExec(s, sql)
 	err = prepareExec.Next(ctx, nil)
