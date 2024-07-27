@@ -39,15 +39,13 @@ var (
 )
 
 func init() {
-	DeferredFunctions[ast.MCTechSequence] = struct{}{}
-
 	// mctech function.
-	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
-	funcs[ast.MCVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
-	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 3}}
-	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
-	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
-	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
+	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCSeq, 0, 0}}
+	funcs[ast.MCVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCVersionJustPass, 0, 0}}
+	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 4}}
+	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
+	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
+	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 2}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
@@ -56,9 +54,23 @@ func init() {
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
 	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
 
-	// mctech function.
+	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
+	DeferredFunctions[ast.MCTechSequence] = struct{}{}
+	DeferredFunctions[ast.MCTechVersionJustPass] = struct{}{}
+	DeferredFunctions[ast.MCSeq] = struct{}{}
+	DeferredFunctions[ast.MCVersionJustPass] = struct{}{}
+
+	// 不可折叠函数（一般用在projection中表函数表达式中，整个sql中只按sql字面出现次数调用还是返回结果中每一行都调用一次）
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
+	unFoldableFunctions[ast.MCTechVersionJustPass] = struct{}{}
 	unFoldableFunctions[ast.MCSeq] = struct{}{}
+	unFoldableFunctions[ast.MCVersionJustPass] = struct{}{}
+
+	// mutableEffectsFunctions集合中保存的函数名称sql中不缓存，每次（行）执行的结果可能都不一样
+	mutableEffectsFunctions[ast.MCTechSequence] = struct{}{}
+	mutableEffectsFunctions[ast.MCTechVersionJustPass] = struct{}{}
+	mutableEffectsFunctions[ast.MCSeq] = struct{}{}
+	mutableEffectsFunctions[ast.MCVersionJustPass] = struct{}{}
 }
 
 type mctechSequenceDecodeFunctionClass struct {
