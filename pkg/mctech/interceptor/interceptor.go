@@ -3,13 +3,11 @@ package interceptor
 import (
 	"bytes"
 	"compress/gzip"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor"
@@ -23,7 +21,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util/logutil"
 	clientutil "github.com/tikv/client-go/v2/util"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type interceptor struct{}
@@ -262,38 +259,30 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 	}()
 
 	si := sessionctx.ShortInfo(sctx)
-	var (
-		connID  uint64         // SQL 查询客户端连接 ID
-		db      = si.GetDB()   // 执行sql时的当前库名称
-		dbs     string         // 执行的sql中用到的所有数据库名称列表。
-		inTX    bool           // 当前sql是否在事务中
-		user    = si.GetUser() // 执行sql时使用的账号
-		tenant  string         // 所属租户信息
-		at      time.Time      // 执行sql开始时间，即创建mctech.Context的时间
-		txID    uint64         // 事务号(显示事务和隐式事务)
-		maxAct  int64          // sql执行过程中读取/生成的最大行数（与rows不一样，中间过程生成的行数多不代表结果集中的行数多）
-		rows    int64          // 查询返回结果行数
-		memMax  int64          // 该 SQL 查询执行时占用的最大内存空间
-		diskMax int64          // 该 SQL 查询执行时占用的最大磁盘空间
-		digest  string         // sql 语句模板的hash
-		across  string         // sql中指定的跨库查询的数据库
-		zip     []byte         // 压缩后的sql文本
+	mctx := mctech.GetContextStrict(sctx)
+	var traceLog = &logSQLTraceObject{
+		db:   si.GetDB(),
+		user: si.GetUser(),
+		at:   mctx.StartedAt(),
+		info: info,
+		conn: sessVars.ConnectionID,
+		inTX: sessVars.InTxn(),
+		txID: sessVars.TxnCtx.StartTS,
+		times: logTimeObject{
+			all:   time.Since(mctx.StartedAt()),
+			parse: sessVars.DurationParse,
+			plan:  sessVars.DurationCompile,
+		},
+		sql: origSQL,
+		err: err,
+	}
 
-		times  logTimeObject    // 各种时间信息
-		maxCop *logMaxCopObject // tikv coprocessor相关的信息
-		tx     *logTXObject     // 修改数据相关的信息
-		ru     logRUStatObject  // 当前sql资源消耗信息
-
-		warnings *logWarningObjects // 执行中生成的警告信息
-	)
-
-	txID = sessVars.TxnCtx.StartTS
 	var stmtDetail execdetails.StmtExecDetails
 	if execStmt != nil {
 		stmtDetailRaw := execStmt.GoCtx.Value(execdetails.StmtExecDetailKey)
 		if stmtDetailRaw != nil {
 			stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
-			times.send = stmtDetail.WriteSQLRespDuration
+			traceLog.times.send = stmtDetail.WriteSQLRespDuration
 		}
 
 		// sessVars.StmtCtx 的值不一定准确
@@ -305,136 +294,58 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		// 因此可以认为只要 execStmt 有值，则StmtCtx的值一定也是最新的，反之当execStmt为nil时，StmtCtx 的状态不确定，此时不能使用
 		if stmtCtx := sessVars.StmtCtx; stmtCtx != nil {
 			if plan, ok := stmtCtx.GetPlan().(base.Plan); ok {
-				rows = executor.GetResultRowsCount(stmtCtx, plan)
+				traceLog.rows = executor.GetResultRowsCount(stmtCtx, plan)
 			}
 			// 添加开发辅助代码
 			if stmtCtx.RuntimeStatsColl != nil {
 				collector := newPlanStatCollector(stmtCtx)
 				ct := collector.collect()
-				times.tidb = ct.tidbTime
+				traceLog.times.tidb = ct.tidbTime
 				// times.tikv.process2 = ct.tikvCopTime
-				times.cop.tiflash = ct.tiflashCopTime
-				maxAct = ct.maxActRows
+				traceLog.times.cop.tiflash = ct.tiflashCopTime
+				traceLog.maxAct = ct.maxActRows
 				if rs, ok := sctx.Value(mctech.MCRUDetailsCtxKey).(*clientutil.RUDetails); ok {
-					ru.rru, ru.wru = rs.RRU(), rs.WRU()
+					traceLog.ru.rru, traceLog.ru.wru = rs.RRU(), rs.WRU()
 				}
 			}
-			warnings = newWarnings(executor.CollectWarnings(stmtCtx))
+			traceLog.warnings = newWarnings(executor.CollectWarnings(stmtCtx))
 			cd := stmtCtx.CopTasksDetails()
-			maxCop = &logMaxCopObject{
+			traceLog.maxCop = &logMaxCopObject{
 				procAddr: cd.MaxProcessAddress,
 				procTime: cd.MaxProcessTime,
 				tasks:    cd.NumCopTasks,
 			}
 
 			execDetails := stmtCtx.GetExecDetails()
-			times.cop.wall = execDetails.CopTime
-			times.cop.tikv = execDetails.TimeDetail.ProcessTime
-			memMax = stmtCtx.MemTracker.MaxConsumed()
-			diskMax = stmtCtx.DiskTracker.MaxConsumed()
+			traceLog.times.cop.wall = execDetails.CopTime
+			traceLog.times.cop.tikv = execDetails.TimeDetail.ProcessTime
+			traceLog.mem = stmtCtx.MemTracker.MaxConsumed()
+			traceLog.disk = stmtCtx.DiskTracker.MaxConsumed()
 
 			if info.modified {
-				tx = &logTXObject{affected: stmtCtx.AffectedRows()}
+				traceLog.tx = &logTXObject{affected: stmtCtx.AffectedRows()}
 			}
 			if cd := execDetails.CommitDetail; cd != nil {
 				if info.modified {
-					tx.keys, tx.size = cd.WriteKeys, cd.WriteSize
-					times.tx = &txTimeObject{prewrite: cd.PrewriteTime, commit: cd.CommitTime}
+					traceLog.tx.keys, traceLog.tx.size = cd.WriteKeys, cd.WriteSize
+					traceLog.times.tx = &txTimeObject{prewrite: cd.PrewriteTime, commit: cd.CommitTime}
 				}
 			}
 			_, d := stmtCtx.SQLDigest()
-			digest = d.String()
+			traceLog.digest = d.String()
 		}
 	}
 
-	mctx := mctech.GetContextStrict(sctx)
-	at = mctx.StartedAt()
-
-	connID = sessVars.ConnectionID
-	inTX = sessVars.InTxn()
-	times.all = time.Since(at)
-	times.parse = sessVars.DurationParse
-	times.plan = sessVars.DurationCompile
-	times.ready = times.all - times.send
-
-	failpoint.Inject("MockTraceLogData", func(val failpoint.Value) {
-		values := make(map[string]any)
-		err := json.Unmarshal([]byte(val.(string)), &values)
-		if err != nil {
-			panic(err)
-		}
-
-		for k, v := range values {
-			switch k {
-			case "startedAt":
-				if t, err := time.ParseInLocation("2006-01-02 15:04:05.000", v.(string), time.Local); err == nil {
-					at = t
-					times.tidb, _ = time.ParseDuration("11s201ms")
-					times.all, _ = time.ParseDuration("3.315821ms")
-					times.parse, _ = time.ParseDuration("176.943µs")
-					times.plan, _ = time.ParseDuration("1.417613ms")
-					times.cop = copTimeObject{}
-					times.cop.wall, _ = time.ParseDuration("0s128ms")
-					times.cop.tikv, _ = time.ParseDuration("0s98ms")
-					times.cop.tiflash, _ = time.ParseDuration("12µs")
-					times.ready, _ = time.ParseDuration("2.315821ms")
-					times.send, _ = time.ParseDuration("1ms")
-					if times.tx != nil {
-						times.tx.commit, _ = time.ParseDuration("100ms")
-						times.tx.prewrite, _ = time.ParseDuration("1s32ms")
-					}
-				}
-			case "maxAct":
-				maxAct = int64(v.(float64))
-			case "maxCop":
-				maxCop = &logMaxCopObject{}
-				sub := v.(map[string]any)
-				for ck, cv := range sub {
-					switch ck {
-					case "procAddr":
-						maxCop.procAddr = cv.(string)
-					case "procTime":
-						maxCop.procTime, _ = time.ParseDuration(cv.(string))
-					case "tasks":
-						maxCop.tasks = int(cv.(float64))
-					}
-				}
-			case "rru":
-				ru.rru = v.(float64)
-			case "wru":
-				ru.wru = v.(float64)
-			case "mem":
-				memMax = int64(v.(float64))
-			case "disk":
-				diskMax = int64(v.(float64))
-			case "rows":
-				rows = int64(v.(float64))
-			case "tx":
-				tx = &logTXObject{}
-				sub := v.(map[string]any)
-				for ck, cv := range sub {
-					switch ck {
-					case "keys":
-						tx.keys = int(cv.(float64))
-					case "affected":
-						tx.affected = uint64(cv.(float64))
-					case "size":
-						tx.size = int(cv.(float64))
-					}
-				}
-			}
-		}
-	})
-
 	sqlLen := len(origSQL)
-	if sqlLen > config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold {
+	threshold := config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold
+	if sqlLen > threshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		if _, err := gz.Write([]byte(origSQL)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
-					zip = b.Bytes()
-					origSQL = origSQL[:256] + fmt.Sprintf("...len(%d)", sqlLen)
+					traceLog.zip = b.Bytes()
+					traceLog.sql = origSQL[:threshold] + fmt.Sprintf("...len(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}
@@ -446,56 +357,18 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 
 	lst := mctx.GetDbs(stmt)
 	if len(lst) > 0 {
-		dbs = strings.Join(lst, ",")
+		traceLog.dbs = strings.Join(lst, ",")
 	}
 	if result := mctx.PrepareResult(); result != nil {
-		tenant = result.Tenant()
+		traceLog.tenant = result.Tenant()
 		if params := result.Params(); params != nil {
 			if v, ok := params[mctech.ParamAcross].(string); ok {
-				across = v
+				traceLog.across = v
 			}
 		}
 	}
 
-	var fields = []zapcore.Field{
-		zap.String("db", db),
-		zap.String("dbs", dbs),
-		zap.String("usr", user),
-		zap.String("tenant", tenant),
-		zap.String("conn", encode(connID)),
-		zap.Bool("inTX", inTX),
-		zap.String("cat", info.category),
-		zap.String("tp", info.sqlType),
-		zap.String("across", across),
-		zap.String("at", at.Format(timeFormat)),
-		zap.String("txId", encode(txID)),
-		zap.Int64("maxAct", maxAct),
-		zap.String("digest", digest),
-		zap.Int64("rows", rows),
-		zap.Int64("mem", memMax),
-		zap.Int64("disk", diskMax),
-		zap.Object("times", &times),
-		zap.Object("ru", &ru),
-	}
-	if maxCop != nil {
-		fields = append(fields, zap.Object("maxCop", maxCop))
-	}
-	if tx != nil {
-		fields = append(fields, zap.Object("tx", tx))
-	}
-	if warnings != nil {
-		fields = append(fields, zap.Object("warnings", warnings))
-	}
-	if err != nil {
-		fields = append(fields, zap.String("error", err.Error()))
-	}
-
-	fields = append(fields, zap.String("sql", origSQL))
-	if len(zip) > 0 {
-		fields = append(fields, zap.Binary("zip", zip))
-	}
-
-	renderTraceLog(sctx, fields)
+	render(sctx, traceLog)
 }
 
 func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sqlStmtInfo) {
@@ -560,20 +433,4 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		// stmt 为 nil 或者除以上各个 case 项以外的类型
 	}
 	return info
-}
-
-const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-
-func encode(num uint64) string {
-	bytes := []byte{}
-	for num > 0 {
-		bytes = append(bytes, chars[num%62])
-		num = num / 62
-	}
-
-	for left, right := 0, len(bytes)-1; left < right; left, right = left+1, right-1 {
-		bytes[left], bytes[right] = bytes[right], bytes[left]
-	}
-
-	return string(bytes)
 }
