@@ -46,9 +46,9 @@ type QueryLog struct {
 }
 
 type LargeQuery struct {
-	Enabled   bool   `toml:"enabled" json:"enabled"`     // 是否启用large sql跟踪
-	Threshold int    `toml:"threshold" json:"threshold"` // 超出该长度的sql会记录到数据库某个位置
-	Types     string `toml:"types" json:"types"`         // 记录的sql类型
+	Enabled   bool     `toml:"enabled" json:"enabled"`     // 是否启用large sql跟踪
+	Threshold int      `toml:"threshold" json:"threshold"` // 超出该长度的sql会记录到数据库某个位置
+	Types     []string `toml:"types" json:"types"`         // 记录的sql类型
 }
 
 // Sequence mctech_sequence functions used
@@ -99,10 +99,25 @@ type VersionColumn struct {
 	DbMatches []string `toml:"db-matches" json:"db-matches"`
 }
 
+const (
+	DefaultTenantEnabled              = false
+	DefaultForbiddenPrepare           = false
+	DefaultMPPValue                   = "allow"
+	DefaultMetricsQueryLogEnabled     = false
+	DefaultMetricsQueryLogMaxLength   = 16 * 1024 // 默认最大记录16K
+	DefaultMetricsLargeQueryEnabled   = false
+	DefaultMetricsLargeQueryThreshold = 1 * 1024 * 1024
+	DefaultSqlTraceEnabled            = false
+	DefaultSqlTraceFileMaxDays        = 1
+	DefaultSqlTraceFileMaxSize        = 1024 // 1024MB
+	DefaultSqlTraceCompressThreshold  = 16 * 1024
+	DefaultMetricsLargeQueryTypes     = "delete,insert,update,select"
+)
+
 func init() {
 	defaultConf.MCTech = MCTech{
 		Sequence: Sequence{
-			Mock:          true,
+			Mock:          false,
 			Debug:         false,
 			MaxFetchCount: 1000,
 			Backend:       3,
@@ -121,45 +136,48 @@ func init() {
 			AcrossDbGroups:   []string{},
 		},
 		Tenant: Tenant{
-			Enabled:          false,
-			ForbiddenPrepare: false,
+			Enabled:          DefaultTenantEnabled,
+			ForbiddenPrepare: DefaultForbiddenPrepare,
 		},
 		DDL: DDL{
 			Version: VersionColumn{
-				Enabled: false,
-				Name:    "__version",
+				Enabled:   false,
+				Name:      "__version",
+				DbMatches: []string{},
 			},
 		},
 		MPP: MPP{
-			DefaultValue: "allow",
+			DefaultValue: DefaultMPPValue,
 		},
 		Metrics: MctechMetrics{
 			QueryLog: QueryLog{
-				Enabled:   false,
-				MaxLength: 16 * 1024, // 默认最大记录16K
+				Enabled:   DefaultMetricsQueryLogEnabled,
+				MaxLength: DefaultMetricsQueryLogMaxLength,
 			},
 			LargeQuery: LargeQuery{
-				Enabled:   false,
-				Threshold: 1 * 1024 * 1024,
-				Types:     "delete,insert,update,select",
+				Enabled:   DefaultMetricsLargeQueryEnabled,
+				Threshold: DefaultMetricsLargeQueryThreshold,
+				Types:     strings.Split(DefaultMetricsLargeQueryTypes, ","),
 			},
 		},
 		SqlTrace: SqlTrace{
-			Enabled:           false,
-			FileMaxDays:       1,
-			FileMaxSize:       1024,
+			Enabled:           DefaultSqlTraceEnabled,
+			FileMaxDays:       DefaultSqlTraceFileMaxDays,
+			FileMaxSize:       DefaultSqlTraceFileMaxSize,
 			Exclude:           []string{},
-			CompressThreshold: 16 * 1024,
+			CompressThreshold: DefaultSqlTraceCompressThreshold,
 		},
 	}
 }
 
 // ########################### Option ##########################################
 
-var defaultExcludeDbs = []string{
+var DefaultSqlTraceExcludeDbs = []string{
 	"test", "dp_stat",
 	"mysql", "information_schema", "metrics_schema", "performance_schema",
 }
+
+var AllMetricsLargeSqlTypes = strings.Split(DefaultMetricsLargeQueryTypes, ",")
 
 // Option mctech option
 type Option struct {
@@ -187,7 +205,7 @@ type Option struct {
 
 	DDLVersionColumnEnabled bool     // 是否开启 create table自动插入特定的version列的特性
 	DDLVersionColumnName    string   // version列的名称
-	DDLVersionFilters       []string // 插入version的表需要满足的条件
+	DDLVersionDbMatches     []string // 插入version的表需要满足的条件
 
 	MetricsLargeQueryEnabled   bool
 	MetricsLargeQueryTypes     []string
@@ -269,15 +287,15 @@ func initMCTechOption() {
 
 		DDLVersionColumnEnabled: opts.DDL.Version.Enabled,
 		DDLVersionColumnName:    opts.DDL.Version.Name,
-		DDLVersionFilters:       opts.DDL.Version.DbMatches,
+		DDLVersionDbMatches:     opts.DDL.Version.DbMatches,
 
 		MetricsLargeQueryEnabled:   opts.Metrics.LargeQuery.Enabled,
 		MetricsLargeQueryThreshold: opts.Metrics.LargeQuery.Threshold,
-		MetricsLargeQueryTypes:     strings.Split(strings.TrimSpace(opts.Metrics.LargeQuery.Types), ","),
+		MetricsLargeQueryTypes:     opts.Metrics.LargeQuery.Types,
 
 		SqlTraceEnabled:           opts.SqlTrace.Enabled,
 		SqlTraceCompressThreshold: opts.SqlTrace.CompressThreshold,
-		SqlTraceExcludeDbs:        defaultExcludeDbs,
+		SqlTraceExcludeDbs:        DefaultSqlTraceExcludeDbs,
 
 		MetricsQueryLogEnabled:   opts.Metrics.QueryLog.Enabled,
 		MetricsQueryLogMaxLength: opts.Metrics.QueryLog.MaxLength,
