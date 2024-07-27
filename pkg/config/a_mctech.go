@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -152,7 +153,7 @@ func init() {
 			Version: VersionColumn{
 				Enabled:   DefaultDDLVersionEnabled,
 				Name:      DefaultDDLVersionColumnName,
-				DbMatches: strToSlice(DefaultDDLVersionDbMatches, ","),
+				DbMatches: StrToSlice(DefaultDDLVersionDbMatches, ","),
 			},
 		},
 		MPP: MPP{
@@ -167,7 +168,7 @@ func init() {
 			LargeQuery: LargeQuery{
 				Enabled:   DefaultMetricsLargeQueryEnabled,
 				Threshold: DefaultMetricsLargeQueryThreshold,
-				Types:     strToSlice(DefaultMetricsLargeQueryTypes, ","),
+				Types:     StrToSlice(DefaultMetricsLargeQueryTypes, ","),
 			},
 			SqlTrace: SqlTrace{
 				Enabled:           DefaultSqlTraceEnabled,
@@ -288,20 +289,48 @@ func formatURL(str string) string {
 	return apiPrefix
 }
 
-func strToSlice(s string, sep string) []string {
+// StrToSlice
+func StrToSlice(s string, sep string) []string {
 	s = strings.TrimSpace(s)
 	if len(s) == 0 {
 		return []string{}
 	}
 
-	items := strings.Split(s, sep)
-	list := make([]string, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if len(item) == 0 {
+	parts := strings.Split(s, sep)
+	var nonEmptyParts []string
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if len(part) == 0 || slices.Contains(nonEmptyParts, part) {
 			continue
 		}
-		list = append(list, item)
+		nonEmptyParts = append(nonEmptyParts, part)
 	}
-	return list
+	return nonEmptyParts
+}
+
+// StrToPossibleValueSlice
+func StrToPossibleValueSlice(s string, sep string, possibleValues []string) ([]string, string, bool) {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return []string{}, "", true
+	}
+
+	var (
+		result  []string
+		illegal string
+	)
+	parts := strings.Split(s, sep)
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if len(part) == 0 || slices.Contains(result, part) {
+			continue
+		}
+		if !slices.Contains(possibleValues, part) {
+			illegal = part
+			return result, illegal, false
+		}
+
+		result = append(result, part)
+	}
+	return result, "", true
 }
