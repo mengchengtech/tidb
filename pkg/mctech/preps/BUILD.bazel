@@ -19,6 +19,7 @@ go_library(
         "//pkg/config",
         "//pkg/mctech",
         "//pkg/mctech/ddl",
+        "//pkg/mctech/interceptor",
         "//pkg/mctech/isolation",
         "//pkg/mctech/msic",
         "//pkg/parser/ast",
