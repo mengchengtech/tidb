@@ -153,24 +153,3 @@ func initFullQueryLogger() *zap.Logger {
 
 	return logger
 }
-
-// LogTimeObject time data struct whitch is used for trace log.
-type LogTimeObject struct {
-	All   time.Duration // 执行总时间
-	Parse time.Duration // 解析语法树用时，含mctech扩展
-	Plan  time.Duration // 生成执行计划用时
-	Cop   time.Duration // cop用时
-	Ready time.Duration // 首行准备好用时
-	Send  time.Duration // 发送到客户端用时
-}
-
-// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
-func (lt *LogTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddDuration("all", lt.All)
-	enc.AddDuration("parse", lt.Parse)
-	enc.AddDuration("plan", lt.Plan)
-	enc.AddDuration("cop", lt.Cop)
-	enc.AddDuration("ready", lt.Ready)
-	enc.AddDuration("send", lt.Send)
-	return nil
-}
