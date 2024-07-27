@@ -49,6 +49,8 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
 		// background
 		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "background": "true", "mpp": "allow"}, "db": "global_platform"}, ""},
+		// across
+		{"pf", "/*& tenant:ztsj */ /*& across:global_cq3,global_ds */ select * from company", map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "across": "global_cq3|global_ds", "mpp": "allow"}, "db": "global_platform"}, ""},
 		// dbPrefix
 		{"pd", "/*& dbPrefix:mock */ select * from company", map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}, "db": "public_data"}, ""},
 		// replace
@@ -60,6 +62,12 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		// 新的值声明方式
 		{"pf", "/*& tenant|gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
 		{"pf", "/*& tenant|'gdcd' */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+
+		// 租户隔离角色
+		{"pf", "/*& impersonate: tenant */ select * from company", nil, "impersonate的值错误。可选值为'tenant_only'"},
+		{"pf", "/*& impersonate: tenant_only */ select * from company", nil, "当前用户root无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */"},
+		{"pf", "/*& global:true */ /*& impersonate: tenant_only */ select * from company", nil, "当前数据库用户包含租户隔离角色，不允许启用 global hint"},
+		{"pf", "/*& tenant|gdcd */ /*& impersonate: tenant_only */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "impersonate": "tenant_only", "mpp": "allow"}, "db": "global_platform"}, ""},
 	}
 
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
