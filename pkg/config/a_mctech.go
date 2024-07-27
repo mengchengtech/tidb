@@ -288,6 +288,13 @@ func GetMCTechConfig() *MCTech {
 				opts.Sequence.Mock = v.(bool)
 			case "DbChecker.Compatible":
 				opts.DbChecker.Compatible = v.(bool)
+			case "DbChecker.Across":
+				lst := v.([]any)
+				across := make([]string, 0, len(lst))
+				for _, item := range lst {
+					across = append(across, item.(string))
+				}
+				opts.DbChecker.Across = across
 			case "Encryption.Mock":
 				opts.Encryption.Mock = v.(bool)
 			case "Tenant.Enabled":

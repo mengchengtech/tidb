@@ -53,7 +53,7 @@ func TestFullSQLLog(t *testing.T) {
 	require.NotNil(t, logData)
 
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc",
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "",
 		"conn": "1", "tp": "select",
 		"at":   now,
 		"time": map[string]any{"all": "3.315821ms", "parse": "176.943µs", "plan": "1.417613ms", "cop": "128ms", "ready": "2.315821ms", "send": "1ms"},
