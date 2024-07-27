@@ -303,6 +303,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		digest            string         // sql 语句的hash
 		zip               []byte         // 压缩后的sql文本
 		writeKeys         = 0            // 写入 Key 个数
+		across            string         // sql中指定的跨库查询的数据库
 	)
 
 	var stmtDetail execdetails.StmtExecDetails
@@ -404,6 +405,11 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		}
 		if result := mctx.PrepareResult(); result != nil {
 			tenant = result.Tenant()
+			if params := result.Params(); params != nil {
+				if v, ok := params[mctech.ParamAcross].(string); ok {
+					across = v
+				}
+			}
 		}
 	}
 
@@ -414,6 +420,7 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		zap.String("tenant", tenant),
 		zap.String("conn", encode(connID)),
 		zap.String("tp", sqlType),
+		zap.String("across", across),
 		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
 		zap.Object("time", &logTimeObject{
 			all:   queryTime,
