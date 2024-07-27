@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "parser_driver",
-    srcs = ["value_expr.go"],
+    srcs = [
+        "a_mctech.go",
+        "value_expr.go",
+    ],
     importpath = "github.com/pingcap/tidb/pkg/types/parser_driver",
     visibility = ["//visibility:public"],
     deps = [
