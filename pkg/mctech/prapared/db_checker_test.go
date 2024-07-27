@@ -93,7 +93,7 @@ func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
 }
 
 func filterRunTestCase(t *testing.T, c *testStringFilterCase) error {
-	p := newStringFilter(c.pattern)
+	p := mctech.NewStringFilter(c.pattern)
 	success, err := p.Match(c.target)
 	if err != nil {
 		return err

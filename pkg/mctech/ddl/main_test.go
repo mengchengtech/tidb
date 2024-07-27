@@ -7,6 +7,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var dbMap = map[string]string{
+	"pf": "global_platform",
+	"pd": "public_data",
+	"ac": "asset_component",
+}
+
 type mctechTestCase interface {
 	Source() any
 	Expect() string
