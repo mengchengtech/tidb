@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/pingcap/tidb/pkg/mctech"
+	_ "github.com/pingcap/tidb/pkg/mctech/interceptor" // 为了解除循环依赖，触发运行期动态函数初始化，在此处强制加载
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 )

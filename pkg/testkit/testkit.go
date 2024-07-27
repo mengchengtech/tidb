@@ -371,7 +371,7 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 			}
 		}
 		// add by zhangbing
-		if err = tk.onAfterParseSQL(ctx, mctx, sql, stmts); err != nil {
+		if err = tk.onAfterParseSQL(ctx, mctx, stmts); err != nil {
 			return nil, err
 		}
 		// add end
@@ -401,6 +401,10 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 				// other statements are executed, but the `ResultSet` is not returned, so close them here
 				terror.Call(rs.Close)
 			}
+
+			// add by zhangbing
+			tk.onAfterHandleStmt(ctx, stmt, err)
+			// add end
 			if err != nil {
 				tk.session.GetSessionVars().StmtCtx.AppendError(err)
 				return rs, errors.Trace(err)

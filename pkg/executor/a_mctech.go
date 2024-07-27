@@ -117,15 +117,19 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	return nil
 }
 
-func (e *PrepareExec) checkPrepare(ctx context.Context) error {
+// ----------------------------------- PrepareExec 扩展 ------------------------------------
+// 处理 Prepare 时为了保证语句复用，不能把租户信息写死，也不需要处理各种头信息，只需要改写下SQL就可以了，把租户信息变成参数占位符
+// 等到对应的 Execute 语句执行时，才考虑租户，考虑这些参数的实际值
+//
+
+func (e *PrepareExec) onCheckPrepare(ctx context.Context) error {
 	if config.GetMCTechConfig().Tenant.ForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
 	return nil
 }
 
-func (e *PrepareExec) afterParseSQL(ctx context.Context, stmt ast.StmtNode) (err error) {
-	handler := mctech.GetHandler()
+func (e *PrepareExec) onAfterParseSQL(ctx context.Context, stmt ast.StmtNode) (err error) {
 	var mctx mctech.Context
 	if mctx, err = mctech.GetContext(ctx); err != nil {
 		return err
@@ -135,18 +139,12 @@ func (e *PrepareExec) afterParseSQL(ctx context.Context, stmt ast.StmtNode) (err
 		return nil
 	}
 
-	if mctx != nil {
-		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-		modifyCtx.SetUsingTenantParam(true)
-		if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
-			if strFmt, ok := e.Ctx().(fmt.Stringer); ok {
-				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", stmt.OriginalText()))
-			}
-			return err
-		}
-	}
+	value := mctx.UsingTenantParam()
+	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	defer modifyCtx.SetUsingTenantParam(value)
 
-	return nil
+	modifyCtx.SetUsingTenantParam(true)
+	return mctech.GetInterceptor().AfterParseSQL(ctx, e.Ctx(), mctx, stmt)
 }
 
 // ---------------------------------------------- large query -----------------------------------------------
