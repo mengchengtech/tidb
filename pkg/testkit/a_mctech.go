@@ -2,41 +2,27 @@ package testkit
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pingcap/tidb/pkg/mctech"
 	_ "github.com/pingcap/tidb/pkg/mctech/preps" // 强制调用preps包里的init方法
 	"github.com/pingcap/tidb/pkg/parser/ast"
-	"github.com/pingcap/tidb/pkg/util/logutil"
-	"go.uber.org/zap"
 )
 
 func (tk *TestKit) onBeforeParseSQL(ctx context.Context, sql string) (context.Context, mctech.Context, string, error) {
-	handler := mctech.GetHandler()
-	subCtx, mctx, err := mctech.WithNewContext3(ctx, tk.Session(), false)
-	if err != nil {
-		return subCtx, nil, "", err
-	}
-
-	if mctx != nil {
-		if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
-			return ctx, nil, "", err
-		}
-	}
-	return subCtx, mctx, sql, nil
+	return mctech.GetInterceptor().BeforeParseSQL(ctx, tk.Session(), sql)
 }
 
-func (tk *TestKit) onAfterParseSQL(ctx context.Context, mctx mctech.Context, sql string, stmts []ast.StmtNode) (err error) {
-	if mctx != nil {
-		handler := mctech.GetHandler()
-		for _, stmt := range stmts {
-			if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
-				if strFmt, ok := tk.session.(fmt.Stringer); ok {
-					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", sql))
-				}
-				return err
-			}
+func (tk *TestKit) onAfterParseSQL(ctx context.Context, mctx mctech.Context, stmts []ast.StmtNode) (err error) {
+	it := mctech.GetInterceptor()
+	sctx := tk.Session()
+	for _, stmt := range stmts {
+		if err = it.AfterParseSQL(ctx, sctx, mctx, stmt); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (tk *TestKit) onAfterHandleStmt(ctx context.Context, stmt ast.StmtNode, err error) {
+	mctech.GetInterceptor().AfterHandleStmt(ctx, tk.Session(), stmt, err)
 }

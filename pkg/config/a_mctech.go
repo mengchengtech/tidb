@@ -302,6 +302,8 @@ func GetMCTechConfig() *MCTech {
 				opts.Metrics.LargeQuery.Filename = v.(string)
 			case "Metrics.SqlTrace.FullSqlDir":
 				opts.Metrics.SQLTrace.FullSQLDir = v.(string)
+			case "Metrics.SqlTrace.Enabled":
+				opts.Metrics.SQLTrace.Enabled = v.(bool)
 			}
 		}
 		failpoint.Return(&opts)
