@@ -7,6 +7,7 @@ go_library(
         "logobject.go",
         "notest.go",
         "stats.go",
+        "traceutil.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech/interceptor",
     visibility = ["//visibility:public"],

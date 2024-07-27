@@ -40,6 +40,7 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
 		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "rows": int64(1024), "maxAct": int64(2024),
 		"rru": int(1111), "wru": int(22),
+		"err": "mock sql error",
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
@@ -65,7 +66,7 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
 		"cat":  "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
 		"times": map[string]any{
-			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "3.315821ms", "send": "10ms",
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
 			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
 		},
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
@@ -73,6 +74,7 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 		"mem":    float64(151300), "disk": float64(9527), "rows": float64(1024),
 		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
 		"sql":    sql,
+		"error":  "mock sql error",
 	}, logData)
 }
 
