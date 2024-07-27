@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "executor",
     srcs = [
+        "a_mctech.go",
         "adapter.go",
         "admin.go",
         "admin_plugins.go",
@@ -136,6 +137,7 @@ go_library(
         "//pkg/kv",
         "//pkg/lightning/log",
         "//pkg/lightning/mydump",
+        "//pkg/mctech",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/metrics",
@@ -297,6 +299,7 @@ go_test(
     name = "executor_test",
     timeout = "moderate",
     srcs = [
+        "a_mctech_test.go",
         "adapter_test.go",
         "analyze_test.go",
         "analyze_utils_test.go",
@@ -398,6 +401,8 @@ go_test(
         "//pkg/expression/aggregation",
         "//pkg/infoschema",
         "//pkg/kv",
+        "//pkg/mctech/mock",
+        "//pkg/mctech/preps",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/metrics",

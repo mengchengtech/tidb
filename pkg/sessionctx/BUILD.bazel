@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "sessionctx",
-    srcs = ["context.go"],
+    srcs = [
+        "a_mctech.go",
+        "context.go",
+    ],
     importpath = "github.com/pingcap/tidb/pkg/sessionctx",
     visibility = ["//visibility:public"],
     deps = [
@@ -30,6 +33,7 @@ go_library(
         "@com_github_pingcap_errors//:errors",
         "@com_github_pingcap_tipb//go-binlog",
         "@com_github_tikv_client_go_v2//oracle",
+        "@org_uber_go_zap//zapcore",
     ],
 )
 
