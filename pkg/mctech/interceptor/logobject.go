@@ -8,16 +8,91 @@ import (
 )
 
 var (
+	_ zapcore.ObjectMarshaler = &logSQLTraceObject{}
 	_ zapcore.ObjectMarshaler = &logTimeObject{}
+	_ zapcore.ObjectMarshaler = &copTimeObject{}
+	_ zapcore.ObjectMarshaler = &txTimeObject{}
 	_ zapcore.ObjectMarshaler = &logRUStatObject{}
+	_ zapcore.ObjectMarshaler = &logMaxCopObject{}
+	_ zapcore.ObjectMarshaler = &logTXObject{}
+	_ zapcore.ObjectMarshaler = &logWarningObjects{}
+	_ zapcore.ObjectMarshaler = &logWarningObject{}
 )
+
+// logSQLTraceObject sql trace log object
+type logSQLTraceObject struct {
+	at       time.Time          // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
+	conn     uint64             // SQL 查询客户端连接 ID
+	db       string             // 执行sql时的当前库名称
+	dbs      string             // 执行的sql中用到的所有数据库名称列表。','分隔
+	across   string             // sql中指定的跨库查询的数据库
+	inTX     bool               // 当前sql是否在事务中
+	user     string             // 执行sql时使用的账号
+	tenant   string             // 所属租户信息
+	txID     uint64             // 事务号(显示事务和隐式事务)
+	maxAct   int64              // sql执行过程中读取/生成的最大行数（与rows不一样，中间过程生成的行数多不代表结果集中的行数多）
+	info     *sqlStmtInfo       // sql类型
+	times    logTimeObject      // 执行过程中各种时间
+	maxCop   *logMaxCopObject   // tikv coprocessor相关的信息
+	tx       *logTXObject       // 修改数据相关的信息
+	ru       logRUStatObject    // 当前sql资源消耗信息
+	mem      int64              // 该 SQL 查询执行时占用的最大内存空间
+	disk     int64              // 该 SQL 查询执行时占用的最大磁盘空间
+	rows     int64              // 查询返回结果行数
+	digest   string             // sql 语句的hash
+	warnings *logWarningObjects // 执行中生成的警告信息
+	sql      string             // 原始sql，或sql片断
+	zip      []byte             // 压缩后的sql文本
+	err      error              // sql执行错误信息
+}
+
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
+func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("db", st.db)
+	enc.AddString("dbs", st.dbs)
+	enc.AddString("usr", st.user)
+	enc.AddString("tenant", st.tenant)
+	enc.AddString("conn", encode(st.conn))
+	enc.AddBool("inTX", st.inTX)
+	enc.AddString("cat", st.info.category)
+	enc.AddString("tp", st.info.sqlType)
+	enc.AddString("across", st.across)
+	enc.AddString("at", st.at.Format(timeFormat))
+	enc.AddString("txId", encode(st.txID))
+	enc.AddInt64("maxAct", st.maxAct)
+	enc.AddString("digest", st.digest)
+	enc.AddInt64("rows", st.rows)
+	enc.AddInt64("mem", st.mem)
+	enc.AddInt64("disk", st.disk)
+	enc.AddObject("times", &st.times)
+	enc.AddObject("ru", &st.ru)
+
+	if st.maxCop != nil {
+		enc.AddObject("maxCop", st.maxCop)
+	}
+	if st.tx != nil {
+		enc.AddObject("tx", st.tx)
+	}
+	if st.warnings != nil {
+		enc.AddObject("warnings", st.warnings)
+	}
+	if st.err != nil {
+		enc.AddString("error", st.err.Error())
+	}
+
+	enc.AddString("sql", st.sql)
+	if len(st.zip) > 0 {
+		enc.AddBinary("zip", st.zip)
+	}
+
+	return nil
+}
 
 type logTimeObject struct {
 	all   time.Duration // 执行总时间，执行 SQL 耗费的自然时间
 	parse time.Duration // 解析语法树用时，含mctech扩展
 	plan  time.Duration // 生成执行计划耗时
 	tidb  time.Duration // tidb-server里用时
-	ready time.Duration // 首行结果准备好时间(总执行时间除去发送结果耗时)
 	send  time.Duration // 发送到客户端用时
 
 	cop copTimeObject // cop task相关的时间
@@ -54,7 +129,7 @@ func (lt *logTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("parse", lt.parse)
 	enc.AddDuration("plan", lt.plan)
 	enc.AddDuration("tidb", lt.tidb)
-	enc.AddDuration("ready", lt.ready)
+	enc.AddDuration("ready", lt.all-lt.send) // 首行结果准备好时间(总执行时间除去发送结果耗时)
 	enc.AddDuration("send", lt.send)
 	enc.AddObject("cop", &lt.cop)
 	if lt.tx != nil {
@@ -181,3 +256,19 @@ var (
 	sqlCallInfo = &sqlStmtInfo{"misc", "call", false}
 	sqlDoInfo   = &sqlStmtInfo{"misc", "do", false}
 )
+
+const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+func encode(num uint64) string {
+	bytes := []byte{}
+	for num > 0 {
+		bytes = append(bytes, chars[num%62])
+		num = num / 62
+	}
+
+	for left, right := 0, len(bytes)-1; left < right; left, right = left+1, right-1 {
+		bytes[left], bytes[right] = bytes[right], bytes[left]
+	}
+
+	return string(bytes)
+}

@@ -7,13 +7,13 @@ import (
 
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/sessionctx"
-	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap"
 )
 
-func renderTraceLog(_ sessionctx.Context, fields []zapcore.Field) {
+func renderTraceLog(_ sessionctx.Context, traceLog *logSQLTraceObject) {
 	mctech.F().Info(
 		"", // 忽略Message字段
-		fields...,
+		zap.Inline(traceLog),
 	)
 }
 
