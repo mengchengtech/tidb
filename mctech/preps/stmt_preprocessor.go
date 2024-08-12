@@ -13,7 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var mctechHintPattern = regexp.MustCompile(`(?i)/\*&\s*(\$?[a-z_0-9]+)[:|](.*?)\s*\*/`)
+var mctechHintPattern = regexp.MustCompile(`(?i)/\*&\s*(\$?[a-z_0-9]+)[:|]\s*(.*?)\s*\*/`)
 
 // StatementPreprocessor interface
 type StatementPreprocessor interface {
@@ -62,11 +62,23 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 			actionName := name[1:]
 			actions = append(actions, &actionInfo{actionName, value})
 		} else {
+			valueLength := len(value)
 			// param 去掉两端的单引号
-			if value[0] == '\'' && value[len(value)-1] == '\'' {
-				value = value[1 : len(value)-1]
+			if valueLength > 0 {
+				quotedPrefix := value[0] == '\''
+				quotedSuffix := value[valueLength-1] == '\''
+				switch {
+				case
+					valueLength == 1 && quotedPrefix, // "'"
+					quotedPrefix && !quotedSuffix,    // "'foo"
+					!quotedPrefix && quotedSuffix:    // "bar'"
+					return "", nil, fmt.Errorf("\"%s\" hint 值格式不正确 -> %s", name, value)
+				case quotedPrefix && quotedSuffix:
+					value = value[1 : valueLength-1]
+					valueLength = len(value)
+				}
 			}
-			if value[0] == ' ' || value[len(value)-1] == ' ' {
+			if valueLength > 0 && (value[0] == ' ' || value[valueLength-1] == ' ') {
 				value = strings.TrimSpace(value)
 			}
 			if val, ok := params[name]; ok {

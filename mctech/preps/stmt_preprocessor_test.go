@@ -45,9 +45,23 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*  & global:true */ select * from company", "", "", "当前用户root无法确定所属租户信息"},
 		{"pf", "/* global:true */ select * from company", "", "", "当前用户root无法确定所属租户信息"},
 		{"test", "/* global:true */ select * from company", "test", "{{{,,false,[{mpp,allow}],{false,[]}}},test}", ""},
+		{"pf", "/*& tenant:' */ select * from company", "", "", "\"tenant\" hint 值格式不正确 -> '"},
+		{"pf", "/*& tenant:'gslq */ select * from company", "", "", "\"tenant\" hint 值格式不正确 -> 'gslq"},
+		{"pf", "/*& tenant: '  gslq */ select * from company", "", "", "\"tenant\" hint 值格式不正确 -> '  gslq"},
+		{"pf", "/*& tenant:gslq  ' */ select * from company", "", "", "\"tenant\" hint 值格式不正确 -> gslq  '"},
 		// tenant hint
 		{"pf", "/*& tenant:gdcd */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
 		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", "", "", "存在tenant信息时，global不允许设置为true"},
+		{"pf", "/*& tenant: gdcd */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:'gdcd ' */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:'  gdcd' */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:'  gdcd   ' */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant:  '  gdcd   ' */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
+		{"pf", "/*& tenant: */ select * from company", "", "", "当前用户root无法确定所属租户信息"},
+		// 空值
+		{"test", "/*& custom: */ select * from company", "test", "{{{,,false,[{custom,} {mpp,allow}],{false,[]}}},test}", ""},
+		{"pf", "/*& tenant:'' */ select * from company", "", "", "当前用户root无法确定所属租户信息"},
+		{"pf", "/*& tenant:'    ' */ select * from company", "", "", "当前用户root无法确定所属租户信息"},
 
 		// request_id
 		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", "global_platform", "{{{,gdcd,false,[{mpp,allow} {requestId,abc123456} {tenant,gdcd}],{false,[]}}},global_platform}", ""},
