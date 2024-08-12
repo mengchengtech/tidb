@@ -44,9 +44,23 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*  & global:true */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
 		{"pf", "/* global:true */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
 		{"test", "/* global:true */ select * from company", []string{"test"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "db": "test"}, ""},
+		{"pf", "/*& tenant:' */ select * from company", nil, nil, "\"tenant\" hint 值格式不正确 -> '"},
+		{"pf", "/*& tenant:'gslq */ select * from company", nil, nil, "\"tenant\" hint 值格式不正确 -> 'gslq"},
+		{"pf", "/*& tenant: '  gslq */ select * from company", nil, nil, "\"tenant\" hint 值格式不正确 -> '  gslq"},
+		{"pf", "/*& tenant:gslq  ' */ select * from company", nil, nil, "\"tenant\" hint 值格式不正确 -> gslq  '"},
 		// tenant hint
 		{"pf", "/*& tenant:gdcd */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
 		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", nil, nil, "存在tenant信息时，global不允许设置为true"},
+		{"pf", "/*& tenant: gdcd */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:'gdcd ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:'  gdcd' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:'  gdcd   ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:  '  gdcd   ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant: */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		// 空值
+		{"test", "/*& custom: */ select * from company", []string{"test"}, map[string]any{"params": map[string]any{"custom": "", "mpp": "allow"}, "db": "test"}, ""},
+		{"pf", "/*& tenant:'' */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		{"pf", "/*& tenant:'    ' */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
 
 		// request_id
 		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},

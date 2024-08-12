@@ -88,7 +88,7 @@ func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCas
 		}
 
 		if c.Failure() != "" {
-			require.ErrorContains(t, err, c.Failure())
+			require.ErrorContainsf(t, err, c.Failure(), "source %v", c.Source())
 		} else {
 			require.NoErrorf(t, err, "source %v", c.Source())
 		}
