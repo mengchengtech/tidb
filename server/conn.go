@@ -1371,16 +1371,14 @@ func (cc *clientConn) dispatch(ctx context.Context, data []byte) error {
 	case mysql.ComQuit:
 		return io.EOF
 	case mysql.ComInitDB:
-		node, err := cc.useDB(ctx, dataStr)
 		// add by zhangbing
-		if err == nil {
-			var mctx mctech.Context
-			if mctx, _, err = cc.onBeforeParseSQL(""); err != nil {
-				return err
-			}
+		if mctx, _, err := cc.onBeforeParseSQL(""); err == nil {
 			defer mctx.Clear()
+		} else {
+			return err
 		}
 		// add end
+		node, err := cc.useDB(ctx, dataStr)
 		cc.onExtensionStmtEnd(node, false, err)
 		if err != nil {
 			return err
