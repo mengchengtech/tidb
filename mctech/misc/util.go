@@ -1,4 +1,4 @@
-package msic
+package misc
 
 import (
 	"sync"
@@ -8,10 +8,10 @@ import (
 	"github.com/pingcap/tidb/parser/model"
 )
 
-type _msicExtension struct {
+type _miscExtension struct {
 }
 
-func (r *_msicExtension) Apply(mctx mctech.Context, node ast.Node) (matched bool, err error) {
+func (r *_miscExtension) Apply(mctx mctech.Context, node ast.Node) (matched bool, err error) {
 	matched = true
 	switch stmtNode := node.(type) {
 	case *ast.UseStmt:
@@ -34,7 +34,7 @@ func (r *_msicExtension) Apply(mctx mctech.Context, node ast.Node) (matched bool
 	return matched, err
 }
 
-func (r *_msicExtension) changeToPhysicalDb(
+func (r *_miscExtension) changeToPhysicalDb(
 	mctx mctech.Context, oriName string) (dbName string, err error) {
 	if dbName, err = mctx.ToPhysicalDbName(oriName); err == nil {
 		return dbName, err
@@ -43,23 +43,23 @@ func (r *_msicExtension) changeToPhysicalDb(
 	return oriName, err
 }
 
-var msicResolver *_msicExtension
-var msicResolverInitOne sync.Once
+var miscResolver *_miscExtension
+var miscResolverInitOne sync.Once
 
-func getMsicExtension() *_msicExtension {
-	if msicResolver != nil {
-		return msicResolver
+func getMiscExtension() *_miscExtension {
+	if miscResolver != nil {
+		return miscResolver
 	}
 
-	msicResolverInitOne.Do(func() {
-		e := &_msicExtension{}
-		msicResolver = e
+	miscResolverInitOne.Do(func() {
+		e := &_miscExtension{}
+		miscResolver = e
 	})
-	return msicResolver
+	return miscResolver
 }
 
-// ApplyExtension apply msic
+// ApplyExtension apply misc
 func ApplyExtension(mctx mctech.Context, node ast.Node) (matched bool, err error) {
-	ext := getMsicExtension()
+	ext := getMiscExtension()
 	return ext.Apply(mctx, node)
 }
