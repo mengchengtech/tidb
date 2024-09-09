@@ -1,4 +1,4 @@
-package msic
+package misc
 
 import (
 	"testing"
