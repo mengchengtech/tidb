@@ -1,4 +1,4 @@
-package msic
+package misc
 
 import (
 	"strings"
@@ -26,26 +26,26 @@ func (s *testDBSelector) GetDbIndex() (mctech.DbIndex, error) {
 	return s.dbIndex, nil
 }
 
-type msicMCTechTestCase struct {
+type miscMCTechTestCase struct {
 	sql     string
 	expect  string
 	failure string
 }
 
-func (t msicMCTechTestCase) Source() any {
+func (t miscMCTechTestCase) Source() any {
 	return t.sql
 }
 
-func (t *msicMCTechTestCase) Expect() string {
+func (t *miscMCTechTestCase) Expect() string {
 	return t.expect
 }
 
-func (t *msicMCTechTestCase) Failure() string {
+func (t *miscMCTechTestCase) Failure() string {
 	return t.failure
 }
 
 var (
-	useCases = []*msicMCTechTestCase{
+	useCases = []*miscMCTechTestCase{
 		{"use global_platform", "USE `mock_global_platform`", ""},
 		{"use global_dw", "USE `mock_global_dw_1`", ""},
 		{"show tables in global_dw", "SHOW TABLES IN `mock_global_dw_1`", ""},
@@ -53,17 +53,17 @@ var (
 	}
 )
 
-var msicExtensionCases = [][]*msicMCTechTestCase{
+var miscExtensionCases = [][]*miscMCTechTestCase{
 	useCases,
 }
 
-func TestMsicExtensionVisitor(t *testing.T) {
-	for _, lst := range msicExtensionCases {
-		doRunTest(t, doRunMsicMCTechTestCase, lst)
+func TestMiscExtensionVisitor(t *testing.T) {
+	for _, lst := range miscExtensionCases {
+		doRunTest(t, doRunMiscMCTechTestCase, lst)
 	}
 }
 
-func doRunMsicMCTechTestCase(t *testing.T, c *msicMCTechTestCase) error {
+func doRunMiscMCTechTestCase(t *testing.T, c *miscMCTechTestCase) error {
 	p := parser.New()
 	stmts, _, err := p.Parse(c.sql, "", "")
 	require.NoErrorf(t, err, "source %v", c.sql)
