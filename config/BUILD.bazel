@@ -41,7 +41,7 @@ go_test(
     data = glob(["**"]),
     embed = [":config"],
     flaky = True,
-    shard_count = 27,
+    shard_count = 28,
     deps = [
         "//mctech/mock",
         "//testkit/testsetup",

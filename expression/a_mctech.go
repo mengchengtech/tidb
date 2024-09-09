@@ -55,10 +55,10 @@ func init() {
 	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
-	DeferredFunctions[ast.MCTechSequence] = struct{}{}
-	DeferredFunctions[ast.MCTechVersionJustPass] = struct{}{}
-	DeferredFunctions[ast.MCSeq] = struct{}{}
-	DeferredFunctions[ast.MCVersionJustPass] = struct{}{}
+	deferredFunctions[ast.MCTechSequence] = struct{}{}
+	deferredFunctions[ast.MCTechVersionJustPass] = struct{}{}
+	deferredFunctions[ast.MCSeq] = struct{}{}
+	deferredFunctions[ast.MCVersionJustPass] = struct{}{}
 
 	// 不可折叠函数（一般用在projection中表函数表达式中，整个sql中只按sql字面出现次数调用还是返回结果中每一行都调用一次）
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}

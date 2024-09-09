@@ -538,7 +538,7 @@ func (er *expressionRewriter) handleCompareSubquery(ctx context.Context, v *ast.
 
 	noDecorrelate := hintFlags&HintFlagNoDecorrelate > 0
 	if noDecorrelate && len(extractCorColumnsBySchema4LogicalPlan(np, er.p.Schema())) == 0 {
-		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.GenWithStack(
+		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.FastGen(
 			"NO_DECORRELATE() is inapplicable because there are no correlated columns."))
 		noDecorrelate = false
 	}
@@ -841,13 +841,13 @@ func (er *expressionRewriter) handleExistSubquery(ctx context.Context, v *ast.Ex
 
 	noDecorrelate := hintFlags&HintFlagNoDecorrelate > 0
 	if noDecorrelate && len(extractCorColumnsBySchema4LogicalPlan(np, er.p.Schema())) == 0 {
-		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.GenWithStack(
+		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.FastGen(
 			"NO_DECORRELATE() is inapplicable because there are no correlated columns."))
 		noDecorrelate = false
 	}
 	semiJoinRewrite := hintFlags&HintFlagSemiJoinRewrite > 0
 	if semiJoinRewrite && noDecorrelate {
-		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.GenWithStack(
+		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.FastGen(
 			"NO_DECORRELATE() and SEMI_JOIN_REWRITE() are in conflict. Both will be ineffective."))
 		noDecorrelate = false
 		semiJoinRewrite = false
@@ -988,7 +988,7 @@ func (er *expressionRewriter) handleInSubquery(ctx context.Context, v *ast.Patte
 	noDecorrelate := hintFlags&HintFlagNoDecorrelate > 0
 	corCols := extractCorColumnsBySchema4LogicalPlan(np, er.p.Schema())
 	if len(corCols) == 0 && noDecorrelate {
-		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.GenWithStack(
+		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.FastGen(
 			"NO_DECORRELATE() is inapplicable because there are no correlated columns."))
 		noDecorrelate = false
 	}
@@ -1048,7 +1048,7 @@ func (er *expressionRewriter) handleScalarSubquery(ctx context.Context, v *ast.S
 
 	noDecorrelate := hintFlags&HintFlagNoDecorrelate > 0
 	if noDecorrelate && len(extractCorColumnsBySchema4LogicalPlan(np, er.p.Schema())) == 0 {
-		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.GenWithStack(
+		er.sctx.GetSessionVars().StmtCtx.AppendWarning(ErrInternal.FastGen(
 			"NO_DECORRELATE() is inapplicable because there are no correlated columns."))
 		noDecorrelate = false
 	}
@@ -1396,7 +1396,7 @@ func (er *expressionRewriter) rewriteVariable(v *ast.VariableExpr) {
 	}
 	if sysVar.IsNoop && !variable.EnableNoopVariables.Load() {
 		// The variable does nothing, append a warning to the statement output.
-		sessionVars.StmtCtx.AppendWarning(ErrGettingNoopVariable.GenWithStackByArgs(sysVar.Name))
+		sessionVars.StmtCtx.AppendWarning(ErrGettingNoopVariable.FastGenByArgs(sysVar.Name))
 	}
 	if sem.IsEnabled() && sem.IsInvisibleSysVar(sysVar.Name) {
 		err := ErrSpecificAccessDenied.GenWithStackByArgs("RESTRICTED_VARIABLES_ADMIN")
@@ -1649,6 +1649,13 @@ func (er *expressionRewriter) deriveCollationForIn(colLen int, _ int, args []exp
 func (er *expressionRewriter) castCollationForIn(colLen int, elemCnt int, stkLen int, coll *expression.ExprCollation) {
 	// We don't handle the cases if the element is a tuple, such as (a, b, c) in ((x1, y1, z1), (x2, y2, z2)).
 	if colLen != 1 {
+		return
+	}
+	if !collate.NewCollationEnabled() {
+		// See https://github.com/pingcap/tidb/issues/52772
+		// This function will apply CoercibilityExplicit to the casted expression, but some checks(during ColumnSubstituteImpl) is missed when the new
+		// collation is disabled, then lead to panic.
+		// To work around this issue, we can skip the function, it should be good since the collation is disabled.
 		return
 	}
 	for i := stkLen - elemCnt; i < stkLen; i++ {
@@ -1990,7 +1997,7 @@ func (er *expressionRewriter) funcCallToExpression(v *ast.FuncCallExpr) {
 
 	var function expression.Expression
 	er.ctxStackPop(len(v.Args))
-	if _, ok := expression.DeferredFunctions[v.FnName.L]; er.useCache() && ok {
+	if ok := expression.IsDeferredFunctions(er.sctx, v.FnName.L); er.useCache() && ok {
 		// When the expression is unix_timestamp and the number of argument is not zero,
 		// we deal with it as normal expression.
 		if v.FnName.L == ast.UnixTimestamp && len(v.Args) != 0 {
@@ -2159,7 +2166,7 @@ func (er *expressionRewriter) evalDefaultExpr(v *ast.DefaultExpr) {
 		}
 	default:
 		// for other columns, just use what it is
-		val, er.err = er.b.getDefaultValue(col)
+		val, er.err = er.b.getDefaultValue(col, false)
 	}
 	if er.err != nil {
 		return
@@ -2180,7 +2187,7 @@ func decodeKeyFromString(ctx sessionctx.Context, s string) string {
 	sc := ctx.GetSessionVars().StmtCtx
 	key, err := hex.DecodeString(s)
 	if err != nil {
-		sc.AppendWarning(errors.Errorf("invalid key: %X", key))
+		sc.AppendWarning(errors.NewNoStackErrorf("invalid key: %X", key))
 		return s
 	}
 	// Auto decode byte if needed.
@@ -2190,17 +2197,17 @@ func decodeKeyFromString(ctx sessionctx.Context, s string) string {
 	}
 	tableID := tablecodec.DecodeTableID(key)
 	if tableID == 0 {
-		sc.AppendWarning(errors.Errorf("invalid key: %X", key))
+		sc.AppendWarning(errors.NewNoStackErrorf("invalid key: %X", key))
 		return s
 	}
 	dm := domain.GetDomain(ctx)
 	if dm == nil {
-		sc.AppendWarning(errors.Errorf("domain not found when decoding key: %X", key))
+		sc.AppendWarning(errors.NewNoStackErrorf("domain not found when decoding key: %X", key))
 		return s
 	}
 	is := dm.InfoSchema()
 	if is == nil {
-		sc.AppendWarning(errors.Errorf("infoschema not found when decoding key: %X", key))
+		sc.AppendWarning(errors.NewNoStackErrorf("infoschema not found when decoding key: %X", key))
 		return s
 	}
 	tbl, _ := is.TableByID(tableID)
@@ -2230,7 +2237,7 @@ func decodeKeyFromString(ctx sessionctx.Context, s string) string {
 		}
 		return ret
 	}
-	sc.AppendWarning(errors.Errorf("invalid key: %X", key))
+	sc.AppendWarning(errors.NewNoStackErrorf("invalid key: %X", key))
 	return s
 }
 
