@@ -4,7 +4,7 @@ import (
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/ddl"
-	"github.com/pingcap/tidb/pkg/mctech/msic"
+	"github.com/pingcap/tidb/pkg/mctech/misc"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
@@ -61,7 +61,7 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmt ast.StmtNode) (b
 	}
 
 	// 返回值skip: 是否属于特殊的sql（use/show 等）
-	if isMsic, err := msic.ApplyExtension(mctx, stmt); err != nil || isMsic {
+	if isMisc, err := misc.ApplyExtension(mctx, stmt); err != nil || isMisc {
 		// 有错误 或者是 misc语句，不再执行后续处理逻辑
 		return false, err
 	}

@@ -1,9 +1,9 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
-    name = "msic",
+    name = "misc",
     srcs = ["util.go"],
-    importpath = "github.com/pingcap/tidb/pkg/mctech/msic",
+    importpath = "github.com/pingcap/tidb/pkg/mctech/misc",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/mctech",
@@ -13,13 +13,13 @@ go_library(
 )
 
 go_test(
-    name = "msic_test",
+    name = "misc_test",
     timeout = "short",
     srcs = [
         "main_test.go",
-        "msic_extension_visitor_test.go",
+        "misc_extension_visitor_test.go",
     ],
-    embed = [":msic"],
+    embed = [":misc"],
     flaky = True,
     deps = [
         "//pkg/mctech",
