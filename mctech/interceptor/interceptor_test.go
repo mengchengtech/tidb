@@ -291,6 +291,30 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	}, logData)
 }
 
+func TestFullSQLLogDbCheckerError(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{
+			"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true,
+			"DbChecker.Enabled": true, "DbChecker.Compatible": false,
+		}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/preps/DbCheckError")
+	}()
+	store := testkit.CreateMockStore(t)
+	tk := initDbAndData(t, store)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/preps/DbCheckError", mock.M(t, "true"))
+	sql := "/*& impersonate: tenant_only */ " + createUpdateTestSQL()
+	_, err := tk.Exec(sql)
+	require.Error(t, err, "dbs not allow in the same statement")
+	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
+	require.NoError(t, err)
+	require.NotNil(t, logData)
+	rawError := logData["error"]
+	require.Contains(t, rawError, "dbs not allow in the same statement")
+}
+
 type sqlCompressCase struct {
 	threshold         int
 	sqlLen            int

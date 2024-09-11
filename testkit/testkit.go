@@ -336,8 +336,11 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 		}
 
 		// add by zhangbing
-		if err = tk.onAfterParseSQL(stmts); err != nil {
-			return nil, err
+		for _, stmt := range stmts {
+			if err = tk.onAfterParseSQL(stmt); err != nil {
+				tk.onAfterHandleStmt(stmt, err)
+				return nil, err
+			}
 		}
 		// add end
 
