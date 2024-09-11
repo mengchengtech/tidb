@@ -15,15 +15,8 @@ func (cc *clientConn) onBeforeParseSQL(sql string) (mctech.Context, string, erro
 }
 
 // onAfterParseSQL 当sql语法解析成功后 执行的方法
-func (cc *clientConn) onAfterParseSQL(stmts []ast.StmtNode) (err error) {
-	it := mctech.GetInterceptor()
-	sctx := cc.getCtx()
-	for _, stmt := range stmts {
-		if err = it.AfterParseSQL(sctx, stmt); err != nil {
-			return err
-		}
-	}
-	return nil
+func (cc *clientConn) onAfterParseSQL(stmt ast.StmtNode) (err error) {
+	return mctech.GetInterceptor().AfterParseSQL(cc.getCtx(), stmt)
 }
 
 type mctechStmtEventInfo struct {
