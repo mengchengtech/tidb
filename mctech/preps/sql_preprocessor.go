@@ -89,7 +89,7 @@ func newSQLPreprocessor(stmt string) *sqlPreprocessor {
 }
 
 func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
-	comments mctech.Comments, params map[string]any) (*mctech.PrepareResult, error) {
+	comments mctech.Comments, params map[string]any) (mctech.PrepareResult, error) {
 	if len(params) > 0 {
 		for name, formatter := range valueFormatters {
 			value := params[name]

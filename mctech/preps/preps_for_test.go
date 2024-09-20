@@ -6,7 +6,7 @@ func NewMutexDatabaseCheckerWithParamsForTest(mutex, exclude, across []string) *
 	return newMutexDatabaseCheckerWithParams(mutex, exclude, across)
 }
 
-func NewDBSelectorForTest(result *mctech.PrepareResult) mctech.DBSelector {
+func NewDBSelectorForTest(result mctech.PrepareResult) mctech.DBSelector {
 	return newDBSelector(result)
 }
 
@@ -32,7 +32,7 @@ func NewActionsForTest(m map[string]string) (result []ActionInfo) {
 
 type SQLPreprocessorTest interface {
 	Prepare(mctx mctech.Context,
-		actions []ActionInfo, comments mctech.Comments, params map[string]any) (*mctech.PrepareResult, error)
+		actions []ActionInfo, comments mctech.Comments, params map[string]any) (mctech.PrepareResult, error)
 	GetPreparedSQL() string
 }
 

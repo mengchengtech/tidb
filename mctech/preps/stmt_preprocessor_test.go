@@ -122,7 +122,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechC
 	var (
 		sql     = c.sql
 		session = mctechCtx.Session()
-		result  *mctech.PrepareResult
+		result  mctech.PrepareResult
 		err     error
 	)
 
