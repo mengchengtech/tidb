@@ -178,29 +178,38 @@ type TenantInfo interface {
 	fmt.Stringer
 	Code() string   // 当前租户code
 	FromRole() bool // 租户code是否来自角色
-	String() string
 }
 
-// TenantValueInfo tenant info
-type TenantValueInfo struct {
+// MutableTenantInfo tenant info
+type MutableTenantInfo interface {
+	SetCode(string) // 当前租户code
+}
+
+// tenantValueInfo tenant info
+type tenantValueInfo struct {
 	code     string // 当前租户code
 	fromRole bool   // 租户code是否来自角色
 }
 
 // Code tenant code
-func (ti *TenantValueInfo) Code() string {
+func (ti *tenantValueInfo) Code() string {
 	return ti.code
 }
 
+func (ti *tenantValueInfo) SetCode(code string) {
+	ti.code = code
+}
+
 // FromRole tenant code is from role?
-func (ti *TenantValueInfo) FromRole() bool {
+func (ti *tenantValueInfo) FromRole() bool {
 	return ti.fromRole
 }
 
-func (ti *TenantValueInfo) String() string {
+func (ti *tenantValueInfo) String() string {
 	return fmt.Sprintf("{%s,%t}", ti.code, ti.fromRole)
 }
 
+// PrepareResult interface
 type PrepareResult interface {
 	fmt.Stringer
 	// Tenant current tenant
@@ -277,7 +286,7 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 	r := &prepareResult{
 		comments: comments,
 		roles:    roles,
-		tenant: &TenantValueInfo{
+		tenant: &tenantValueInfo{
 			code:     tenantCode,
 			fromRole: fromRole,
 		},
