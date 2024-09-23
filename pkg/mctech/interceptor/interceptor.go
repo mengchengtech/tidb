@@ -25,7 +25,13 @@ import (
 
 type interceptor struct{}
 
-const timeFormat = "2006-01-02 15:04:05.000"
+const (
+	timeFormat        = "2006-01-02 15:04:05.000"
+	ellipsis          = "......"
+	sqlPrefixLen      = 100 // 生成sql片断时，前面至少保留的字符数
+	sqlSuffixLen      = 100 // 生成sql片断时，后面至少保留的字符数
+	sqlReserveBothLen = sqlPrefixLen + sqlSuffixLen
+)
 
 func init() {
 	mctech.SetInterceptor(&interceptor{})
@@ -335,16 +341,19 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		}
 	}
 
-	sqlLen := len(origSQL)
 	threshold := config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold
-	if sqlLen > threshold {
+	sqlLen := len(origSQL)
+	//          prefixEnd                   suffixStart
+	// |------------:----------------------------:----------------|
+	// |---prefix---|                            |------suffix----|
+	if prefixEnd, suffixStart, ok := mustCompress(sqlLen, threshold); ok {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		if _, err := gz.Write([]byte(origSQL)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
 					traceLog.zip = b.Bytes()
-					traceLog.sql = origSQL[:threshold] + fmt.Sprintf("...len(%d)", sqlLen)
+					traceLog.sql = origSQL[:prefixEnd] + ellipsis + origSQL[suffixStart:] + fmt.Sprintf("len(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}
@@ -382,6 +391,36 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 	}
 
 	render(sctx, traceLog)
+}
+
+// MustCompressForTest 仅供测试代码使用
+func MustCompressForTest(sqlLen int, threshold int) (int, int, bool) {
+	return mustCompress(sqlLen, threshold)
+}
+
+// mustCompress SQL记录日志时是否需要压缩存储
+// :params sqlLen:int 原始sql长度
+func mustCompress(sqlLen int, threshold int) (int, int, bool) {
+	if sqlLen <= threshold {
+		// 不需要压缩
+		return -1, -1, false
+	}
+
+	// sql 语句中的一些重要信息一般在开始和结束位置，预留一部分给sql末尾的字符串
+	// 当 threshold >= sqlReserveBothLen 时。
+	// * prefixEnd=threshold-sqlSuffixLen, suffixStart=sqlLen-sqlSuffixLen
+	//
+	// 当 sqlReserveBothLen > threshold >= sqlPrefixLen 时，优先保证前面的字符串（长度为sqlPrefixLen），不足部分从后面的字符串长度扣除（实际长度为threshold - sqlPrefixLen）
+	// * prefixEnd=sqlPrefixLen, suffixStart=sqlLen-(threshold-sqlPrefixLen)
+	//
+	// 当 sqlPrefixLen > threshold 时，prefixEnd取值为实际的threshold（长度为threshold），suffixStart始终为sqlLen（长度为0）
+	// * prefixEnd=threshold, suffixStart=sqlLen
+
+	// 截取sql最前面字符串的结束位置
+	prefixEnd := min(threshold, max(sqlPrefixLen, threshold-sqlSuffixLen))
+	// 截取sql最后字符串的起始位置
+	suffixStart := sqlLen - max(0, min(sqlSuffixLen, threshold-sqlPrefixLen))
+	return prefixEnd, suffixStart, true
 }
 
 func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sqlStmtInfo) {
@@ -446,4 +485,18 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		// stmt 为 nil 或者除以上各个 case 项以外的类型
 	}
 	return info
+}
+
+func min(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
