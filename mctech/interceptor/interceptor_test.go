@@ -1,6 +1,7 @@
 package interceptor_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -67,9 +68,9 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
-		"app":  "ec-analysis-service", "product": "", "pkg": "",
-		"cat": "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
+		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
+		"client": map[string]any{"app": "ec-analysis-service", "product": ""},
+		"cat":    "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
 			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
@@ -120,9 +121,9 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
-		"app":  "ec-analysis-service", "product": "", "pkg": "",
-		"cat": "dml", "tp": "select", "inTX": true, "maxAct": float64(2024),
+		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
+		"client": map[string]any{"app": "ec-analysis-service", "product": ""},
+		"cat":    "dml", "tp": "select", "inTX": true, "maxAct": float64(2024),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
 		"times": map[string]any{
@@ -164,11 +165,11 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 	require.NotNil(t, logData)
 
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq", "across": "",
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
-		"app":  "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala",
-		"cat": "dml", "tp": "update", "inTX": false, "maxAct": float64(1),
+		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
+		"client": map[string]any{"app": "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala"},
+		"cat":    "dml", "tp": "update", "inTX": false, "maxAct": float64(1),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
@@ -215,11 +216,11 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 	require.NotNil(t, logData)
 
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq", "across": "",
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
-		"app":  "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala",
-		"cat": "dml", "tp": "update", "inTX": true, "maxAct": float64(1),
+		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
+		"client": map[string]any{"app": "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala"},
+		"cat":    "dml", "tp": "update", "inTX": true, "maxAct": float64(1),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
@@ -269,11 +270,11 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	require.NotNil(t, logData)
 
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "", "usr": "root", "tenant": "", "across": "",
+		"db": "global_ec3", "dbs": "", "usr": "root",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
-		"app":  "", "product": "", "pkg": "",
-		"cat": "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
+		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
+		// "client": map[string]any{},
+		"cat":    "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
@@ -288,6 +289,60 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 		"warnings": map[string]any{"topN": []any{map[string]any{"msg": "this is for test warning", "extra": false}}, "total": float64(1)},
 		"sql":      "commit",
 	}, logData)
+}
+
+type sqlCompressCase struct {
+	threshold         int
+	sqlLen            int
+	must              bool
+	expectPrefixEnd   int
+	expectSuffixStart int
+}
+
+func (c sqlCompressCase) String() string {
+	return fmt.Sprintf("threshold: %d, sqlLen: %d", c.threshold, c.sqlLen)
+}
+
+func TestSqlCompress(t *testing.T) {
+	cases := []sqlCompressCase{
+		// 当 threshold >= sqlReserveBothLen
+		{250, 300, true, 150, 200},
+		{200, 250, true, 100, 150},
+
+		{250, 250, false, -1, -1},
+		{250, 200, false, -1, -1},
+		{250, 150, false, -1, -1},
+		{250, 100, false, -1, -1},
+		{250, 50, false, -1, -1},
+		{200, 200, false, -1, -1},
+		// 当 sqlReserveBothLen > threshold >= sqlPrefixLen
+		{150, 250, true, 100, 200},
+		{150, 200, true, 100, 150},
+		{150, 170, true, 100, 120},
+		{101, 150, true, 100, 149},
+		{100, 150, true, 100, 150},
+
+		{160, 150, false, -1, -1},
+		{150, 150, false, -1, -1},
+		{100, 90, false, -1, -1},
+		{90, 80, false, -1, -1},
+		// 当 sqlPrefixLen > threshold
+		{90, 120, true, 90, 120},
+		{90, 100, true, 90, 100},
+		{70, 170, true, 70, 170},
+
+		{90, 90, false, -1, -1},
+		{70, 60, false, -1, -1},
+	}
+
+	for i, c := range cases {
+		prefixEnd, suffixStart, ok := interceptor.MustCompressForTest(c.sqlLen, c.threshold)
+		require.Equal(t, c.must, ok, fmt.Sprintf("case %d, %v", i, c))
+		if ok {
+			require.Equal(t, c.expectPrefixEnd, prefixEnd, fmt.Sprintf("case %d, %v", i, c))
+			require.Equal(t, c.expectSuffixStart, suffixStart, fmt.Sprintf("case %d, %v", i, c))
+		}
+	}
 }
 
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
