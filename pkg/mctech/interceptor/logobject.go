@@ -52,7 +52,9 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("db", st.db)
 	enc.AddString("dbs", st.dbs)
 	enc.AddString("usr", st.user)
-	enc.AddString("tenant", st.tenant)
+	if len(st.tenant) > 0 {
+		enc.AddString("tenant", st.tenant)
+	}
 	enc.AddString("conn", encode(st.conn))
 	if st.client != nil {
 		enc.AddObject("client", st.client)
@@ -60,7 +62,9 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddBool("inTX", st.inTX)
 	enc.AddString("cat", st.info.category)
 	enc.AddString("tp", st.info.sqlType)
-	enc.AddString("across", st.across)
+	if len(st.across) > 0 {
+		enc.AddString("across", st.across)
+	}
 	enc.AddString("at", st.at.Format(timeFormat))
 	enc.AddString("txId", encode(st.txID))
 	enc.AddInt64("maxAct", st.maxAct)
