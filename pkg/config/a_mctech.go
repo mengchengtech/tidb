@@ -297,37 +297,55 @@ func GetMCTechConfig() *MCTech {
 		for k, v := range values {
 			switch k {
 			case "Sequence.Mock":
-				opts.Sequence.Mock = v.(bool)
+				opts.Sequence.Mock = toBool(v)
 			case "DbChecker.Compatible":
-				opts.DbChecker.Compatible = v.(bool)
+				opts.DbChecker.Compatible = toBool(v)
 			case "DbChecker.Across":
-				lst := v.([]any)
-				across := make([]string, 0, len(lst))
-				for _, item := range lst {
-					across = append(across, item.(string))
-				}
-				opts.DbChecker.Across = across
+				opts.DbChecker.Across = toList(v)
 			case "Encryption.Mock":
-				opts.Encryption.Mock = v.(bool)
+				opts.Encryption.Mock = toBool(v)
 			case "Tenant.Enabled":
-				opts.Tenant.Enabled = v.(bool)
+				opts.Tenant.Enabled = toBool(v)
 			case "Tenant.ForbiddenPrepare":
-				opts.Tenant.ForbiddenPrepare = v.(bool)
+				opts.Tenant.ForbiddenPrepare = toBool(v)
 			case "DbChecker.Enabled":
-				opts.DbChecker.Enabled = v.(bool)
+				opts.DbChecker.Enabled = toBool(v)
 			case "DDL.Version.Enabled":
-				opts.DDL.Version.Enabled = v.(bool)
+				opts.DDL.Version.Enabled = toBool(v)
 			case "Metrics.LargeQuery.Filename":
-				opts.Metrics.LargeQuery.Filename = v.(string)
+				opts.Metrics.LargeQuery.Filename = toString(v)
 			case "Metrics.SqlTrace.FullSqlDir":
-				opts.Metrics.SQLTrace.FullSQLDir = v.(string)
+				opts.Metrics.SQLTrace.FullSQLDir = toString(v)
 			case "Metrics.SqlTrace.Enabled":
-				opts.Metrics.SQLTrace.Enabled = v.(bool)
+				opts.Metrics.SQLTrace.Enabled = toBool(v)
+			case "Metrics.SqlTrace.CompressThreshold":
+				opts.Metrics.SQLTrace.CompressThreshold = toInt(v)
 			}
 		}
 		failpoint.Return(&opts)
 	})
 	return mctechOpts
+}
+
+func toBool(v any) bool {
+	return v.(bool)
+}
+
+func toInt(v any) int {
+	return int(v.(float64))
+}
+
+func toString(v any) string {
+	return v.(string)
+}
+
+func toList(v any) []string {
+	lst := v.([]any)
+	strList := make([]string, 0, len(lst))
+	for _, item := range lst {
+		strList = append(strList, item.(string))
+	}
+	return strList
 }
 
 func storeMCTechConfig(config *Config) {
