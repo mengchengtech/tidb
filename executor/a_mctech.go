@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -1038,7 +1037,8 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 		}, nil
 	case variable.MCTechLargeQueryUserStr, variable.MCTechLargeQueryHostStr,
 		variable.MCTechLargeQueryDBStr, variable.MCTechLargeQueryDigestStr,
-		variable.MCTechLargeQueryServiceStr, variable.MCTechLargeQuerySQLTypeStr,
+		variable.MCTechLargeQueryAppNameStr, variable.MCTechLargeQueryProductLineStr,
+		variable.MCTechLargeQueryPackageStr, variable.MCTechLargeQuerySQLTypeStr,
 		variable.MCTechLargeQuerySQLStr:
 		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error) {
 			row[columnIdx] = types.NewStringDatum(value)
@@ -1068,7 +1068,7 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 }
 
 // SaveLargeQuery is used to print the large query in the log files.
-func (a *ExecStmt) SaveLargeQuery(sqlType string, succ bool) {
+func (a *ExecStmt) SaveLargeQuery(mctx mctech.Context, sqlType string, succ bool) {
 	sessVars := a.Ctx.GetSessionVars()
 	cfg := config.GetMCTechConfig()
 	threshold := cfg.Metrics.LargeQuery.Threshold
@@ -1079,36 +1079,10 @@ func (a *ExecStmt) SaveLargeQuery(sqlType string, succ bool) {
 		return
 	}
 
-	stmtCtx := sessVars.StmtCtx
-	_, digest := stmtCtx.SQLDigest()
-	var stmtDetail execdetails.StmtExecDetails
-	stmtDetailRaw := a.GoCtx.Value(execdetails.StmtExecDetailKey)
-	if stmtDetailRaw != nil {
-		stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
-	}
-	execDetail := stmtCtx.GetExecDetails()
-	memMax := stmtCtx.MemTracker.MaxConsumed()
-	diskMax := stmtCtx.DiskTracker.MaxConsumed()
 	sql := a.GetTextToLog(true)
-	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
-	largeItems := &variable.MCTechLargeQueryLogItems{
-		SQL:               sql,
-		SQLType:           sqlType,
-		Service:           GetSeriveFromSQL(sql),
-		Digest:            digest.String(),
-		TimeTotal:         costTime,
-		TimeParse:         sessVars.DurationParse,
-		TimeCompile:       sessVars.DurationCompile,
-		TimeOptimize:      sessVars.DurationOptimization,
-		RewriteInfo:       sessVars.RewritePhaseInfo,
-		ExecDetail:        execDetail,
-		MemMax:            memMax,
-		DiskMax:           diskMax,
-		Succ:              succ,
-		Plan:              getPlanTree(stmtCtx),
-		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
-		ResultRows:        GetResultRowsCount(stmtCtx, a.Plan),
-	}
+	comments := mctx.PrepareResult().Comments()
+	resultRows := GetResultRowsCount(sessVars.StmtCtx, a.Plan)
+	largeItems := CreateLargeLogItems(a.GoCtx, sql, sqlType, succ, resultRows, sessVars, comments)
 	largeLog, err := sessVars.LargeQueryFormat(largeItems)
 	if err != nil {
 		logutil.BgLogger().Error("record large query error", zap.Error(err), zap.Stack("stack"))
@@ -1119,21 +1093,56 @@ func (a *ExecStmt) SaveLargeQuery(sqlType string, succ bool) {
 	mctech.L().Warn(largeLog)
 }
 
-var pattern = regexp.MustCompile(`(?i)/*\s*from:\s*'([^']+)'`)
+// CreateLargeLogItems create large log items
+func CreateLargeLogItems(ctx context.Context, sql string, sqlType string, succ bool, resultRows int64,
+	sessVars *variable.SessionVars, comments mctech.Comments) *variable.MCTechLargeQueryLogItems {
+	stmtCtx := sessVars.StmtCtx
+	_, digest := stmtCtx.SQLDigest()
+	execDetail := stmtCtx.GetExecDetails()
+	memMax := stmtCtx.MemTracker.MaxConsumed()
+	diskMax := stmtCtx.DiskTracker.MaxConsumed()
+	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
 
-// GetSeriveFromSQL 尝试从sql中提取服务名称
-func GetSeriveFromSQL(sql string) string {
-	sub := sql
-	if len(sql) > 200 {
-		sub = sql[:200]
+	var stmtDetail *execdetails.StmtExecDetails
+	stmtDetailRaw := ctx.Value(execdetails.StmtExecDetailKey)
+	if stmtDetailRaw != nil {
+		stmtDetail = stmtDetailRaw.(*execdetails.StmtExecDetails)
 	}
+	var (
+		appName     string
+		productLine string
+		pkgName     string
+	)
 
-	matches := pattern.FindStringSubmatch(sub)
-	if matches == nil {
-		return ""
+	pkg := comments.Package()
+	if pkg != nil {
+		pkgName = pkg.Name()
 	}
-	fmt.Println(matches)
-	return matches[1]
+	svc := comments.Service()
+	if svc != nil {
+		appName = svc.AppName()
+		productLine = svc.ProductLine()
+	}
+	return &variable.MCTechLargeQueryLogItems{
+		SQL:               sql,
+		SQLType:           sqlType,
+		AppName:           appName,
+		ProductLine:       productLine,
+		Package:           pkgName,
+		Digest:            digest.String(),
+		TimeTotal:         costTime,
+		TimeParse:         sessVars.DurationParse,
+		TimeCompile:       sessVars.DurationCompile,
+		TimeOptimize:      sessVars.DurationOptimization,
+		RewriteInfo:       sessVars.RewritePhaseInfo,
+		ExecDetail:        execDetail,
+		MemMax:            memMax,
+		DiskMax:           diskMax,
+		Succ:              succ,
+		Plan:              getPlanTree(sessVars.StmtCtx),
+		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
+		ResultRows:        resultRows,
+	}
 }
 
 // --------------------------------------------------------------------------------

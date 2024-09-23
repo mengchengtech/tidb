@@ -22,26 +22,26 @@ import (
 )
 
 const (
-	// MCTechLargeQueryRowPrefixStr is slow log row prefix.
+	// MCTechLargeQueryRowPrefixStr is large log row prefix.
 	MCTechLargeQueryRowPrefixStr = "# "
 	// MCTechLargeQuerySpaceMarkStr is large query log space mark.
 	MCTechLargeQuerySpaceMarkStr = ": "
-	// MCTechLargeQuerySQLSuffixStr is slow log suffix.
+	// MCTechLargeQuerySQLSuffixStr is large log suffix.
 	MCTechLargeQuerySQLSuffixStr = ";"
 	// MCTechLargeQueryGzipPrefixStr is compress sql prefix.
 	MCTechLargeQueryGzipPrefixStr = "{gzip}"
-	// MCTechLargeQueryStartPrefixStr is slow log start row prefix.
+	// MCTechLargeQueryStartPrefixStr is large log start row prefix.
 	MCTechLargeQueryStartPrefixStr = MCTechLargeQueryRowPrefixStr + MCTechLargeQueryTimeStr + MCTechLargeQuerySpaceMarkStr
 	// MCTechLargeQueryUserAndHostStr is the user and host field name, which is compatible with MySQL.
 	MCTechLargeQueryUserAndHostStr = "USER@HOST"
 
-	// MCTechLargeQueryTimeStr is slow log field name.
+	// MCTechLargeQueryTimeStr is large log field name.
 	MCTechLargeQueryTimeStr = "TIME"
-	// MCTechLargeQueryUserStr is slow log field name.
+	// MCTechLargeQueryUserStr is large log field name.
 	MCTechLargeQueryUserStr = "USER"
-	// MCTechLargeQueryHostStr only for slow_query table usage.
+	// MCTechLargeQueryHostStr only for large_query table usage.
 	MCTechLargeQueryHostStr = "HOST"
-	// MCTechLargeQueryQueryTimeStr is slow log field name.
+	// MCTechLargeQueryQueryTimeStr is large log field name.
 	MCTechLargeQueryQueryTimeStr = "QUERY_TIME"
 	// MCTechLargeQueryParseTimeStr is the parse sql time.
 	MCTechLargeQueryParseTimeStr = "PARSE_TIME"
@@ -52,9 +52,9 @@ const (
 	// MCTechLargeQueryOptimizeTimeStr is the optimization time.
 	MCTechLargeQueryOptimizeTimeStr = "OPTIMIZE_TIME"
 
-	// MCTechLargeQueryDBStr is slow log field name.
+	// MCTechLargeQueryDBStr is large log field name.
 	MCTechLargeQueryDBStr = "DB"
-	// MCTechLargeQuerySQLStr is slow log field name.
+	// MCTechLargeQuerySQLStr is large log field name.
 	MCTechLargeQuerySQLStr = "Query"
 	// MCTechLargeQuerySuccStr is used to indicate whether this sql execute successfully.
 	MCTechLargeQuerySuccStr = "SUCC"
@@ -62,12 +62,16 @@ const (
 	MCTechLargeQueryMemMax = "MEM_MAX"
 	// MCTechLargeQueryDiskMax is the nax number bytes of disk used in this statement.
 	MCTechLargeQueryDiskMax = "DISK_MAX"
-	// MCTechLargeQueryDigestStr is slow log field name.
+	// MCTechLargeQueryDigestStr is large log field name.
 	MCTechLargeQueryDigestStr = "DIGEST"
 	// MCTechLargeQuerySQLLengthStr is large log length.
 	MCTechLargeQuerySQLLengthStr = "SQL_LENGTH"
-	// MCTechLargeQueryServiceStr is the service that large log maybe from.
-	MCTechLargeQueryServiceStr = "SERVICE"
+	// MCTechLargeQueryAppNameStr is the service that large log maybe from.
+	MCTechLargeQueryAppNameStr = "APP_NAME"
+	// MCTechLargeQueryProductLineStr is the product-line that large log maybe from.
+	MCTechLargeQueryProductLineStr = "PRODUCT_LINE"
+	// MCTechLargeQueryPackageStr is the package that large log maybe from.
+	MCTechLargeQueryPackageStr = "PACKAGE"
 	// MCTechLargeQueryResultRows is the row count of the SQL result.
 	MCTechLargeQueryResultRows = "RESULT_ROWS"
 	// MCTechLargeQuerySQLTypeStr large sql type. (insert/update/delete/select......)
@@ -86,6 +90,8 @@ const (
 	MCTechDbCheckerEnabled = "mctech_db_checker_enabled"
 	// MCTechDbCheckerCompatible is one of mctech config items
 	MCTechDbCheckerCompatible = "mctech_db_checker_compatible"
+	// MCTechDbCheckerExcepts is one of mctech config items
+	MCTechDbCheckerExcepts = "mctech_db_checker_excepts"
 
 	// MCTechDbCheckerMutex is one of mctech config items
 	MCTechDbCheckerMutex = "mctech_checker_mutex"
@@ -386,7 +392,9 @@ type MCTechLargeQueryLogItems struct {
 	WriteSQLRespTotal time.Duration
 	ResultRows        int64
 	Succ              bool
-	Service           string
+	AppName           string
+	ProductLine       string
+	Package           string
 	SQL               string
 	SQLType           string
 }
@@ -406,7 +414,9 @@ type MCTechLargeQueryLogItems struct {
 // # RESULT_ROWS: 1
 // # SUCC: true
 // # SQL_LENGTH: 26621
-// # SERVICE: org-service
+// # APP_NAME: org-service
+// # PRODUCT_LINE: pf
+// # PACKAGE: @mctech/dp-impala
 // # SQL_TYPE: insert
 // # Plan: tidb_decode_plan('ZJAwCTMyXzcJMAkyMAlkYXRhOlRhYmxlU2Nhbl82CjEJMTBfNgkxAR0AdAEY1Dp0LCByYW5nZTpbLWluZiwraW5mXSwga2VlcCBvcmRlcjpmYWxzZSwgc3RhdHM6cHNldWRvCg==')
 // use test;
@@ -455,8 +465,14 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (stri
 	writeSlowLogItem(&buf, MCTechLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
 	writeSlowLogItem(&buf, MCTechLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
 	writeSlowLogItem(&buf, MCTechLargeQuerySQLTypeStr, logItems.SQLType)
-	if len(logItems.Service) > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryServiceStr, logItems.Service)
+	if len(logItems.AppName) > 0 {
+		writeSlowLogItem(&buf, MCTechLargeQueryAppNameStr, logItems.AppName)
+	}
+	if len(logItems.ProductLine) > 0 {
+		writeSlowLogItem(&buf, MCTechLargeQueryProductLineStr, logItems.ProductLine)
+	}
+	if len(logItems.Package) > 0 {
+		writeSlowLogItem(&buf, MCTechLargeQueryPackageStr, logItems.Package)
 	}
 
 	if len(logItems.Plan) != 0 {

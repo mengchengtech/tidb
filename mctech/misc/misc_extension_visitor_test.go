@@ -1,10 +1,12 @@
-package misc
+package misc_test
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/misc"
+	"github.com/pingcap/tidb/mctech/preps"
 	"github.com/pingcap/tidb/parser"
 	. "github.com/pingcap/tidb/parser/format"
 	"github.com/stretchr/testify/require"
@@ -76,7 +78,7 @@ func doRunMiscMCTechTestCase(t *testing.T, c *miscMCTechTestCase) error {
 			return err
 		}
 
-		if _, err := ApplyExtension(mctechCtx, stmt); err != nil {
+		if _, err := misc.ApplyExtension(mctechCtx, stmt); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
@@ -96,7 +98,7 @@ func doRunMiscMCTechTestCase(t *testing.T, c *miscMCTechTestCase) error {
 }
 
 func newTestMCTechContext() (mctech.Context, error) {
-	result, err := mctech.NewPrepareResult("gslq4dev", true, map[string]any{
+	result, err := mctech.NewPrepareResult("gslq4dev", preps.NewFlagRoles(true, false), nil, map[string]any{
 		"dbPrefix": "mock",
 	})
 

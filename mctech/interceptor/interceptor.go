@@ -190,16 +190,16 @@ func doAfterHandleStmt(sctx sessionctx.Context, sql string, stmt ast.StmtNode, e
 
 	if metrics.LargeQuery.Enabled {
 		// 只有正确执行的sql才考虑是否记录
-		logLargeQuery(execStmt, err == nil)
+		logLargeQuery(mctx, execStmt, err == nil)
 	}
 
 	if metrics.SQLTrace.Enabled {
-		traceFullQuery(sctx, sql, stmt, execStmt, err)
+		traceFullQuery(sctx, mctx, sql, stmt, execStmt, err)
 	}
 }
 
 // 记录超长sql
-func logLargeQuery(execStmt *executor.ExecStmt, succ bool) {
+func logLargeQuery(mctx mctech.Context, execStmt *executor.ExecStmt, succ bool) {
 	if execStmt == nil {
 		// 某些原因下execStmt为空的时候（比如sql解析失败，未能生成执行计划等），不记录超长sql
 		return
@@ -226,12 +226,12 @@ func logLargeQuery(execStmt *executor.ExecStmt, succ bool) {
 	}()
 
 	if slices.Contains(opts.Metrics.LargeQuery.Types, sqlType) {
-		execStmt.SaveLargeQuery(sqlType, succ)
+		execStmt.SaveLargeQuery(mctx, sqlType, succ)
 	}
 }
 
 // 记录全量sql
-func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
+func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, stmt ast.StmtNode,
 	execStmt *executor.ExecStmt, err error) {
 	sessVars := sctx.GetSessionVars()
 	var (
@@ -258,7 +258,6 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 	}()
 
 	si := sessionctx.ShortInfo(sctx)
-	mctx := mctech.GetContextStrict(sctx)
 	var traceLog = &logSQLTraceObject{
 		db:   si.GetDB(),
 		user: si.GetUser(),
@@ -365,6 +364,20 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			if v, ok := params[mctech.ParamAcross].(string); ok {
 				traceLog.across = v
 			}
+		}
+
+		comments := result.Comments()
+		pkg := comments.Package()
+		var client *clientInfo
+		if pkg != nil {
+			client = traceLog.getClient()
+			client.pkg = pkg.Name()
+		}
+		svc := comments.Service()
+		if svc != nil {
+			client = traceLog.getClient()
+			client.app = svc.AppName()
+			client.product = svc.ProductLine()
 		}
 	}
 

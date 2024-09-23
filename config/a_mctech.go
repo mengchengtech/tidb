@@ -89,7 +89,7 @@ type DbChecker struct {
 	APIPrefix  string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
 	Mutex      []string `toml:"mutex" json:"mutex"`           //
 	Exclude    []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
-	Across     []string `toml:"across" json:"across"`
+	Across     []string `toml:"across" json:"across"`         // 额外允许跨库查询的数据库对。每一项为'|'分隔的数据库名
 }
 
 // Tenant append tenant condition used
