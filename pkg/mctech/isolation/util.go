@@ -36,7 +36,12 @@ func ApplyExtension(mctx mctech.Context, node ast.Node,
 
 func doApplyExtension(
 	mctx mctech.Context, node ast.Node, charset, collation string) (dbs []string, err error) {
-	v := newIsolationConditionVisitor(mctx, charset, collation)
+	var v dbNameVisitor
+	if mctx.InExecute() {
+		v = newDatabaseNameVisitor(mctx)
+	} else {
+		v = newIsolationConditionVisitor(mctx, charset, collation)
+	}
 	defer func() {
 		if e := recover(); e != nil {
 			err = e.(error)
@@ -44,8 +49,8 @@ func doApplyExtension(
 	}()
 	node.Accept(v)
 
-	dbs = make([]string, 0, len(v.dbNames))
-	for n := range v.dbNames {
+	dbs = make([]string, 0, len(v.DBNames()))
+	for n := range v.DBNames() {
 		if n == "" {
 			n = mctx.CurrentDB()
 		}
