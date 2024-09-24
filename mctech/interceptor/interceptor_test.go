@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	// 强制调用preps包里的init方法
-
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech/interceptor"
@@ -272,9 +270,8 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "", "usr": "root",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
-		// "client": map[string]any{},
-		"cat":    "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",

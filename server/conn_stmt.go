@@ -146,7 +146,8 @@ func (cc *clientConn) handleStmtPrepare(ctx context.Context, sql string) error {
 func (cc *clientConn) handleStmtExecute(ctx context.Context, data []byte) (err error) {
 	// add by zhangbing
 	var mctx mctech.Context
-	if mctx, _, err = cc.onBeforeParseSQL(""); err != nil {
+	// 为了强制生成MCTechContext中的PrepareResult，此处使用了一个简单的sql语句。
+	if mctx, _, err = cc.onBeforeParseSQL("select 1"); err != nil {
 		return err
 	}
 	defer mctx.Clear()

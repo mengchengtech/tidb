@@ -149,6 +149,29 @@ func (e *PrepareExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 	return mctech.GetInterceptor().AfterParseSQL(e.ctx, stmt)
 }
 
+func (e *ExecuteExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(e.ctx); err != nil {
+		return err
+	}
+
+	if intest.InTest && mctx == nil {
+		return nil
+	}
+
+	usingTenantParam := mctx.UsingTenantParam()
+	inExecute := mctx.InExecute()
+	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	defer func() {
+		modifyCtx.SetUsingTenantParam(usingTenantParam)
+		modifyCtx.SetInExecute(inExecute)
+	}()
+
+	modifyCtx.SetUsingTenantParam(true)
+	modifyCtx.SetInExecute(true)
+	return mctech.GetInterceptor().AfterParseSQL(e.ctx, stmt)
+}
+
 // ---------------------------------------------- large sql query -----------------------------------------------
 
 // ParseLargeQueryBatchSize is the batch size of large-query-log lines for a worker to parse, exported for testing.

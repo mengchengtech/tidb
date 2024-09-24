@@ -58,7 +58,8 @@ type Context interface {
 	// @title UsingTenantParam
 	// @description 租户过滤条件是否使用参数
 	UsingTenantParam() bool
-
+	// 是否是在execute语句中运行
+	InExecute() bool
 	// 获取给定sql语法树里用到的数据库
 	GetDbs(stmt ast.StmtNode) []string
 	// 设置给定sql语法树里用到的数据库
@@ -76,6 +77,8 @@ type ContextForTest interface {
 type ModifyContext interface {
 	// 设置创建租户条件表达式是否使用参数化方式
 	SetUsingTenantParam(val bool)
+	// 设置是否是在Execute中运行
+	SetInExecute(val bool)
 	// @title Reset
 	// @description 重置是否改写状态，用于支持一次执行多条sql语句时
 	Reset()
@@ -355,6 +358,7 @@ type baseContext struct {
 	sqlRewrited      bool
 	sqlHasGlobalDB   bool
 	usingTenantParam bool
+	inExecute        bool
 	dbsDict          map[ast.StmtNode][]string
 }
 
@@ -433,7 +437,15 @@ func (d *baseContext) UsingTenantParam() bool {
 	return d.usingTenantParam
 }
 
+func (d *baseContext) InExecute() bool {
+	return d.inExecute
+}
+
 func (d *baseContext) SetUsingTenantParam(val bool) {
+	d.usingTenantParam = val
+}
+
+func (d *baseContext) SetInExecute(val bool) {
 	d.usingTenantParam = val
 }
 
