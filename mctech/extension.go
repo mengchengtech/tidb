@@ -2,6 +2,7 @@ package mctech
 
 import (
 	"github.com/pingcap/tidb/extension"
+	"github.com/pingcap/tidb/parser/terror"
 	"github.com/pingcap/tidb/sessionctx"
 )
 
@@ -38,11 +39,12 @@ func onStmtEvent(tp extension.StmtEventTp, event extension.StmtEventInfo) {
 }
 
 // RegisterExtensions 注册自定义事件扩展
-func RegisterExtensions() error {
+func RegisterExtensions() {
 	option := extension.WithSessionHandlerFactory(func() *extension.SessionHandler {
 		return &extension.SessionHandler{
 			OnStmtEvent: onStmtEvent,
 		}
 	})
-	return extension.Register("mctech", option)
+	err := extension.Register("mctech", option)
+	terror.MustNil(err)
 }

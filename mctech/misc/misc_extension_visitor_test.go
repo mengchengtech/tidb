@@ -91,7 +91,6 @@ func doRunMiscMCTechTestCase(t *testing.T, c *miscMCTechTestCase) error {
 			restoreSQLs += "; "
 		}
 		restoreSQLs += restoreSQL
-
 	}
 	require.Equalf(t, c.expect, restoreSQLs, "restore %v; expect %v", restoreSQLs, c.expect)
 	return nil

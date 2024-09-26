@@ -102,11 +102,9 @@ type ModifyContext interface {
 
 // SessionMPPVarsContext interface
 type SessionMPPVarsContext interface {
-	StoreSessionMPPVars(mpp string) (err error)
-
-	ReloadSessionMPPVars() (err error)
-
-	SetSessionMPPVars(mpp string) (err error)
+	StoreSessionMPPVars(mpp string) error
+	ReloadSessionMPPVars() error
+	SetSessionMPPVars(mpp string) error
 }
 
 // BaseContextAware interface
@@ -404,17 +402,17 @@ func (d *baseContext) Clear() {
 
 // ------------------------------------------------
 
-func (d *baseContext) StoreSessionMPPVars(mpp string) (err error) {
+func (d *baseContext) StoreSessionMPPVars(mpp string) error {
 	log.Error("Session: " + string(debug.Stack()))
 	panic(errors.New("[StoreSessionMPPVars] not implemented"))
 }
 
-func (d *baseContext) ReloadSessionMPPVars() (err error) {
+func (d *baseContext) ReloadSessionMPPVars() error {
 	log.Error("Session: " + string(debug.Stack()))
 	panic(errors.New("[ReloadSessionMPPVars] not implemented"))
 }
 
-func (d *baseContext) SetSessionMPPVars(mpp string) (err error) {
+func (d *baseContext) SetSessionMPPVars(mpp string) error {
 	log.Error("Session: " + string(debug.Stack()))
 	panic(errors.New("[SetSessionMPPVars] not implemented"))
 }

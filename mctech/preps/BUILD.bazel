@@ -27,6 +27,7 @@ go_library(
         "//sessionctx",
         "//sessionctx/variable",
         "//util/intest",
+        "//util/logutil",
         "@com_github_patrickmn_go_cache//:go-cache",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",

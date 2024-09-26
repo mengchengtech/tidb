@@ -8,6 +8,8 @@ import (
 	_ "github.com/pingcap/tidb/mctech/interceptor" // 为了解除循环依赖，触发运行期动态函数初始化，在此处强制加载
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/sessionctx/variable"
+	"github.com/pingcap/tidb/util/logutil"
+	"go.uber.org/zap"
 )
 
 type varValue struct {
@@ -88,17 +90,17 @@ func (d *tidbSessionMCTechContext) StoreSessionMPPVars(mpp string) (err error) {
 	return
 }
 
-func (d *tidbSessionMCTechContext) ReloadSessionMPPVars() (err error) {
+func (d *tidbSessionMCTechContext) ReloadSessionMPPVars() error {
 	sessionVars := d.Session().GetSessionVars()
 	vars := d.storedVars
 	// 把之前缓存的当前会话的原始值恢复到初始状态
 	for _, v := range vars {
-		if err = sessionVars.SetSystemVar(v.name, v.value); err != nil {
-			return
+		if err := sessionVars.SetSystemVar(v.name, v.value); err != nil {
+			return err
 		}
 	}
 	d.storedVars = nil
-	return
+	return nil
 }
 
 func (d *tidbSessionMCTechContext) SetSessionMPPVars(mpp string) (err error) {
@@ -127,7 +129,9 @@ func (d *tidbSessionMCTechContext) getTargetMPPVars(mpp string) ([]*varValue, er
 }
 
 func (d *tidbSessionMCTechContext) Clear() {
-	d.ReloadSessionMPPVars()
+	if err := d.ReloadSessionMPPVars(); err != nil {
+		logutil.BgLogger().Warn("[ReloadSessionMPPVars] received error", zap.Error(err))
+	}
 
 	d.session.ClearValue(mctech.MCExecStmtVarKey)
 	d.session.ClearValue(mctech.MCContextVarKey)

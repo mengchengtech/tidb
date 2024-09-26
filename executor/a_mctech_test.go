@@ -9,11 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/kv"
-
-	// 强制调用preps包里的init方法
-	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/pingcap/tidb/parser/auth"
 	"github.com/pingcap/tidb/testkit"

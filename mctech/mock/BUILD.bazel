@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "mock",
-    srcs = ["mock.go"],
+    srcs = [
+        "mock.go",
+        "mock_intest.go",  #keep
+    ],
     importpath = "github.com/pingcap/tidb/mctech/mock",
     visibility = ["//visibility:public"],
     deps = ["@com_github_stretchr_testify//require"],

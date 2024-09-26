@@ -21,16 +21,18 @@ const (
 )
 
 // NewTiFlashTableRules create tiflash rule from table. not contain the partition that has placement policy itself
-func NewTiFlashTableRules(tbl *model.TableInfo, bundle *placement.Bundle) []*placement.TiFlashRule {
+func NewTiFlashTableRules(tbl *model.TableInfo, bundle *placement.Bundle) ([]*placement.TiFlashRule, error) {
 	if tbl.TiFlashReplica == nil {
 		// 跳过不存在tiflash的表
-		return nil
+		return nil, nil
 	}
 
 	rules := []*placement.TiFlashRule{}
 	if tbl.TiFlashReplica != nil {
 		newRule := MakeNewRule(tbl.ID, tbl.TiFlashReplica.Count, tbl.TiFlashReplica.LocationLabels)
-		attachLeaderRuleFromBundle(tbl.ID, &newRule, bundle)
+		if err := attachLeaderRuleFromBundle(tbl.ID, &newRule, bundle); err != nil {
+			return nil, err
+		}
 		rules = append(rules, &newRule)
 
 		if tbl.Partition != nil {
@@ -39,28 +41,33 @@ func NewTiFlashTableRules(tbl *model.TableInfo, bundle *placement.Bundle) []*pla
 					// 此处不包含独立配置的分区，会单独处理
 					continue
 				}
-				rule := NewTiFlashPartitionRule(p.ID, tbl, bundle)
+				rule, err := NewTiFlashPartitionRule(p.ID, tbl, bundle)
+				if err != nil {
+					return nil, err
+				}
 				rules = append(rules, rule)
 			}
 		}
 	}
-	return rules
+	return rules, nil
 }
 
 // NewTiFlashPartitionRule create TiFlashRule from partition
-func NewTiFlashPartitionRule(partID int64, tbl *model.TableInfo, bundle *placement.Bundle) *placement.TiFlashRule {
+func NewTiFlashPartitionRule(partID int64, tbl *model.TableInfo, bundle *placement.Bundle) (*placement.TiFlashRule, error) {
 	if tbl.TiFlashReplica == nil {
 		// 跳过不存在tiflash的表
-		return nil
+		return nil, nil
 	}
 
 	newRule := MakeNewRule(partID, tbl.TiFlashReplica.Count, tbl.TiFlashReplica.LocationLabels)
 	if bundle != nil {
 		// bundle可能为nil，此时只需忽略即可
 		// set placement policy = default; 就是删除policy
-		attachLeaderRuleFromBundle(partID, &newRule, bundle)
+		if err := attachLeaderRuleFromBundle(partID, &newRule, bundle); err != nil {
+			return nil, err
+		}
 	}
-	return &newRule
+	return &newRule, nil
 }
 
 // PutTiFlashRulesWithDefaultRetry will retry for default times
@@ -131,7 +138,9 @@ func attachLeaderRuleFromBundle(id int64, rule *placement.TiFlashRule, bundle *p
 			// 提取的Contraints需要排除key=engine的约束项
 			continue
 		}
-		rule.Constraints.Add(c)
+		if err := rule.Constraints.Add(c); err != nil {
+			return err
+		}
 	}
 	rule.LocationLabels = slices.Clone(leaderRule.LocationLabels)
 	return nil

@@ -56,7 +56,6 @@ func PrintTiDBInfo() {
 	// add by zhangbing
 	logutil.BgLogger().Info("是否单元测试运行环境:" + strconv.FormatBool(intest.InTest))
 	// add end
-
 }
 
 // GetTiDBInfo returns the git hash and build time of this tidb-server binary.
