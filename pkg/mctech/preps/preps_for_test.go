@@ -32,7 +32,7 @@ func NewActionsForTest(m map[string]string) (result []ActionInfo) {
 
 type SQLPreprocessorTest interface {
 	Prepare(mctx mctech.Context,
-		actions []ActionInfo, params map[string]any) (*mctech.PrepareResult, error)
+		actions []ActionInfo, comments mctech.Comments, params map[string]any) (*mctech.PrepareResult, error)
 	GetPreparedSQL() string
 }
 

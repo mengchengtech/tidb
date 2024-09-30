@@ -28,6 +28,10 @@ declare interface FullTraceLog {
    */
   conn: string
   /**
+   * 执行sql的客户端的信息
+   */
+  client?: clientInfo
+  /**
    * 当前sql是否在事务中
    */
   inTX: boolean
@@ -103,6 +107,21 @@ declare interface FullTraceLog {
    * 当sql保存的内容不完整时，zip保存压缩后的完整sql内容
    */
   zip?: string
+}
+
+declare interface clientInfo {
+  /**
+   * 提取自 /* from:'......' *\/ 一般表示eureka里注册的服务名称。如果找不到服务名称则会用unknown({db})代替
+   */
+  app: string
+  /**
+   * 来源与service一样，表示所属产品线，如果找不到则为空。比较旧的服务执行sql里提取到的信息不含product
+   */
+  product?: string
+  /**
+   * 提取自 /\* package:'' *\/ 表示当前sql是在某个依赖包中执行的。
+   */
+  pkg: string
 }
 
 declare interface logWarningObjects {

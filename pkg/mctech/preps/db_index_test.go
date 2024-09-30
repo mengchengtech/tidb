@@ -45,7 +45,8 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 		mock.M(t, c.response),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp")
-	result, err := mctech.NewPrepareResult(c.tenant, true, c.params)
+
+	result, err := mctech.NewPrepareResult(c.tenant, preps.NewFlagRoles(true, false), nil, c.params)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 )
 
 const tenantOnlyRole = "tenant_only"
+const acrossDBRole = "across_db"
 
 var tenantCodePattern = regexp.MustCompile(`(?i)^code_(.+)?$`)
 
@@ -18,17 +19,24 @@ func currentUser(ctx sessionctx.Context) string {
 	return vars.User.Username
 }
 
-func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCode string, err error) {
+func resolveActiveRoles(ctx sessionctx.Context) (roles mctech.FlagRoles, tenantCode string, err error) {
 	vars := ctx.GetSessionVars()
+	var (
+		tenantOnly bool // 角色上是否存在只允许限制在某个租户上执行的角色
+		acrossDB   bool // 角色上是否存在支持跨库查询的标记角色。
+	)
 	tenantFromRoles := make([]string, 0, len(vars.ActiveRoles))
 	for _, r := range vars.ActiveRoles {
-		if r.Username == tenantOnlyRole {
+		switch r.Username {
+		case tenantOnlyRole:
 			tenantOnly = true
-			continue
-		}
-		subs := tenantCodePattern.FindStringSubmatch(r.Username)
-		if subs != nil {
-			tenantFromRoles = append(tenantFromRoles, subs[1])
+		case acrossDBRole:
+			acrossDB = true
+		default:
+			subs := tenantCodePattern.FindStringSubmatch(r.Username)
+			if subs != nil {
+				tenantFromRoles = append(tenantFromRoles, subs[1])
+			}
 		}
 	}
 	// var isAdmin = user == "root"
@@ -51,13 +59,13 @@ func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCod
 			for index := 1; index < tenantFromRolesLength; index++ {
 				if tenantCode != tenantFromRoles[index] {
 					user := currentUser(ctx)
-					return tenantOnly, tenantCode, fmt.Errorf("用户%s所属的角色存在多个租户的信息", user)
+					return nil, "", fmt.Errorf("用户%s所属的角色存在多个租户的信息", user)
 				}
 			}
 		}
 	}
 
-	return tenantOnly, tenantCode, nil
+	return NewFlagRoles(tenantOnly, acrossDB), tenantCode, nil
 }
 
 var valueFormatters = map[string]valueFormatter{
@@ -80,8 +88,8 @@ func newSQLPreprocessor(stmt string) *sqlPreprocessor {
 	}
 }
 
-func (p *sqlPreprocessor) Prepare(mctx mctech.Context,
-	actions []ActionInfo, params map[string]any) (*mctech.PrepareResult, error) {
+func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
+	comments mctech.Comments, params map[string]any) (*mctech.PrepareResult, error) {
 	if len(params) > 0 {
 		for name, formatter := range valueFormatters {
 			value := params[name]
@@ -114,23 +122,23 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context,
 		}
 	}
 
-	tenantOnly, tenantCode, err := findTenantInfoFromRoles(mctx.Session())
+	roles, tenantCode, err := resolveActiveRoles(mctx.Session())
 	if err != nil {
 		return nil, err
 	}
 
 	if v, ok := params[mctech.ParamImpersonate]; ok {
 		if role := v.(string); role == tenantOnlyRole {
-			tenantOnly = true
+			roles.SetTenantOnly(true)
 		}
 	}
 
-	result, err := mctech.NewPrepareResult(tenantCode, tenantOnly, params)
+	result, err := mctech.NewPrepareResult(tenantCode, roles, comments, params)
 	if err != nil {
 		return nil, err
 	}
 
-	if result.Global() && tenantOnly {
+	if result.Global() && roles.TenantOnly() {
 		return nil, errors.New("当前数据库用户包含租户隔离角色，不允许启用 global hint")
 	}
 
