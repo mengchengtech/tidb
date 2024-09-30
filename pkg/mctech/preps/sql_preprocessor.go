@@ -71,7 +71,7 @@ func resolveActiveRoles(ctx sessionctx.Context) (roles mctech.FlagRoles, tenantC
 var valueFormatters = map[string]valueFormatter{
 	mctech.ParamGlobal:      newGlobalValueFormatter(),
 	mctech.ParamAcross:      newCrossValueFormatter(),
-	mctech.ParamImpersonate: newEnumValueFormatter("tenant_only"),
+	mctech.ParamImpersonate: newEnumValueFormatter(tenantOnlyRole),
 }
 
 var resolveActions = map[string]action{
