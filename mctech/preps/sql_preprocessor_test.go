@@ -27,7 +27,7 @@ func (c *preprocessorTestCase) Source() any {
 }
 
 func TestProcessorWithRoot(t *testing.T) {
-	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	// {{{service,dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	// TODO: 完成单元测试
 	cases := []*preprocessorTestCase{
 		// global
