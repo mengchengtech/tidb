@@ -133,7 +133,6 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 }
 
 func (d *dbSelector) getDbIndexByTicketFromService(env string, requestID string) (mctech.DbIndex, error) {
-
 	apiPrefix := config.GetMCTechConfig().DbChecker.APIPrefix
 	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestID)
 	get, err := http.NewRequest("GET", apiURL, nil)
