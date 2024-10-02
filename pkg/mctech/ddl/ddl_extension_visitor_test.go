@@ -138,7 +138,6 @@ func doRunDDLMCTechTestCase(t *testing.T, c *ddlMCTechTestCase) error {
 			restoreSQLs += "; "
 		}
 		restoreSQLs += restoreSQL
-
 	}
 	require.Equalf(t, c.expect, restoreSQLs, "restore %v; expect %v", restoreSQLs, c.expect)
 	return nil
