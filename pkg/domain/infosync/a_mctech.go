@@ -128,6 +128,11 @@ var roleToPriorities = map[placement.PeerRoleType]uint8{
 }
 
 func attachTiflshRuleFromBundle(id int64, rule *placement.TiFlashRule, bundle *placement.Bundle) error {
+	if len(bundle.Rules) == 0 {
+		rule.LocationLabels = nil
+		return nil
+	}
+
 	// 获取rule的优先级 Learner > Follower > Voter > Leader
 	var (
 		seletedRule *placement.Rule                 // 选中的放置规则
@@ -142,7 +147,7 @@ func attachTiflshRuleFromBundle(id int64, rule *placement.TiFlashRule, bundle *p
 	}
 
 	if seletedRule == nil {
-		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule don't exists in Bundle", placement.GroupID(id))
+		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule doesn't exist in Bundle", placement.GroupID(id))
 	}
 
 	for _, c := range seletedRule.Constraints {
