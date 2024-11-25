@@ -66,8 +66,12 @@ const (
 	MCLargeQueryDigestStr = "DIGEST"
 	// MCLargeQuerySQLLengthStr is large query length.
 	MCLargeQuerySQLLengthStr = "SQL_LENGTH"
-	// MCLargeQueryServiceStr is the service that large query maybe from.
-	MCLargeQueryServiceStr = "SERVICE"
+	// MCLargeQueryAppNameStr is the service that large query maybe from.
+	MCLargeQueryAppNameStr = "APP_NAME"
+	// MCLargeQueryProductLineStr is the product-line that large query maybe from.
+	MCLargeQueryProductLineStr = "PRODUCT_LINE"
+	// MCLargeQueryPackageStr is the package that large query maybe from.
+	MCLargeQueryPackageStr = "PACKAGE"
 	// MCLargeQueryResultRows is the row count of the SQL result.
 	MCLargeQueryResultRows = "RESULT_ROWS"
 	// MCLargeQuerySQLTypeStr large sql type. (insert/update/delete/select......)
@@ -86,6 +90,8 @@ const (
 	MCTechDbCheckerEnabled = "mctech_db_checker_enabled"
 	// MCTechDbCheckerCompatible is one of mctech config items
 	MCTechDbCheckerCompatible = "mctech_db_checker_compatible"
+	// MCTechDbCheckerExcepts is one of mctech config items
+	MCTechDbCheckerExcepts = "mctech_db_checker_excepts"
 
 	// MCTechDbCheckerMutex is one of mctech config items
 	MCTechDbCheckerMutex = "mctech_checker_mutex"
@@ -386,7 +392,9 @@ type MCLargeQueryItems struct {
 	WriteSQLRespTotal time.Duration
 	ResultRows        int64
 	Succ              bool
-	Service           string
+	AppName           string
+	ProductLine       string
+	Package           string
 	SQL               string
 	SQLType           string
 }
@@ -406,7 +414,9 @@ type MCLargeQueryItems struct {
 // # RESULT_ROWS: 1
 // # SUCC: true
 // # SQL_LENGTH: 26621
-// # SERVICE: org-service
+// # APP_NAME: org-service
+// # PRODUCT_LINE: pf
+// # PACKAGE: @mctech/dp-impala
 // # SQL_TYPE: insert
 // # Plan: tidb_decode_plan('ZJAwCTMyXzcJMAkyMAlkYXRhOlRhYmxlU2Nhbl82CjEJMTBfNgkxAR0AdAEY1Dp0LCByYW5nZTpbLWluZiwraW5mXSwga2VlcCBvcmRlcjpmYWxzZSwgc3RhdHM6cHNldWRvCg==')
 // use test;
@@ -455,8 +465,14 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCLargeQueryItems) (string, err
 	writeSlowLogItem(&buf, MCLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
 	writeSlowLogItem(&buf, MCLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
 	writeSlowLogItem(&buf, MCLargeQuerySQLTypeStr, logItems.SQLType)
-	if len(logItems.Service) > 0 {
-		writeSlowLogItem(&buf, MCLargeQueryServiceStr, logItems.Service)
+	if len(logItems.AppName) > 0 {
+		writeSlowLogItem(&buf, MCLargeQueryAppNameStr, logItems.AppName)
+	}
+	if len(logItems.ProductLine) > 0 {
+		writeSlowLogItem(&buf, MCLargeQueryProductLineStr, logItems.ProductLine)
+	}
+	if len(logItems.Package) > 0 {
+		writeSlowLogItem(&buf, MCLargeQueryPackageStr, logItems.Package)
 	}
 
 	if len(logItems.Plan) != 0 {

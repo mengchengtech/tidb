@@ -80,9 +80,7 @@ func getDDLExtension() *_ddlExtension {
 
 		if e.versionEnabled {
 			e.visitor = newDDLExtensionVisitor(option.DDL.Version.Name)
-			matchTexts := append(
-				slices.Clone(option.DDL.Version.DbMatches),
-			)
+			matchTexts := slices.Clone(option.DDL.Version.DbMatches)
 
 			for _, t := range matchTexts {
 				if filter, ok := mctech.NewStringFilter(t); ok {
