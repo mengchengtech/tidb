@@ -27,6 +27,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/charset"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/parser/opcode"
 	"github.com/pingcap/tidb/pkg/parser/terror"
@@ -454,8 +455,10 @@ func ColumnSubstituteImpl(expr Expression, schema *Schema, newExprs []Expression
 			if substituted {
 				flag := v.RetType.GetFlag()
 				var e Expression
+				var err error
 				if v.FuncName.L == ast.Cast {
-					e = BuildCastFunction(v.GetCtx(), newArg, v.RetType)
+					e, err = BuildCastFunctionWithCheck(v.GetCtx(), newArg, v.RetType, v.Function.IsExplicitCharset())
+					terror.Log(err)
 				} else {
 					// for grouping function recreation, use clone (meta included) instead of newFunction
 					e = v.Clone()
@@ -466,6 +469,28 @@ func ColumnSubstituteImpl(expr Expression, schema *Schema, newExprs []Expression
 				return true, false, e
 			}
 			return false, false, v
+		}
+		// If the collation of the column is PAD SPACE,
+		// we can't propagate the constant to the length function.
+		// For example, schema = ['name'], newExprs = ['a'], v = length(name).
+		// We can't substitute name with 'a' in length(name) because the collation of name is PAD SPACE.
+		// TODO: We will fix it here temporarily, and redesign the logic if we encounter more similar functions or situations later.
+		// Fixed issue #53730
+		if v.GetCtx().GetSessionVars().StmtCtx.InConstantPropagateCheck && v.FuncName.L == ast.Length {
+			arg0, isColumn := v.GetArgs()[0].(*Column)
+			if isColumn {
+				id := schema.ColumnIndex(arg0)
+				if id != -1 {
+					_, isConstant := newExprs[id].(*Constant)
+					if isConstant {
+						mappedNewColumnCollate := schema.Columns[id].GetType().GetCollate()
+						if mappedNewColumnCollate == charset.CollationUTF8MB4 ||
+							mappedNewColumnCollate == charset.CollationUTF8 {
+							return false, false, v
+						}
+					}
+				}
+			}
 		}
 		// cowExprRef is a copy-on-write util, args array allocation happens only
 		// when expr in args is changed
@@ -519,7 +544,11 @@ func ColumnSubstituteImpl(expr Expression, schema *Schema, newExprs []Expression
 			}
 		}
 		if substituted {
-			return true, hasFail, NewFunctionInternal(v.GetCtx(), v.FuncName.L, v.RetType, refExprArr.Result()...)
+			newFunc, err := NewFunction(v.GetCtx(), v.FuncName.L, v.RetType, refExprArr.Result()...)
+			if err != nil {
+				return true, true, v
+			}
+			return true, hasFail, newFunc
 		}
 	}
 	return false, false, expr
@@ -586,13 +615,13 @@ Loop:
 
 // SubstituteCorCol2Constant will substitute correlated column to constant value which it contains.
 // If the args of one scalar function are all constant, we will substitute it to constant.
-func SubstituteCorCol2Constant(expr Expression) (Expression, error) {
+func SubstituteCorCol2Constant(ctx sessionctx.Context, expr Expression) (Expression, error) {
 	switch x := expr.(type) {
 	case *ScalarFunction:
 		allConstant := true
 		newArgs := make([]Expression, 0, len(x.GetArgs()))
 		for _, arg := range x.GetArgs() {
-			newArg, err := SubstituteCorCol2Constant(arg)
+			newArg, err := SubstituteCorCol2Constant(ctx, arg)
 			if err != nil {
 				return nil, err
 			}
@@ -624,7 +653,7 @@ func SubstituteCorCol2Constant(expr Expression) (Expression, error) {
 		return &Constant{Value: *x.Data, RetType: x.GetType()}, nil
 	case *Constant:
 		if x.DeferredExpr != nil {
-			newExpr := FoldConstant(x)
+			newExpr := FoldConstant(ctx, x)
 			return &Constant{Value: newExpr.(*Constant).Value, RetType: x.GetType()}, nil
 		}
 	}
@@ -1416,10 +1445,10 @@ func RemoveDupExprs(ctx sessionctx.Context, exprs []Expression) []Expression {
 }
 
 // GetUint64FromConstant gets a uint64 from constant expression.
-func GetUint64FromConstant(expr Expression) (uint64, bool, bool) {
+func GetUint64FromConstant(sctx sessionctx.Context, expr Expression) (uint64, bool, bool) {
 	con, ok := expr.(*Constant)
 	if !ok {
-		logutil.BgLogger().Warn("not a constant expression", zap.String("expression", expr.ExplainInfo()))
+		logutil.BgLogger().Warn("not a constant expression", zap.String("expression", expr.ExplainInfo(sctx)))
 		return 0, false, false
 	}
 	dt := con.Value
@@ -1819,7 +1848,7 @@ func ExprsToStringsForDisplay(exprs []Expression) []string {
 		// so we trim the \" prefix and suffix here.
 		strs[i] = strings.TrimSuffix(
 			strings.TrimPrefix(
-				strconv.Quote(cond.String()),
+				strconv.Quote(cond.StringWithCtx(false)),
 				quote),
 			quote)
 	}
