@@ -4,6 +4,7 @@ package infosync
 
 import (
 	"context"
+	"math"
 	"slices"
 	"time"
 
@@ -31,7 +32,7 @@ func NewTiFlashTableRules(tbl *model.TableInfo, bundle *placement.Bundle) ([]*ht
 	rules := []*http.Rule{}
 	if tbl.TiFlashReplica != nil {
 		newRule := MakeNewRule(tbl.ID, tbl.TiFlashReplica.Count, tbl.TiFlashReplica.LocationLabels)
-		if err := attachLeaderRuleFromBundle(tbl.ID, &newRule, bundle); err != nil {
+		if err := attachTiflshRuleFromBundle(tbl.ID, &newRule, bundle); err != nil {
 			return nil, err
 		}
 		rules = append(rules, &newRule)
@@ -64,7 +65,7 @@ func NewTiFlashPartitionRule(partID int64, tbl *model.TableInfo, bundle *placeme
 	if bundle != nil {
 		// bundle可能为nil，此时只需忽略即可
 		// set placement policy = default; 就是删除policy
-		if err := attachLeaderRuleFromBundle(partID, &newRule, bundle); err != nil {
+		if err := attachTiflshRuleFromBundle(partID, &newRule, bundle); err != nil {
 			return nil, err
 		}
 	}
@@ -117,27 +118,38 @@ func PutTiFlashRules(ctx context.Context, rules []*http.Rule) error {
 	return is.tiflashReplicaManager.SetPlacementRuleBatch(ctx, rules)
 }
 
-func attachLeaderRuleFromBundle(id int64, rule *http.Rule, bundle *placement.Bundle) error {
-	// 为了简单,只使用leader角色的配置.
-	var leaderRule *http.Rule
-	for _, rule := range bundle.Rules {
-		if rule.Role == http.Voter {
-			leaderRule = rule
-			break
+var roleToPriorities = map[http.PeerRoleType]uint8{
+	http.Learner:  0,
+	http.Follower: 1,
+	http.Voter:    2,
+	http.Leader:   3,
+}
+
+func attachTiflshRuleFromBundle(id int64, rule *http.Rule, bundle *placement.Bundle) error {
+	// 获取rule的优先级 Learner > Follower > Voter > Leader
+	var (
+		seletedRule *http.Rule                 // 选中的放置规则
+		priority    uint8      = math.MaxUint8 // 预设置一个大值
+	)
+	for _, r := range bundle.Rules {
+		p := roleToPriorities[r.Role]
+		if p < priority {
+			priority = p
+			seletedRule = r
 		}
 	}
 
-	if leaderRule == nil {
+	if seletedRule == nil {
 		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule don't exists in Bundle", placement.GroupID(id))
 	}
 
-	for _, c := range leaderRule.LabelConstraints {
+	for _, c := range seletedRule.LabelConstraints {
 		if c.Key == "engine" {
 			// 提取的Contraints需要排除key=engine的约束项
 			continue
 		}
 		rule.LabelConstraints = append(rule.LabelConstraints, c)
 	}
-	rule.LocationLabels = slices.Clone(leaderRule.LocationLabels)
+	rule.LocationLabels = slices.Clone(seletedRule.LocationLabels)
 	return nil
 }
