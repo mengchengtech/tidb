@@ -185,24 +185,33 @@ type TenantInfo interface {
 	GetInfoForTest() map[string]any
 }
 
-// TenantValueInfo tenant info
-type TenantValueInfo struct {
+// MutableTenantInfo tenant info
+type MutableTenantInfo interface {
+	SetCode(string) // 当前租户code
+}
+
+// tenantValueInfo tenant info
+type tenantValueInfo struct {
 	code     string // 当前租户code
 	fromRole bool   // 租户code是否来自角色
 }
 
 // Code tenant code
-func (ti *TenantValueInfo) Code() string {
+func (ti *tenantValueInfo) Code() string {
 	return ti.code
 }
 
+func (ti *tenantValueInfo) SetCode(code string) {
+	ti.code = code
+}
+
 // FromRole tenant code is from role?
-func (ti *TenantValueInfo) FromRole() bool {
+func (ti *tenantValueInfo) FromRole() bool {
 	return ti.fromRole
 }
 
 // GetInfoForTest get info for test
-func (ti *TenantValueInfo) GetInfoForTest() map[string]any {
+func (ti *tenantValueInfo) GetInfoForTest() map[string]any {
 	return map[string]any{"code": ti.code, "fromRole": ti.fromRole}
 }
 
@@ -283,7 +292,7 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 	r := &prepareResult{
 		comments: comments,
 		roles:    roles,
-		tenant: &TenantValueInfo{
+		tenant: &tenantValueInfo{
 			code:     tenantCode,
 			fromRole: fromRole,
 		},
