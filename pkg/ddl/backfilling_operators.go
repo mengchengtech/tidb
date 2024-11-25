@@ -310,7 +310,8 @@ func (src *TableScanTaskSource) generateTasks() error {
 	startKey := src.startKey
 	endKey := src.endKey
 	for {
-		kvRanges, err := splitTableRanges(
+		kvRanges, err := splitAndValidateTableRanges(
+			src.ctx,
 			src.tbl,
 			src.store,
 			startKey,
@@ -591,6 +592,7 @@ func NewIndexIngestOperator(
 				writer, err := engines[i].CreateWriter(writerID)
 				if err != nil {
 					logutil.Logger(ctx).Error("create index ingest worker failed", zap.Error(err))
+					ctx.onError(err)
 					return nil
 				}
 				writers = append(writers, writer)
@@ -743,7 +745,9 @@ func (w *indexIngestBaseWorker) WriteChunk(rs *IndexRecordChunk) (count int, nex
 		failpoint.Return(0, nil, errors.New("mock write local error"))
 	})
 	failpoint.Inject("writeLocalExec", func(_ failpoint.Value) {
-		OperatorCallBackForTest()
+		if rs.Done {
+			OperatorCallBackForTest()
+		}
 	})
 
 	oprStartTime := time.Now()
