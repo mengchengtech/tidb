@@ -58,7 +58,8 @@ func newTestMCTechContext(tenant string) (mctech.Context, error) {
 	result, err := mctech.NewPrepareResult(tenant, map[string]any{
 		"global": &mctech.GlobalValueInfo{},
 	})
-	context := mctech.NewBaseContext(result, nil)
+	context := mctech.NewBaseContext()
+	context.(mctech.ModifyContext).SetPrepareResult(result)
 	return context, err
 }
 
