@@ -1,4 +1,4 @@
-package preps
+package preps_test
 
 import (
 	"context"

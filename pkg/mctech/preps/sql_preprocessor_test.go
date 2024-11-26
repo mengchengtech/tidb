@@ -1,15 +1,16 @@
-package preps
+package preps_test
 
 import (
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
 type preprocessorTestCase struct {
 	sql          string
-	actions      []*actionInfo
+	actions      []preps.ActionInfo
 	params       map[string]any
 	resultExpect map[string]any
 	sqlExpect    string
@@ -44,10 +45,10 @@ func TestProcessorWithRoot(t *testing.T) {
 		{"select * from company", nil, map[string]any{"dbPrefix": "mock"}, map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}}, "", ""},
 		// action
 		// $replace
-		{"select * from custom.company", []*actionInfo{{"nop", ""}}, map[string]any{}, nil, "", "不支持的action操作"},
-		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant=gslq"}}, map[string]any{}, map[string]any{"params": map[string]any{"mpp": "allow"}}, "select * from gslq_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}}, "select * from gdcd_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, map[string]any{}, nil, "", "执行[replace]时未找到名称为'tenant'的参数的值"},
+		{"select * from custom.company", preps.NewActionsForTest(map[string]string{"nop": ""}), map[string]any{}, nil, "", "不支持的action操作"},
+		{"select * from {{tenant}}_custom.company", preps.NewActionsForTest(map[string]string{"replace": "tenant=gslq"}), map[string]any{}, map[string]any{"params": map[string]any{"mpp": "allow"}}, "select * from gslq_custom.company", ""},
+		{"select * from {{tenant}}_custom.company", preps.NewActionsForTest(map[string]string{"replace": "tenant"}), map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}}, "select * from gdcd_custom.company", ""},
+		{"select * from {{tenant}}_custom.company", preps.NewActionsForTest(map[string]string{"replace": "tenant"}), map[string]any{}, nil, "", "执行[replace]时未找到名称为'tenant'的参数的值"},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "root")
@@ -126,14 +127,14 @@ func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 }
 
 func preprocessorRunTestCase(t *testing.T, c *preprocessorTestCase, mctechCtx mctech.Context) error {
-	processor := newSQLPreprocessor(c.sql)
+	processor := preps.NewSQLPreprocessorForTest(c.sql)
 	result, err := processor.Prepare(mctechCtx, c.actions, c.params)
 	if err != nil {
 		return err
 	}
 
 	require.Equal(t, c.resultExpect, result.GetInfoForTest(), c.Source())
-	outSQL := processor.preparedSQL
+	outSQL := processor.GetPreparedSQL()
 	require.NotContains(t, outSQL, "{{tenant}}", c.Source())
 	if outSQL != c.sql {
 		require.Equal(t, c.sqlExpect, outSQL, c.Source())

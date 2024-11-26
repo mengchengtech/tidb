@@ -25,10 +25,19 @@ type StatementPreprocessor interface {
 type mctechStatementPreprocessor struct {
 }
 
+// ActionInfo 自定义指令描述接口
+type ActionInfo interface {
+	Name() string
+	Args() string
+}
+
 type actionInfo struct {
 	name string
 	args string
 }
+
+func (i *actionInfo) Name() string { return i.name }
+func (i *actionInfo) Args() string { return i.args }
 
 /**
  * 预解析sql，解析的结果存到MCTechContext中
@@ -40,7 +49,7 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 	}
 
 	params := map[string]any{}
-	actions := []*actionInfo{}
+	actions := []ActionInfo{}
 
 	matches := mctechHintPattern.FindAllStringSubmatch(sql, -1)
 	for _, match := range matches {
