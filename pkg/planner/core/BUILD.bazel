@@ -187,6 +187,7 @@ go_test(
     name = "core_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "binary_plan_test.go",
         "cbo_test.go",
         "collect_column_stats_usage_test.go",
@@ -239,6 +240,7 @@ go_test(
         "//pkg/expression/aggregation",
         "//pkg/infoschema",
         "//pkg/kv",
+        "//pkg/mctech/mock",
         "//pkg/metrics",
         "//pkg/parser",
         "//pkg/parser/ast",
