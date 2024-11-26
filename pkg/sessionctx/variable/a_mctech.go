@@ -249,6 +249,16 @@ func init() {
 				return nil
 			},
 		},
+		{Scope: ScopeGlobal, Name: MCTechDbCheckerExcepts, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExcepts, ","),
+			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
+				return strings.Join(config.GetMCTechConfig().DbChecker.Excepts, ","), nil
+			},
+			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
+				excepts := config.StrToSlice(val, ",")
+				config.GetMCTechConfig().DbChecker.Excepts = excepts
+				return nil
+			},
+		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSQLTraceEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return BoolToOnOff(config.GetMCTechConfig().Metrics.SQLTrace.Enabled), nil
@@ -347,6 +357,7 @@ func LoadMCTechSysVars() {
 	SetSysVar(MCTechDbCheckerMutex, strings.Join(option.DbChecker.Mutex, ","))
 	SetSysVar(MCTechDbCheckerExclude, strings.Join(option.DbChecker.Exclude, ","))
 	SetSysVar(MCTechDbCheckerAcross, strings.Join(option.DbChecker.Across, ","))
+	SetSysVar(MCTechDbCheckerExcepts, strings.Join(option.DbChecker.Excepts, ","))
 
 	SetSysVar(MCTechTenantEnabled, BoolToOnOff(option.Tenant.Enabled))
 	SetSysVar(MCTechTenantForbiddenPrepare, BoolToOnOff(option.Tenant.ForbiddenPrepare))

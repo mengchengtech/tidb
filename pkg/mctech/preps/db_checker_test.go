@@ -107,6 +107,32 @@ func TestDatabaseChecker(t *testing.T) {
 	doRunTest(t, checkRunTestCase, cases)
 }
 
+func TestDatabaseCheckerUseCustomComment(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]any{
+			"DbChecker.Compatible": false,
+			"DbChecker.Excepts":    []string{"demo-service", "another-demo-service.pf", "@mctech/dp-impala"},
+		}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+
+	cases := []*testDatabaseCheckerCase{
+		// custom comment crossdb check pass
+		{true, map[string]string{"from": "demo-service"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		{true, map[string]string{"from": "demo-service", "package": "@mctech/dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		{true, map[string]string{"from": "another-demo-service.pf", "package": "@mctech/dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		{true, map[string]string{"package": "@mctech/dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		{true, map[string]string{"from": "another-demo-service", "package": "@mctech/dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		{true, map[string]string{"from": "another-demo-service.pf", "package": "@mctech/another-dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		{true, map[string]string{"from": "another-demo-service.pf"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, ""},
+		// custom comment crossdb check unpass
+		{true, map[string]string{"from": "another-demo-service"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, "dbs not allow in the same statement"},
+		{true, map[string]string{"package": "@mctech/another-dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, "dbs not allow in the same statement"},
+		{true, map[string]string{"from": "another-demo-service", "package": "@mctech/another-dp-impala"}, "global_ds|global_qa|global_sq", []string{"global_sq", "global_ds", "global_qa", "global_mb"}, "dbs not allow in the same statement"},
+	}
+	doRunTest(t, checkRunTestCase, cases)
+}
+
 type mockStmtTextAware struct{}
 
 func (a *mockStmtTextAware) OriginalText() string {
