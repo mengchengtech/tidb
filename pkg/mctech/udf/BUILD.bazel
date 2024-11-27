@@ -13,6 +13,7 @@ go_library(
         "//pkg/config",
         "//pkg/mctech",
         "//pkg/types",
+        "//pkg/util/logutil",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@com_github_pkg_errors//:errors",
@@ -31,7 +32,7 @@ go_test(
     ],
     embed = [":udf"],
     flaky = True,
-    shard_count = 7,
+    shard_count = 9,
     deps = [
         "//pkg/mctech/mock",
         "//pkg/parser/mysql",
