@@ -1,3 +1,5 @@
+// 不在测试环境不会编译当前代码
+
 //go:build !intest
 
 package mock
