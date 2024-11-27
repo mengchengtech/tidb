@@ -72,9 +72,6 @@ func TestMCTechSequenceDefaultValueAlterSchemaTest(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
-	// session := tk.Session()
-	// mctech.SetHandlerFactory(session, prapared.GetHandlerFactory())
-
 	tk.MustExec(strings.Join([]string{
 		"create table version_table (",
 		"a varchar(10)",
@@ -148,6 +145,32 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	require.Len(t, seqs, len(rows)*2)
 	require.Len(t, stamps, 2)
 	// fmt.Printf("%v", rows)
+}
+
+func TestMCTechSequenceDefaultValueInitTest(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := initMock(t, store)
+
+	tk.MustExec(strings.Join([]string{
+		"create table version_table (",
+		"a varchar(10)",
+		",b int",
+		")",
+	}, "\n"))
+
+	tk.MustExec(
+		`insert into version_table
+		(a, b)
+		values ('a', 1), ('b', 2), ('c', 3), ('d', 4)
+		`)
+
+	tk.MustExec("alter table version_table add column `stamp` timestamp(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6)")
+	tk.MustExec("alter table version_table add column `__version` bigint(20) NOT NULL DEFAULT MCTECH_SEQUENCE ON UPDATE MCTECH_SEQUENCE")
+
+	res := tk.MustQuery("select stamp, __version from version_table where __version is not null")
+	rows := res.Rows()
+	require.Len(t, rows, 4)
+	fmt.Printf("%v", rows)
 }
 
 func TestInsertSelectUseSequenceTest(t *testing.T) {
