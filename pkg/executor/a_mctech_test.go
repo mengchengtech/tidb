@@ -46,10 +46,10 @@ func TestMCTechStatementsSummary(t *testing.T) {
 }
 
 func TestForbiddenPrepare(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"ForbiddenPrepare": true}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
@@ -85,10 +85,10 @@ func TestIntegerAutoIncrement(t *testing.T) {
 }
 
 func TestPrepareByQuery(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
 
@@ -122,10 +122,10 @@ func TestPrepareByQuery(t *testing.T) {
 }
 
 func TestPrepareByCmd(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
@@ -144,10 +144,10 @@ func TestPrepareByCmd(t *testing.T) {
 }
 
 func TestPrepareByCmdNoTenant(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"ForbiddenPrepare": false}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)

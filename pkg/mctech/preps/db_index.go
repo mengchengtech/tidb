@@ -112,8 +112,7 @@ func (d *dbSelector) getDbIndex(local bool, env string) (mctech.DbIndex, error) 
 }
 
 func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
-	option := config.GetOption()
-	apiPrefix := option.DbCheckerAPIPrefix
+	apiPrefix := config.GetMCTechConfig().DbChecker.APIPrefix
 	apiURL := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, env)
 	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
@@ -128,14 +127,14 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, errors.Wrap(err, "get dw index errors："+apiPrefix)
+		return -1, errors.Wrap(err, "get dw index errors")
 	}
 	return js["current"], nil
 }
 
 func (d *dbSelector) getDbIndexByTicketFromService(env string, requestID string) (mctech.DbIndex, error) {
-	option := config.GetOption()
-	apiPrefix := option.DbCheckerAPIPrefix
+
+	apiPrefix := config.GetMCTechConfig().DbChecker.APIPrefix
 	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestID)
 	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {

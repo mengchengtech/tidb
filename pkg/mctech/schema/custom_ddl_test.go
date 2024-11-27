@@ -35,10 +35,10 @@ var createTableSQL = strings.Join([]string{
 }, "\n")
 
 func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -118,10 +118,10 @@ func TestMCTechSequenceDefaultValueAlterSchemaTest(t *testing.T) {
 }
 
 func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"DDLVersionColumnEnabled": true}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -196,10 +196,10 @@ func TestBigintDefaultValueOnInsertTest(t *testing.T) {
 }
 
 func TestInsertSelectUseSequenceTest(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMctechOption",
-		mock.M(t, map[string]bool{"SequenceMock": false}),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Sequence.Mock": false}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMctechOption")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)

@@ -116,11 +116,11 @@ func getDatabaseChecker() DatabaseChecker {
 	}
 
 	dbCheckerInitOne.Do(func() {
-		option := config.GetOption()
+		option := config.GetMCTechConfig()
 		dbChecker = newMutexDatabaseCheckerWithParams(
-			option.DbCheckerMutexAcrossDbs,
-			option.DbCheckerExcludeAcrossDbs,
-			option.DbCheckerAcrossDbGroups)
+			option.DbChecker.MutexAcrossDbs,
+			option.DbChecker.ExcludeAcrossDbs,
+			option.DbChecker.AcrossDbGroups)
 	})
 	return dbChecker
 }
