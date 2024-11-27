@@ -68,12 +68,12 @@ func doRunMsicMCTechTestCase(t *testing.T, c *msicMCTechTestCase) error {
 	restoreSQLs := ""
 	for _, stmt := range stmts {
 		sb.Reset()
-		context, err := newTestMCTechContext()
+		mctechCtx, err := newTestMCTechContext()
 		if err != nil {
 			return err
 		}
 
-		if _, err := ApplyExtension(context, stmt); err != nil {
+		if _, err := ApplyExtension(mctechCtx, stmt); err != nil {
 			return err
 		}
 		err = stmt.Restore(NewRestoreCtx(DefaultRestoreFlags|RestoreBracketAroundBinaryOperation, &sb))
@@ -102,7 +102,7 @@ func newTestMCTechContext() (mctech.Context, error) {
 	}
 
 	context := &testMCTechContext{
-		Context: mctech.NewBaseContext(),
+		Context: mctech.NewBaseContext(false),
 	}
 	modifyCtx := context.Context.(mctech.ModifyContext)
 	modifyCtx.SetPrepareResult(result)
