@@ -605,6 +605,9 @@ func getColDefaultValue(ctx sessionctx.Context, col *model.ColumnInfo, defaultVa
 	switch col.GetType() {
 	// add by zhangbing
 	case mysql.TypeLonglong:
+		if value, err := CastValue(ctx, types.NewDatum(defaultVal), col, false, false); err == nil {
+			return value, nil
+		}
 		value, err := expression.GetBigIntValue(ctx, defaultVal, col.GetType(), col.GetDecimal())
 		if err != nil {
 			return types.Datum{}, errGetDefaultFailed.GenWithStackByArgs(col.Name)
