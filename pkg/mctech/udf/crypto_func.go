@@ -23,14 +23,14 @@ const cryptoPrefix = "{crypto}"
 var cryptoPfrefixLength = len(cryptoPrefix)
 
 type aesCryptoClient struct {
-	option *config.Option
+	option *config.MCTech
 	key    []byte
 	iv     []byte
 }
 
 func newAesCryptoClientFromService() *aesCryptoClient {
 	c := new(aesCryptoClient)
-	option := config.GetOption()
+	option := config.GetMCTechConfig()
 	c.option = option
 
 	key, iv, err := loadCryptoParams(option)
@@ -66,7 +66,7 @@ func newAesCryptoClientFromService() *aesCryptoClient {
 
 // Encrypt encrypt plain text
 func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
-	if c.option.EncryptionMock {
+	if c.option.Encryption.Mock {
 		// 用于调试场景
 		return plainText, nil
 	}
@@ -92,7 +92,7 @@ func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
 
 // Decrypt decrypt cipher text
 func (c *aesCryptoClient) Decrypt(content string) (string, error) {
-	if c.option.EncryptionMock {
+	if c.option.Encryption.Mock {
 		// 用于调试场景
 		return content, nil
 	}
@@ -123,9 +123,9 @@ func (c *aesCryptoClient) Decrypt(content string) (string, error) {
 	return raw, nil
 }
 
-func loadCryptoParams(option *config.Option) (key []byte, iv []byte, err error) {
+func loadCryptoParams(option *config.MCTech) (key []byte, iv []byte, err error) {
 	// 从配置中获取
-	apiPrefix := option.EncryptionAPIPrefix
+	apiPrefix := option.Encryption.APIPrefix
 	serviceURL := apiPrefix + "db/aes"
 	get, err := http.NewRequest("GET", serviceURL, nil)
 	if err != nil {
@@ -133,7 +133,7 @@ func loadCryptoParams(option *config.Option) (key []byte, iv []byte, err error) 
 	}
 
 	get.Header = map[string][]string{
-		"x-access-id": {option.EncryptionAccessID},
+		"x-access-id": {option.Encryption.AccessID},
 	}
 
 	body, err := mctech.DoRequest(get)
