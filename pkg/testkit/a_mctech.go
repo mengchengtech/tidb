@@ -12,15 +12,8 @@ func (tk *TestKit) onBeforeParseSQL(sql string) (mctech.Context, string, error) 
 }
 
 // onAfterParseSQL 当sql语法解析成功后 执行的方法
-func (tk *TestKit) onAfterParseSQL(stmts []ast.StmtNode) (err error) {
-	it := mctech.GetInterceptor()
-	sctx := tk.Session()
-	for _, stmt := range stmts {
-		if err = it.AfterParseSQL(sctx, stmt); err != nil {
-			return err
-		}
-	}
-	return nil
+func (tk *TestKit) onAfterParseSQL(stmt ast.StmtNode) (err error) {
+	return mctech.GetInterceptor().AfterParseSQL(tk.Session(), stmt)
 }
 
 // onParseSQLFailed 当sql语法解析出错后 执行的方法
