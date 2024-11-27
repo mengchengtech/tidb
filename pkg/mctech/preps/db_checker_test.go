@@ -70,6 +70,7 @@ func TestDatabaseChecker(t *testing.T) {
 		mock.M(t, map[string]bool{"DbChecker.Compatible": false}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+
 	cases := []*testDatabaseCheckerCase{
 		// 当前账号不属于tenant_only角色
 		{false, []string{"global_cq3", "global_mtlp"}, ""},

@@ -39,6 +39,7 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -122,6 +123,7 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
