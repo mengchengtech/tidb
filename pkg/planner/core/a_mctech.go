@@ -16,7 +16,6 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/planner/core/base"
-	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/types"
 )
 
@@ -189,42 +188,20 @@ func init() {
 	tenantParamTp.SetDecimal(types.UnspecifiedLength)
 }
 
-func (e *Execute) GetExtensionParams(ctx context.Context) ([]types.ParamMarkerOffset, string, error) {
-	var (
-		extParams  []types.ParamMarkerOffset
-		tenantCode string
-		err        error
-	)
+func (e *Execute) getExtensionParams() []types.ParamMarkerOffset {
 	prepared := e.PrepStmt
-	mctechCtx := mctech.GetContext(ctx)
 	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
 		return p.(types.ParamMarkerOffset).GetOffset() == mctech.ExtensionParamMarkerOffset
 	})
-	sessionVars := mctechCtx.Session().GetSessionVars()
-	if index >= 0 {
-		// 含有扩展参数
-		tenantCode = mctechCtx.PrepareResult().Tenant()
-		if tenantCode != "" {
-			for _, v := range prepared.Params[index:] {
-				extParams = append(extParams, v.(types.ParamMarkerOffset))
-			}
-		} else {
-			user := sessionVars.User.Username
-			err = fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
-		}
-	}
-	return extParams, tenantCode, err
-}
 
-func (e *Execute) InitSessionVars(ctx sessionctx.Context, execCom bool, tenantCode string) {
-	sessionVars := ctx.GetSessionVars()
-	if execCom {
-		// execute command
-		sessionVars.UnsetUserVar(tenantParamName)
-	} else {
-		// execute sql
-		sessionVars.SetStringUserVar(tenantParamName, tenantCode, "")
+	if index < 0 {
+		return nil
 	}
+	extParams := make([]types.ParamMarkerOffset, 0, len(prepared.Params)-index)
+	for _, v := range prepared.Params[index:] {
+		extParams = append(extParams, v.(types.ParamMarkerOffset))
+	}
+	return extParams
 }
 
 type extensionArgCreator[T any] func() (T, error)
@@ -246,12 +223,39 @@ func appendExtensionArgs[T any](
 	return extensions, nil
 }
 
-func (e *Execute) AppendVarExprs(sctx sessionctx.Context, extParams []types.ParamMarkerOffset, tenantCode string) error {
+func (e *Execute) AppendVarExprs(ctx context.Context) error {
+	// 获取扩展参数列表
+	extParams := e.getExtensionParams()
+	if len(extParams) == 0 {
+		return nil
+	}
+
+	mctechCtx := mctech.GetContext(ctx)
+	var tenantCode string
+	if mctechCtx != nil {
+		tenantCode = mctechCtx.PrepareResult().Tenant()
+	}
+
+	sctx := mctechCtx.Session()
+	sessionVars := sctx.GetSessionVars()
+	if tenantCode == "" {
+		user := sessionVars.User.Username
+		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
+	}
+
+	// 初始化租户条件参数
+	if tenantCode == "" {
+		sessionVars.UnsetUserVar(tenantParamName)
+	} else {
+		sessionVars.SetStringUserVar(tenantParamName, tenantCode, "")
+	}
+
 	extArgs, err := appendExtensionArgs(extParams, func() (expression.Expression, error) {
 		return expression.BuildGetVarFunction(sctx.GetExprCtx(),
 			expression.DatumToConstant(types.NewDatum(tenantParamName), mysql.TypeString, 0),
 			tenantParamTp)
 	})
+
 	if err == nil {
 		e.Params = append(e.Params, extArgs...)
 	}

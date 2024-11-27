@@ -30,8 +30,6 @@ func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCod
 			tenantFromRoles[i] = subs[1]
 		}
 	}
-
-	user := currentUser(ctx)
 	// var isAdmin = user == "root"
 
 	tenantFromRolesLength := len(tenantFromRoles)
@@ -48,6 +46,7 @@ func findTenantInfoFromRoles(ctx sessionctx.Context) (tenantOnly bool, tenantCod
 			// 只有一个角色能提供租户信息
 			for index := 1; index < tenantFromRolesLength; index++ {
 				if tenantCode != tenantFromRoles[index] {
+					user := currentUser(ctx)
 					return tenantOnly, tenantCode, fmt.Errorf("用户%s所属的角色存在多个租户的信息", user)
 				}
 			}
