@@ -105,6 +105,10 @@ func doNodeVisitorRunTest(t *testing.T, cases []mctechTestCase, enableWindowFunc
 	}
 }
 
+var mctechShowStmtCases = []mctechTestCase{
+	{false, nil, "pf", "mctech select * from company", "MCTECH SELECT * FROM `company` WHERE (`company`.`tenant`='gslq4dev')"},
+}
+
 var deleteSingleTableCases = []mctechTestCase{
 	{false, nil, "pf", "delete from org_relation_temp", "DELETE FROM `org_relation_temp` WHERE (`org_relation_temp`.`tenant`='gslq4dev')"},
 	{false, nil, "pf", "delete from component where id > 100", "DELETE FROM `component` WHERE ((`component`.`tenant`='gslq4dev') AND (`id`>100))"},
@@ -230,6 +234,7 @@ var cases = [][]mctechTestCase{
 	simpleCases,
 	updateSingleTableCases, updateMultipleTableCases, updateWithSubqueryCases, updateWithCTECases,
 	nopCases,
+	mctechShowStmtCases,
 }
 
 func TestMCTechVisitor(t *testing.T) {
