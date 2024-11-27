@@ -56,6 +56,10 @@ type cteScopeItem struct {
 	cteNames  []string
 }
 
+func (v *databaseNameVisitor) DBNames() map[string]bool {
+	return v.dbNames
+}
+
 // Enter implements interface Visitor
 func (v *databaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	var err error
@@ -127,15 +131,24 @@ type isolationConditionVisitor struct {
 
 const tenantFieldName = "tenant"
 
+type dbNameVisitor interface {
+	ast.Visitor
+	DBNames() map[string]bool
+}
+
+func newDatabaseNameVisitor(mctx mctech.Context) *databaseNameVisitor {
+	return &databaseNameVisitor{
+		context: mctx,
+		dbNames: map[string]bool{},
+	}
+}
+
 func newIsolationConditionVisitor(
 	mctx mctech.Context,
 	charset string, collation string) *isolationConditionVisitor {
 	visitor := &isolationConditionVisitor{
-		usingParam: mctx.UsingTenantParam(),
-		databaseNameVisitor: &databaseNameVisitor{
-			context: mctx,
-			dbNames: map[string]bool{},
-		},
+		usingParam:          mctx.UsingTenantParam(),
+		databaseNameVisitor: newDatabaseNameVisitor(mctx),
 		withClauseScope:     &nodeScope[*cteScopeItem]{items: list.New()},
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
