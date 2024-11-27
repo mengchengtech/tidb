@@ -70,11 +70,6 @@ func GetOption() *Option {
 	return mctechOpts
 }
 
-// SetOptionForTest for unit test
-func SetOptionForTest(option *Option) {
-	mctechOpts = option
-}
-
 func initMCTechOption() *Option {
 	opts := config.GetGlobalConfig().MCTech
 	option := &Option{
