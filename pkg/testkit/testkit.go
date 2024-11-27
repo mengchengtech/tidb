@@ -36,7 +36,6 @@ import (
 	"github.com/pingcap/tidb/pkg/types"
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/intest"
-	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/pingcap/tipb/go-binlog"
 	"github.com/stretchr/testify/assert"
@@ -44,7 +43,6 @@ import (
 	"github.com/tikv/client-go/v2/tikv"
 	"github.com/tikv/client-go/v2/tikvrpc"
 	"go.uber.org/atomic"
-	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -343,16 +341,9 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...interface{}) (rs sqlexec.RecordSet, err error) {
 	defer tk.Session().GetSessionVars().ClearAlloc(&tk.alloc, err != nil)
 	// add by zhangbing
-	handler := mctech.GetHandler()
-	var mctechCtx mctech.Context
-	if ctx, mctechCtx, err = mctech.WithNewContext3(ctx, tk.Session(), false); err != nil {
+	var mctx mctech.Context
+	if ctx, mctx, sql, err = tk.onBeforeParseSQL(ctx, sql); err != nil {
 		return nil, err
-	}
-
-	if mctechCtx != nil {
-		if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
-			return nil, err
-		}
 	}
 	// add end
 	if len(args) == 0 {
@@ -367,13 +358,8 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 			}
 		}
 		// add by zhangbing
-		if mctechCtx != nil {
-			if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
-				if strFmt, ok := tk.session.(fmt.Stringer); ok {
-					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", sql))
-				}
-				return nil, err
-			}
+		if err = tk.onAfterParseSQL(ctx, mctx, sql, stmts); err != nil {
+			return nil, err
 		}
 		// add end
 		warns := sc.GetWarnings()

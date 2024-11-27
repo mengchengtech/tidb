@@ -123,7 +123,7 @@ func (e *PrepareExec) beforePrepare(ctx context.Context) error {
 	return nil
 }
 
-func (e *PrepareExec) afterParseSQL(ctx context.Context, stmts []ast.StmtNode) (err error) {
+func (e *PrepareExec) afterParseSQL(ctx context.Context, stmt ast.StmtNode) (err error) {
 	handler := mctech.GetHandler()
 	var mctx mctech.Context
 	mctx, err = mctech.GetContext(ctx)
@@ -134,13 +134,11 @@ func (e *PrepareExec) afterParseSQL(ctx context.Context, stmts []ast.StmtNode) (
 	if mctx != nil {
 		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 		modifyCtx.SetUsingTenantParam(true)
-		for _, stmt := range stmts {
-			if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
-				if strFmt, ok := e.Ctx().(fmt.Stringer); ok {
-					logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", stmt.OriginalText()))
-				}
-				return err
+		if _, err = handler.ApplyAndCheck(mctx, stmt); err != nil {
+			if strFmt, ok := e.Ctx().(fmt.Stringer); ok {
+				logutil.Logger(ctx).Warn("mctech SQL failed", zap.Error(err), zap.Stringer("session", strFmt), zap.String("SQL", stmt.OriginalText()))
 			}
+			return err
 		}
 	}
 
