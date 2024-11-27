@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
@@ -144,6 +145,12 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 			specialGroup = across
 		}
 	}
+
+	failpoint.Inject("DbCheckError", func(_ failpoint.Value) {
+		dbs := []string{"global_ec5", "global_sq"}
+		logicNames = append(logicNames, dbs...)
+	})
+
 	if len(logicNames) <= 1 {
 		// 数据库只有一个
 		return nil
@@ -154,17 +161,15 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 		return nil
 	}
 
-	if config.GetMCTechConfig().DbChecker.Compatible {
-		sql := aware.OriginalText()
-		maxQueryLen := 4096
-		length := len(sql)
-		if length > maxQueryLen {
-			sql = fmt.Sprintf("%.*q(len:%d)", maxQueryLen, sql, length)
-		}
-		log.Warn(fmt.Sprintf("dbs not allow in the same statement. %s", logicNames), zap.String("SQL", sql))
-		return nil
+	msg := fmt.Sprintf("dbs not allow in the same statement. %s", logicNames)
+	sql := aware.OriginalText()
+	maxQueryLen := 1024
+	length := len(sql)
+	if length > maxQueryLen {
+		sql = fmt.Sprintf("%.*s......(len:%d)", maxQueryLen, sql, length)
 	}
-	return fmt.Errorf("dbs not allow in the same statement.  %s", logicNames)
+	log.Warn(msg, zap.String("SQL", sql))
+	return errors.New(msg)
 }
 
 func (c *mutexDatabaseChecker) dbPredicate(dbName string) bool {
