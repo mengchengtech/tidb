@@ -7,6 +7,7 @@ import (
 	"time"
 
 	goCache "github.com/patrickmn/go-cache"
+	"github.com/pingcap/errors"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 )
@@ -28,6 +29,15 @@ func NewMCTechContext(
 
 func (d *tidbSessionMCTechContext) CurrentDB() string {
 	return d.session.GetSessionVars().CurrentDB
+}
+
+func (d *tidbSessionMCTechContext) GetInfoForTest() map[string]any {
+	info := d.MCTechContext.GetInfoForTest()
+	db := d.CurrentDB()
+	if len(db) > 0 {
+		info["db"] = db
+	}
+	return info
 }
 
 const paramBackgroundKey = "background"
@@ -84,7 +94,7 @@ func (d *dbSelector) GetDbIndex() (mctech.DbIndex, error) {
 	env := result.DbPrefix()
 	var dbIndex mctech.DbIndex = -1
 	var err error
-	_, forceBackground := params[paramBackgroundKey]
+	_, forceBackground := params[paramBackgroundKey] // 只要存在就生效
 	if forceBackground {
 		// 强制使用后台库
 		dbIndex, err = d.forceBackground(env)
@@ -161,7 +171,7 @@ func (d *dbSelector) getDbIndexFromService(env string) (mctech.DbIndex, error) {
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, err
+		return -1, errors.Wrap(err, "get dw index errors")
 	}
 	return js["current"], nil
 }
@@ -183,7 +193,7 @@ func (d *dbSelector) getDbIndexByTicketFromService(env string, requestId string)
 	var js = map[string]mctech.DbIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return -1, err
+		return -1, errors.Wrap(err, "get dw index by request errors")
 	}
 
 	return js["db"], nil
