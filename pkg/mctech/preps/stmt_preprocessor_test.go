@@ -1,10 +1,11 @@
-package preps
+package preps_test
 
 import (
 	"context"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
@@ -78,7 +79,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechC
 	)
 
 	session.GetSessionVars().CurrentDB = db
-	sql, result, err = preprocessor.PrepareSQL(mctechCtx, sql)
+	sql, result, err = preps.GetPreprocessorForTest().PrepareSQL(mctechCtx, sql)
 	if err != nil {
 		return err
 	}
@@ -93,16 +94,16 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechC
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
 	modifyCtx.Reset()
 
-	dbs, skipped, err := preprocessor.ResolveStmt(mctechCtx, stmt, charset, collation)
+	dbs, skipped, err := preps.GetPreprocessorForTest().ResolveStmt(mctechCtx, stmt, charset, collation)
 	if err != nil {
 		return err
 	}
 
-	if err = getDatabaseChecker().Check(mctechCtx, stmt, dbs); err != nil {
+	if err = preps.GetDatabaseCheckerForTest().Check(mctechCtx, stmt, dbs); err != nil {
 		return err
 	}
 	if !skipped {
-		err = preprocessor.Validate(mctechCtx)
+		err = preps.GetPreprocessorForTest().Validate(mctechCtx)
 		if err != nil {
 			return err
 		}

@@ -15,7 +15,6 @@ import (
 	// 强制调用preps包里的init方法
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
-	_ "github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
@@ -131,13 +130,13 @@ func TestPrepareByCmd(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
 
-	result1 := tk.MustQueryWithContext(context.Background(), sql, "termination", "finished", "none", "project", "project", "mctest")
+	result := tk.MustQueryWithContext(context.Background(), sql, "termination", "finished", "none", "project", "project", "mctest")
 
-	rows1 := result1.Rows()
-	seqs1 := map[string]any{}
-	require.Len(t, rows1, 2)
-	for _, row := range rows1 {
-		seqs1[row[0].(string)] = true
+	rows := result.Rows()
+	seqs := map[string]any{}
+	require.Len(t, rows, 2)
+	for _, row := range rows {
+		seqs[row[0].(string)] = true
 	}
 }
 
