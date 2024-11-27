@@ -129,6 +129,11 @@ const (
 	ParamAcross = "across"
 	// ParamImpersonate 自定义hint，模拟特殊角色的功能
 	ParamImpersonate = "impersonate"
+
+	// CommentFrom 执行sql的服务
+	CommentFrom = "from"
+	// CommentPackage 执行sql的依赖包
+	CommentPackage = "package"
 )
 
 // GlobalValueInfo from global params
@@ -146,20 +151,46 @@ func (g *GlobalValueInfo) GetInfoForTest() map[string]any {
 	return info
 }
 
+// FlagRoles custom roles
+type FlagRoles interface {
+	TenantOnly() bool // 是否包含tenan_only 角色
+	SetTenantOnly(tenantOnly bool)
+	AcrossDB() bool // 是否包含 across_db 角色。保留字段，暂时没有使用
+}
+
+// Comments sql中特殊的注释信息
+type Comments interface {
+	Service() ServiceComment // 执行sql的服务名称
+	Package() PackageComment // 执行sql所属的依赖包名称（公共包中执行的sql）
+	GetInfoForTest() map[string]any
+}
+
+// ServiceComment service comment
+type ServiceComment interface {
+	From() string        // {appName}[.{productLine}]
+	AppName() string     // 执行sql的服务名称
+	ProductLine() string // 执行sql所属的服务的产品线
+}
+
+// PackageComment package comment
+type PackageComment interface {
+	Name() string
+}
+
 // PrepareResult sql resolve result
 type PrepareResult struct {
-	params map[string]any
-	// 自定义hint，数据库前缀。'dev', 'test'
 	// Deprecated: 已废弃
-	dbPrefix       string
-	tenant         string
-	globalInfo     *GlobalValueInfo
-	tenantFromRole bool
-	tenantOnlyRole bool
+	dbPrefix       string           // 自定义hint，数据库前缀。'dev', 'test'
+	params         map[string]any   // 自定义hint的一般参数
+	tenant         string           // 当前租户code
+	globalInfo     *GlobalValueInfo // global hint 解析后的值
+	tenantFromRole bool             // 租户code是否来自角色
+	roles          FlagRoles        // 当前执行账号的特殊角色信息
+	comments       Comments         // 从特殊注释中提取的一些信息
 }
 
 // NewPrepareResult create PrepareResult
-func NewPrepareResult(tenantCode string, tenantOnly bool, params map[string]any) (*PrepareResult, error) {
+func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
 		params[ParamMPP] = config.GetMCTechConfig().MPP.DefaultValue
@@ -203,8 +234,9 @@ func NewPrepareResult(tenantCode string, tenantOnly bool, params map[string]any)
 	}
 
 	r := &PrepareResult{
+		comments:       comments,
 		tenantFromRole: fromRole,
-		tenantOnlyRole: tenantOnly,
+		roles:          roles,
 		tenant:         tenantCode,
 		dbPrefix:       dbPrefix,
 		globalInfo:     globalInfo,
@@ -219,6 +251,7 @@ func (r *PrepareResult) GetInfoForTest() map[string]any {
 	if len(r.params) > 0 {
 		info["params"] = maps.Clone(r.params)
 	}
+	info["comments"] = r.comments.GetInfoForTest()
 	if len(r.dbPrefix) > 0 {
 		info["prefix"] = r.dbPrefix
 	}
@@ -244,14 +277,19 @@ func (r *PrepareResult) TenantFromRole() bool {
 	return r.tenantFromRole
 }
 
-// TenantOnlyRole current user has role 'tenant_only'
-func (r *PrepareResult) TenantOnlyRole() bool {
-	return r.tenantOnlyRole
+// Roles current user has some roles
+func (r *PrepareResult) Roles() FlagRoles {
+	return r.roles
 }
 
 // Global global
 func (r *PrepareResult) Global() bool {
 	return r.globalInfo.Global
+}
+
+// Comments custom comment
+func (r *PrepareResult) Comments() Comments {
+	return r.comments
 }
 
 // Excludes excludes

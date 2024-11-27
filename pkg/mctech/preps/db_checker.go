@@ -119,7 +119,7 @@ func newMutexDatabaseCheckerWithParams(mutex, exclude, across []string) *mutexDa
 
 func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, dbs []string) error {
 	result := mctx.PrepareResult()
-	if !result.TenantOnlyRole() {
+	if !result.Roles().TenantOnly() {
 		return nil
 	}
 
