@@ -108,6 +108,7 @@ func TestDDLExtensionVisitor(t *testing.T) {
 		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+
 	for _, lst := range ddlExtensionCases {
 		doRunTest(t, doRunDDLMCTechTestCase, lst)
 	}
