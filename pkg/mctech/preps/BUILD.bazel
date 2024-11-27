@@ -1,0 +1,63 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "preps",
+    srcs = [
+        "cache.go",
+        "context.go",
+        "db_checker.go",
+        "db_index.go",
+        "format.go",
+        "mctech_handler.go",
+        "replace_action.go",
+        "sql_preprocessor.go",
+        "stmt_preprocessor.go",
+    ],
+    importpath = "github.com/pingcap/tidb/pkg/mctech/preps",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/config",
+        "//pkg/mctech",
+        "//pkg/mctech/ddl",
+        "//pkg/mctech/isolation",
+        "//pkg/mctech/msic",
+        "//pkg/parser/ast",
+        "//pkg/sessionctx",
+        "//pkg/sessionctx/variable",
+        "//pkg/util/intest",
+        "@com_github_patrickmn_go_cache//:go-cache",
+        "@com_github_pingcap_log//:log",
+        "@com_github_pkg_errors//:errors",
+        "@org_uber_go_zap//:zap",
+    ],
+)
+
+go_test(
+    name = "preps_test",
+    timeout = "short",
+    srcs = [
+        "db_checker_test.go",
+        "db_index_test.go",
+        "format_test.go",
+        "main_test.go",
+        "mctech_handler_test.go",
+        "replace_action_test.go",
+        "sql_preprocessor_test.go",
+        "stmt_preprocessor_test.go",
+    ],
+    embed = [":preps"],
+    flaky = True,
+    shard_count = 18,
+    deps = [
+        "//pkg/config",
+        "//pkg/kv",
+        "//pkg/mctech",
+        "//pkg/mctech/mock",
+        "//pkg/parser/ast",
+        "//pkg/parser/auth",
+        "//pkg/session",
+        "//pkg/testkit",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_stretchr_testify//require",
+    ],
+)
