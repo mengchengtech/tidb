@@ -1,4 +1,4 @@
-package isolation
+package isolation_test
 
 import (
 	"testing"

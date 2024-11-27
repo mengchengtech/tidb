@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "testkit",
     srcs = [
+        "a_mctech.go",
         "asynctestkit.go",
         "dbtestkit.go",
         "mocksessionmanager.go",
@@ -20,6 +21,7 @@ go_library(
         "//pkg/expression",
         "//pkg/kv",
         "//pkg/mctech",
+        "//pkg/mctech/preps",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
         "//pkg/parser/terror",
