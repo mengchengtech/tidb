@@ -7,47 +7,64 @@ import (
 	"io"
 	"os"
 	"path"
+	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/logutil"
+	"go.uber.org/zap"
 )
 
 const dateFormat = "2006-01-02"
 
 // GetFullSQL get full sql from disk compact file
-func GetFullSQL(node, conn string, at types.Time) (sql string, err error) {
+func GetFullSQL(at types.Time, txID int64) (sql string, isNull bool, err error) {
 	config := config.GetMCTechConfig()
 	fullSQLDir := config.Metrics.SQLTrace.FullSQLDir
 	if fullSQLDir == "" {
-		return "", errors.New("未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
+		return "", true, errors.New("未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
 	}
 
 	var gotime time.Time
 	if gotime, err = at.GoTime(time.Local); err != nil {
-		return "", err
+		return "", true, err
 	}
 	date := gotime.Format(dateFormat)
-	fullPath := path.Join(fullSQLDir, date, node, conn, fmt.Sprintf("%d.gz", gotime.UnixMilli()))
+	hour := gotime.Hour()
+	fileDir := path.Join(fullSQLDir, date, strconv.Itoa(hour))
+	fullPath := path.Join(fileDir, fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID))
 	if _, err := os.Stat(fullPath); err != nil {
-		return "", err
+		// FiXME 兼容期过了再移除
+		fullPath = path.Join(fileDir, fmt.Sprintf("%d.gz", txID))
+		if _, err := os.Stat(fullPath); err != nil {
+			if pe, ok := err.(*os.PathError); ok {
+				if pe.Err == syscall.ENOENT {
+					return "", true, nil
+				}
+			}
+
+			logutil.BgLogger().Error("load full sql error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+			return "", true, errors.New("load full sql error")
+		}
 	}
 
 	var fi *os.File
 	if fi, err = os.Open(fullPath); err != nil {
-		return "", err
+		return "", true, err
 	}
 	defer fi.Close()
 	var gz *gzip.Reader
 	if gz, err = gzip.NewReader(fi); err != nil {
-		return "", err
+		return "", true, err
 	}
 
 	defer gz.Close()
 	var b []byte
 	if b, err = io.ReadAll(gz); err != nil {
-		return "", err
+		return "", true, err
 	}
 	sql = string(b)
-	return sql, nil
+	return sql, false, nil
 }
