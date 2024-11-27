@@ -17,6 +17,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
 	"github.com/pingcap/tidb/pkg/util/logutil"
 	clientutil "github.com/tikv/client-go/v2/util"
@@ -25,6 +26,8 @@ import (
 )
 
 type interceptor struct{}
+
+const timeFormat = "2006-01-02 15:04:05.000"
 
 func init() {
 	mctech.SetInterceptor(&interceptor{})
@@ -227,8 +230,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 	execStmt *executor.ExecStmt, err error) {
 	sessVars := sctx.GetSessionVars()
 	var (
-		sqlType = "unknown" // sql语句类型
-		origSQL = sql       // 只有当stmt为nil时才会使用传入的sql参数，此时代表的是 sql 解析失败
+		origSQL = sql // 只有当stmt为nil时才会使用传入的sql参数，此时代表的是 sql 解析失败
+		info    *sqlStmtInfo
 	)
 	// 此处不能使用 sessVars.StmtCtx 获取sql信息
 	// 原因参考当前方法后续 `if execStmt != nil {......}` 块内部的说明
@@ -237,42 +240,8 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 	if stmt != nil {
 		origSQL = stmt.OriginalText()
 	}
-
-	switch s := stmt.(type) {
-	case *ast.PrepareStmt, *ast.ExecuteStmt, *ast.DeallocateStmt: // execute
-		sqlType = "exec"
-	case *ast.BeginStmt, *ast.RollbackStmt, *ast.CommitStmt: // transaction
-		sqlType = "tx"
-	case *ast.NonTransactionalDMLStmt:
-		switch s.DMLStmt.(type) {
-		case *ast.DeleteStmt:
-			sqlType = "delete"
-		case *ast.UpdateStmt:
-			sqlType = "update"
-		case *ast.InsertStmt:
-			sqlType = "insert"
-		}
-	case *ast.SelectStmt, *ast.SetOprStmt: // select
-		sqlType = "select"
-	case *ast.DeleteStmt: // delete
-		sqlType = "delete"
-	case *ast.InsertStmt: // insert
-		sqlType = "insert"
-	case *ast.UpdateStmt: // update
-		sqlType = "update"
-	case *ast.LoadDataStmt:
-		sqlType = "load"
-	case *ast.SetStmt:
-		sqlType = "set"
-	case *ast.TruncateTableStmt:
-		sqlType = "truncate"
-	case *ast.LockTablesStmt, *ast.UnlockTablesStmt, // lock/unlock table
-		// *ast.UseStmt,  // use
-		*ast.CallStmt, // precedure
-		*ast.DoStmt:   // do block
-		sqlType = "misc"
-	default:
-		// stmt 为 nil 或者除以上各个 case 项以外的类型
+	if info = getSQLStmtInfo(stmt, sctx.GetSessionVars()); info == nil {
+		// 返回空值表示不记录trace 日志
 		return
 	}
 
@@ -285,39 +254,35 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 
 	si := sessionctx.ShortInfo(sctx)
 	var (
-		timeStart         time.Time      // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-		connID            uint64         // SQL 查询客户端连接 ID
-		db                = si.GetDB()   // 执行sql时的当前库名称
-		dbs               string         // 执行的sql中用到的所有数据库名称列表。','分隔
-		user              = si.GetUser() // 执行sql时使用的账号
-		tenant            string         // 所属租户信息
-		queryTime         time.Duration  // 执行 SQL 耗费的自然时间
-		parseTime         time.Duration  // 解析耗时
-		compileTime       time.Duration  // 生成执行计划耗时
-		tidbTime          time.Duration  // tidb-server里用时
-		copTime           time.Duration  // 直接从统计结果中获取到的Coprocessor 执行耗时
-		tikvCopTime       time.Duration  // TiKV执行Coprocessor 耗时(从执行计划中统计)
-		tiflashCopTime    time.Duration  // TiFlash执行Coprocessor 耗时(从执行计划中统计)
-		memMax            int64          // 该 SQL 查询执行时占用的最大内存空间
-		diskMax           int64          // 该 SQL 查询执行时占用的最大磁盘空间
-		writeSQLRespTotal time.Duration  // 发送结果耗时
-		firstRowReadyTime time.Duration  // 首行结果准备好时间(总执行时间除去发送结果耗时)
-		resultRows        int64          // 查询返回结果行数
-		affectedRows      uint64         // sql执行结果影响的数据行数
-		digest            string         // sql 语句的hash
-		zip               []byte         // 压缩后的sql文本
-		writeKeys         = 0            // 写入 Key 个数
-		ruRead            float64        // sql执行消耗的RRU值
-		ruWrite           float64        // sql执行消耗的WRU值
-		across            string         // sql中指定的跨库查询的数据库
+		connID  uint64         // SQL 查询客户端连接 ID
+		db      = si.GetDB()   // 执行sql时的当前库名称
+		dbs     string         // 执行的sql中用到的所有数据库名称列表。
+		inTX    bool           // 当前sql是否在事务中
+		user    = si.GetUser() // 执行sql时使用的账号
+		tenant  string         // 所属租户信息
+		at      time.Time      // 执行sql开始时间，即创建mctech.Context的时间
+		txID    uint64         // 事务号(显示事务和隐式事务)
+		maxAct  int64          // sql执行过程中读取/生成的最大行数（与rows不一样，中间过程生成的行数多不代表结果集中的行数多）
+		rows    int64          // 查询返回结果行数
+		memMax  int64          // 该 SQL 查询执行时占用的最大内存空间
+		diskMax int64          // 该 SQL 查询执行时占用的最大磁盘空间
+		digest  string         // sql 语句模板的hash
+		across  string         // sql中指定的跨库查询的数据库
+		zip     []byte         // 压缩后的sql文本
+
+		times  logTimeObject    // 各种时间信息
+		maxCop *logMaxCopObject // tikv coprocessor相关的信息
+		tx     *logTXObject     // 修改数据相关的信息
+		ru     logRUStatObject  // 当前sql资源消耗信息
 	)
 
+	txID = sessVars.TxnCtx.StartTS
 	var stmtDetail execdetails.StmtExecDetails
 	if execStmt != nil {
 		stmtDetailRaw := execStmt.GoCtx.Value(execdetails.StmtExecDetailKey)
 		if stmtDetailRaw != nil {
 			stmtDetail = *(stmtDetailRaw.(*execdetails.StmtExecDetails))
-			writeSQLRespTotal = stmtDetail.WriteSQLRespDuration
+			times.send = stmtDetail.WriteSQLRespDuration
 		}
 
 		// sessVars.StmtCtx 的值不一定准确
@@ -329,41 +294,57 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		// 因此可以认为只要 execStmt 有值，则StmtCtx的值一定也是最新的，反之当execStmt为nil时，StmtCtx 的状态不确定，此时不能使用
 		if stmtCtx := sessVars.StmtCtx; stmtCtx != nil {
 			if plan, ok := stmtCtx.GetPlan().(core.Plan); ok {
-				resultRows = executor.GetResultRowsCount(stmtCtx, plan)
+				rows = executor.GetResultRowsCount(stmtCtx, plan)
 			}
 			// 添加开发辅助代码
 			if stmtCtx.RuntimeStatsColl != nil {
-				flat := executor.GetFlatPlan(stmtCtx)
-				collector := planStatCollector{
-					renderDetails:    false,
-					runtimeStatsColl: stmtCtx.RuntimeStatsColl,
+				collector := newPlanStatCollector(stmtCtx)
+				ct := collector.collect()
+				times.tidb = ct.tidbTime
+				times.tikv.process2 = ct.tikvCopTime
+				times.tiflash = ct.tiflashCopTime
+				maxAct = ct.maxActRows
+				if rs, ok := sctx.Value(mctech.MCRUDetailsCtxKey).(*clientutil.RUDetails); ok {
+					ru.rru, ru.wru = rs.RRU(), rs.WRU()
 				}
-				tidbTime, tikvCopTime, tiflashCopTime = collector.collectCPUTime(flat)
-				if ruStats, ok := sctx.Value(mctech.MCRUDetailsCtxKey).(*clientutil.RUDetails); ok {
-					ruRead = ruStats.RRU()
-					ruWrite = ruStats.WRU()
+			}
+			if cd := stmtCtx.CopTasksDetails(); cd != nil {
+				maxCop = &logMaxCopObject{
+					procAddr: cd.MaxProcessAddress,
+					procTime: cd.MaxProcessTime,
+					tasks:    cd.NumCopTasks,
 				}
 			}
 
 			execDetails := stmtCtx.GetExecDetails()
-			copTime = execDetails.CopTime
+			times.tikv.cop = execDetails.CopTime
+			times.tikv.process = execDetails.TimeDetail.ProcessTime
 			memMax = stmtCtx.MemTracker.MaxConsumed()
 			diskMax = stmtCtx.DiskTracker.MaxConsumed()
-			affectedRows = stmtCtx.AffectedRows()
-			if execDetails.CommitDetail != nil {
-				writeKeys = execDetails.CommitDetail.WriteKeys
+
+			if info.modified {
+				tx = &logTXObject{affected: stmtCtx.AffectedRows()}
+			}
+			if cd := execDetails.CommitDetail; cd != nil {
+				if info.modified {
+					tx.keys, tx.size = cd.WriteKeys, cd.WriteSize
+					times.tx = &txTimeObject{prewrite: cd.PrewriteTime, commit: cd.CommitTime}
+				}
 			}
 			_, d := stmtCtx.SQLDigest()
 			digest = d.String()
 		}
 	}
 
-	timeStart = sessVars.StartTime
+	mctx := mctech.GetContextStrict(sctx)
+	at = mctx.StartedAt()
+
 	connID = sessVars.ConnectionID
-	queryTime = time.Since(sessVars.StartTime) + sessVars.DurationParse
-	parseTime = sessVars.DurationParse
-	compileTime = sessVars.DurationCompile
-	firstRowReadyTime = queryTime - writeSQLRespTotal
+	inTX = sessVars.InTxn()
+	times.all = time.Since(at)
+	times.parse = sessVars.DurationParse
+	times.plan = sessVars.DurationCompile
+	times.ready = times.all - times.send
 
 	failpoint.Inject("MockTraceLogData", func(val failpoint.Value) {
 		values := make(map[string]any)
@@ -376,29 +357,61 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 			switch k {
 			case "startedAt":
 				if t, err := time.ParseInLocation("2006-01-02 15:04:05.000", v.(string), time.Local); err == nil {
-					timeStart = t
-					tidbTime, _ = time.ParseDuration("11s201ms")
-					queryTime, _ = time.ParseDuration("3.315821ms")
-					parseTime, _ = time.ParseDuration("176.943µs")
-					compileTime, _ = time.ParseDuration("1.417613ms")
-					copTime, _ = time.ParseDuration("0s128ms")
-					firstRowReadyTime, _ = time.ParseDuration("2.315821ms")
-					writeSQLRespTotal, _ = time.ParseDuration("1ms")
+					at = t
+					times.tidb, _ = time.ParseDuration("11s201ms")
+					times.all, _ = time.ParseDuration("3.315821ms")
+					times.parse, _ = time.ParseDuration("176.943µs")
+					times.plan, _ = time.ParseDuration("1.417613ms")
+					times.tikv = tikvTimeObject{}
+					times.tikv.cop, _ = time.ParseDuration("0s128ms")
+					times.tikv.process, _ = time.ParseDuration("0s98ms")
+					times.tikv.process2, _ = time.ParseDuration("0s")
+					times.tiflash, _ = time.ParseDuration("0s12µs")
+					times.ready, _ = time.ParseDuration("2.315821ms")
+					times.send, _ = time.ParseDuration("1ms")
+					if times.tx != nil {
+						times.tx.commit, _ = time.ParseDuration("100ms")
+						times.tx.prewrite, _ = time.ParseDuration("1s32ms")
+					}
+				}
+			case "maxAct":
+				maxAct = int64(v.(float64))
+			case "maxCop":
+				maxCop = &logMaxCopObject{}
+				sub := v.(map[string]any)
+				for ck, cv := range sub {
+					switch ck {
+					case "procAddr":
+						maxCop.procAddr = cv.(string)
+					case "procTime":
+						maxCop.procTime, _ = time.ParseDuration(cv.(string))
+					case "tasks":
+						maxCop.tasks = int(cv.(float64))
+					}
 				}
 			case "rru":
-				ruRead = v.(float64)
+				ru.rru = v.(float64)
 			case "wru":
-				ruWrite = v.(float64)
+				ru.wru = v.(float64)
 			case "mem":
 				memMax = int64(v.(float64))
 			case "disk":
 				diskMax = int64(v.(float64))
-			case "keys":
-				writeKeys = int(v.(float64))
 			case "rows":
-				resultRows = int64(v.(float64))
-			case "affected":
-				affectedRows = uint64(v.(float64))
+				rows = int64(v.(float64))
+			case "tx":
+				tx = &logTXObject{}
+				sub := v.(map[string]any)
+				for ck, cv := range sub {
+					switch ck {
+					case "keys":
+						tx.keys = int(cv.(float64))
+					case "affected":
+						tx.affected = uint64(cv.(float64))
+					case "size":
+						tx.size = int(cv.(float64))
+					}
+				}
 			}
 		}
 	})
@@ -421,19 +434,15 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		}
 	}
 
-	if mctx, err := mctech.GetContext(sctx); err != nil {
-		panic(err)
-	} else {
-		lst := mctx.GetDbs(stmt)
-		if len(lst) > 0 {
-			dbs = strings.Join(lst, ",")
-		}
-		if result := mctx.PrepareResult(); result != nil {
-			tenant = result.Tenant()
-			if params := result.Params(); params != nil {
-				if v, ok := params[mctech.ParamAcross].(string); ok {
-					across = v
-				}
+	lst := mctx.GetDbs(stmt)
+	if len(lst) > 0 {
+		dbs = strings.Join(lst, ",")
+	}
+	if result := mctx.PrepareResult(); result != nil {
+		tenant = result.Tenant()
+		if params := result.Params(); params != nil {
+			if v, ok := params[mctech.ParamAcross].(string); ok {
+				across = v
 			}
 		}
 	}
@@ -444,30 +453,25 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 		zap.String("usr", user),
 		zap.String("tenant", tenant),
 		zap.String("conn", encode(connID)),
-		zap.String("tp", sqlType),
+		zap.Bool("inTX", inTX),
+		zap.String("cat", info.category),
+		zap.String("tp", info.sqlType),
 		zap.String("across", across),
-		zap.String("at", timeStart.Format("2006-01-02 15:04:05.000")),
-		zap.Object("time", &logTimeObject{
-			all:   queryTime,
-			parse: parseTime,
-			plan:  compileTime,
-			cop:   copTime,
-			tidb:  tidbTime,
-			copTK: tikvCopTime,
-			copTF: tiflashCopTime,
-			ready: firstRowReadyTime,
-			send:  writeSQLRespTotal,
-		}),
+		zap.String("at", at.Format(timeFormat)),
+		zap.String("txId", encode(txID)),
+		zap.Int64("maxAct", maxAct),
 		zap.String("digest", digest),
-		zap.Object("ru", &logRUStatObject{
-			RRU: ruRead,
-			WRU: ruWrite,
-		}),
+		zap.Int64("rows", rows),
 		zap.Int64("mem", memMax),
 		zap.Int64("disk", diskMax),
-		zap.Int("keys", writeKeys),
-		zap.Uint64("affected", affectedRows),
-		zap.Int64("rows", resultRows),
+		zap.Object("times", &times),
+		zap.Object("ru", &ru),
+	}
+	if maxCop != nil {
+		fields = append(fields, zap.Object("maxCop", maxCop))
+	}
+	if tx != nil {
+		fields = append(fields, zap.Object("tx", tx))
 	}
 	if err != nil {
 		fields = append(fields, zap.String("error", err.Error()))
@@ -479,6 +483,70 @@ func traceFullQuery(sctx sessionctx.Context, sql string, stmt ast.StmtNode,
 	}
 
 	renderTraceLog(sctx, fields)
+}
+
+func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sqlStmtInfo) {
+	switch s := stmt.(type) {
+	case *ast.ExecuteStmt:
+		var (
+			prepStmt *core.PlanCacheStmt
+			err      error
+		)
+		if prepStmt, err = core.GetPreparedStmt(s, sessVars); err != nil {
+			panic(err)
+		}
+
+		raw := getSQLStmtInfo(prepStmt.PreparedAst.Stmt, sessVars)
+		if raw != nil {
+			info = &sqlStmtInfo{"exec", raw.sqlType, raw.modified}
+		}
+	case *ast.PrepareStmt:
+		info = sqlPrepareInfo
+	case *ast.DeallocateStmt:
+		info = sqlDeallocateInfo
+	case *ast.BeginStmt:
+		info = sqlBeginInfo
+	case *ast.RollbackStmt:
+		info = sqlRollbackInfo
+	case *ast.CommitStmt:
+		info = sqlCommitInfo
+	case *ast.NonTransactionalDMLStmt:
+		switch s.DMLStmt.(type) {
+		case *ast.DeleteStmt:
+			info = sqlDeleteInfo
+		case *ast.UpdateStmt:
+			info = sqlUpdateInfo
+		case *ast.InsertStmt:
+			info = sqlInsertInfo
+		}
+	case *ast.SelectStmt, *ast.SetOprStmt: // select
+		info = sqlSelectInfo
+	case *ast.DeleteStmt: // delete
+		info = sqlDeleteInfo
+	case *ast.InsertStmt: // insert
+		info = sqlInsertInfo
+	case *ast.UpdateStmt: // update
+		info = sqlUpdateInfo
+	case *ast.LoadDataStmt:
+		info = sqlLoadInfo
+	case *ast.TruncateTableStmt:
+		info = sqlTruncateInfo
+	case *ast.SetStmt:
+		info = sqlSetInfo
+	case *ast.LockTablesStmt:
+		info = sqlLockInfo
+	case *ast.UnlockTablesStmt: // lock/unlock table
+		info = sqlUnlockInfo
+	// case *ast.UseStmt: // use
+	// 	info = sqlUseInfo
+	case *ast.CallStmt: // precedure
+		info = sqlCallInfo
+	case *ast.DoStmt: // do block
+		info = sqlDoInfo
+	default:
+		// stmt 为 nil 或者除以上各个 case 项以外的类型
+	}
+	return info
 }
 
 const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"

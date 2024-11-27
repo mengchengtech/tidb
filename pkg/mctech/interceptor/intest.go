@@ -59,3 +59,8 @@ func GetFullQueryTraceLog(sctx sessionctx.Context) (map[string]any, error) {
 	}
 	return nil, nil
 }
+
+// EncodeForTest 仅用于单元测试
+func EncodeForTest(num uint64) string {
+	return encode(num)
+}
