@@ -30,6 +30,25 @@ func TestMCTechCrypto(t *testing.T) {
 	doRunCryptoTest(t, cases)
 }
 
+func TestMCTechCryptoUnpaddingFail(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Encryption.Mock": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/udf/pkcs7Unpadding",
+		mock.M(t, "true"),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/udf/pkcs7Unpadding")
+	}()
+
+	cases := []*encryptionTestCases{
+		{false, "{crypto}XGhHgHevnICYzqxUPS26lw==", "", "mctech decrypt failure. '{crypto}XGhHgHevnICYzqxUPS26lw=='"},
+	}
+
+	doRunCryptoTest(t, cases)
+}
+
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
 		mock.M(t, map[string]any{
