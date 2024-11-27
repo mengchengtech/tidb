@@ -41,6 +41,7 @@ go_test(
         "format_test.go",
         "main_test.go",
         "mctech_handler_test.go",
+        "preps_for_test.go",
         "replace_action_test.go",
         "sql_preprocessor_test.go",
         "stmt_preprocessor_test.go",

@@ -1765,8 +1765,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	prevWarns := sc.GetWarnings()
 	// add by zhangbing
 	var mctx mctech.Context
-	ctx, mctx, sql, err = cc.beforeParseSQL(ctx, sql)
-	if err != nil {
+	if ctx, mctx, sql, err = cc.beforeParseSQL(ctx, sql); err != nil {
 		return err
 	}
 	// add end
