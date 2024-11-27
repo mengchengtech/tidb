@@ -22,11 +22,11 @@ var currentMap = NewCache(15*time.Second, 10*time.Second)
 
 type dbSelector struct {
 	// private final static URI BASE_URI;
-	result  *mctech.PrepareResult
+	result  mctech.PrepareResult
 	dbIndex *mctech.DbIndex
 }
 
-func newDBSelector(result *mctech.PrepareResult) mctech.DBSelector {
+func newDBSelector(result mctech.PrepareResult) mctech.DBSelector {
 	return &dbSelector{
 		result: result,
 	}

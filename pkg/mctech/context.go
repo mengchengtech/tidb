@@ -42,7 +42,7 @@ type Context interface {
 	ToLogicDbName(db string) string
 	// @title PrepareResult
 	// @description 对sql预处理的结果
-	PrepareResult() *PrepareResult
+	PrepareResult() PrepareResult
 	// @title IsGlobalDb
 	// @description 判断给定的库名是否属于global一类的库。（需要考虑是否含有dbPrefix）
 	// @param dbName string
@@ -80,8 +80,8 @@ type ModifyContext interface {
 	Reset()
 	// @title SetPrepareResult
 	// @description 设置sql预处理的结果
-	// @param result *PrepareResult
-	SetPrepareResult(result *PrepareResult)
+	// @param result PrepareResult
+	SetPrepareResult(result PrepareResult)
 	// @title SetDBSelector
 	// @description 设置DbSelector
 	// @param selector DBSelector
@@ -206,8 +206,27 @@ func (ti *tenantValueInfo) GetInfoForTest() map[string]any {
 	return map[string]any{"code": ti.code, "fromRole": ti.fromRole}
 }
 
-// PrepareResult sql resolve result
-type PrepareResult struct {
+// PrepareResult interface
+type PrepareResult interface {
+	// Tenant current tenant
+	Tenant() TenantInfo
+	// Roles current user has some roles
+	Roles() FlagRoles
+	// Global global
+	Global() bool
+	// Comments custom comment
+	Comments() Comments
+	// Excludes excludes
+	Excludes() []string
+	// Params params
+	Params() map[string]any
+	// DbPrefix 自定义hint，数据库前缀。'dev', 'test'
+	// Deprecated: 已废弃
+	DbPrefix() string
+	GetInfoForTest() map[string]any
+}
+
+type prepareResult struct {
 	// Deprecated: 已废弃
 	dbPrefix   string           // 自定义hint，数据库前缀。'dev', 'test'
 	params     map[string]any   // 自定义hint的一般参数
@@ -218,7 +237,7 @@ type PrepareResult struct {
 }
 
 // NewPrepareResult create PrepareResult
-func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, params map[string]any) (*PrepareResult, error) {
+func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, params map[string]any) (PrepareResult, error) {
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
 		params[ParamMPP] = config.GetMCTechConfig().MPP.DefaultValue
@@ -261,7 +280,7 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 		newParams[k] = v
 	}
 
-	r := &PrepareResult{
+	r := &prepareResult{
 		comments: comments,
 		roles:    roles,
 		tenant: &tenantValueInfo{
@@ -276,7 +295,7 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 }
 
 // GetInfoForTest get info for test
-func (r *PrepareResult) GetInfoForTest() map[string]any {
+func (r *prepareResult) GetInfoForTest() map[string]any {
 	info := map[string]any{}
 	if len(r.params) > 0 {
 		info["params"] = maps.Clone(r.params)
@@ -293,38 +312,38 @@ func (r *PrepareResult) GetInfoForTest() map[string]any {
 }
 
 // Tenant current tenant
-func (r *PrepareResult) Tenant() TenantInfo {
+func (r *prepareResult) Tenant() TenantInfo {
 	return r.tenant
 }
 
 // Roles current user has some roles
-func (r *PrepareResult) Roles() FlagRoles {
+func (r *prepareResult) Roles() FlagRoles {
 	return r.roles
 }
 
 // Global global
-func (r *PrepareResult) Global() bool {
+func (r *prepareResult) Global() bool {
 	return r.globalInfo.Global
 }
 
 // Comments custom comment
-func (r *PrepareResult) Comments() Comments {
+func (r *prepareResult) Comments() Comments {
 	return r.comments
 }
 
 // Excludes excludes
-func (r *PrepareResult) Excludes() []string {
+func (r *prepareResult) Excludes() []string {
 	return r.globalInfo.Excludes
 }
 
 // Params params
-func (r *PrepareResult) Params() map[string]any {
+func (r *prepareResult) Params() map[string]any {
 	return r.params
 }
 
 // DbPrefix 自定义hint，数据库前缀。'dev', 'test'
 // Deprecated: 已废弃
-func (r *PrepareResult) DbPrefix() string {
+func (r *prepareResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
@@ -332,7 +351,7 @@ type baseContext struct {
 	startedAt        time.Time
 	inPrepareStmt    bool
 	selector         DBSelector
-	prepareResult    *PrepareResult
+	prepareResult    PrepareResult
 	sqlRewrited      bool
 	sqlHasGlobalDB   bool
 	usingTenantParam bool
@@ -437,7 +456,7 @@ func (d *baseContext) SetSQLHasGlobalDB(hasGlobalDB bool) {
 	d.sqlHasGlobalDB = hasGlobalDB
 }
 
-func (d *baseContext) SetPrepareResult(result *PrepareResult) {
+func (d *baseContext) SetPrepareResult(result PrepareResult) {
 	d.prepareResult = result
 }
 
@@ -459,7 +478,7 @@ func (d *baseContext) SQLHasGlobalDB() bool {
 	return d.sqlHasGlobalDB
 }
 
-func (d *baseContext) PrepareResult() *PrepareResult {
+func (d *baseContext) PrepareResult() PrepareResult {
 	return d.prepareResult
 }
 

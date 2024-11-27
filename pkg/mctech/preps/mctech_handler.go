@@ -26,7 +26,7 @@ func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql stri
 		return rawSQL, nil
 	}
 
-	var result *mctech.PrepareResult
+	var result mctech.PrepareResult
 	sql, result, err = preprocessor.PrepareSQL(mctx, rawSQL)
 	if err != nil {
 		return "", err

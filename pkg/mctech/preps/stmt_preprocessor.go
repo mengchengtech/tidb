@@ -17,7 +17,7 @@ var mctechHintPattern = regexp.MustCompile(`(?i)/\*&\s*(\$?[a-z_0-9]+)[:|]\s*(.*
 
 // StatementPreprocessor interface
 type StatementPreprocessor interface {
-	PrepareSQL(mctx mctech.Context, sql string) (string, *mctech.PrepareResult, error)
+	PrepareSQL(mctx mctech.Context, sql string) (string, mctech.PrepareResult, error)
 	ResolveStmt(mctx mctech.Context,
 		stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error)
 	Validate(mctx mctech.Context) error
@@ -44,7 +44,7 @@ func (i *actionInfo) Args() string { return i.args }
  * 预解析sql，解析的结果存到MCTechContext中
  */
 func (r *mctechStatementPreprocessor) PrepareSQL(
-	mctx mctech.Context, sql string) (string, *mctech.PrepareResult, error) {
+	mctx mctech.Context, sql string) (string, mctech.PrepareResult, error) {
 	if mctx.PrepareResult() != nil {
 		return "", nil, errors.New("[mctech] PrepareSQL failure, Context exists")
 	}
