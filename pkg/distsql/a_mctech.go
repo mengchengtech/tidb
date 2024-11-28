@@ -10,7 +10,7 @@ import (
 
 // Collect collect cpu time
 func (e *selectResultRuntimeStats) Collect() *mctech.CPUTimeStats {
-	var cpuTime time.Duration = 0
+	var cpuTime time.Duration
 	if e.totalProcessTime > 0 {
 		cpuTime = cpuTime + e.totalProcessTime
 	}

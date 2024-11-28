@@ -41,7 +41,7 @@ func setMCTechSequenceDefaultValue(c *table.Column, hasDefaultValue bool, setOnU
 	}
 }
 
-func updateExistTiFlashPlacementPolicy(tblInfos []*model.TableInfo, partInfos []*innerPartInfo, bundle *placement.Bundle) error {
+func updateExistTiFlashPlacementPolicy(tblInfos []*model.TableInfo, partInfos []*innerPartInfo, bundle *placement.Bundle) (err error) {
 	rules := make([]*http.Rule, 0, len(tblInfos)+len(partInfos))
 	for _, tbl := range tblInfos {
 		if tbl.TiFlashReplica == nil {
@@ -49,7 +49,10 @@ func updateExistTiFlashPlacementPolicy(tblInfos []*model.TableInfo, partInfos []
 			continue
 		}
 		// 表级的Placement Policy，如果存在分区，也包含分区默认的Policy（不含独立配置Policy的分区）
-		tblRules := infosync.NewTiFlashTableRules(tbl, bundle)
+		var tblRules []*http.Rule
+		if tblRules, err = infosync.NewTiFlashTableRules(tbl, bundle); err != nil {
+			return err
+		}
 		rules = append(rules, tblRules...)
 	}
 
@@ -59,13 +62,15 @@ func updateExistTiFlashPlacementPolicy(tblInfos []*model.TableInfo, partInfos []
 			continue
 		}
 
-		partRule := infosync.NewTiFlashPartitionRule(part.ID, part.tblInfo, bundle)
+		var partRule *http.Rule
+		if partRule, err = infosync.NewTiFlashPartitionRule(part.ID, part.tblInfo, bundle); err != nil {
+			return err
+		}
 		rules = append(rules, partRule)
 	}
 
 	if len(rules) > 0 {
-		err := infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules)
-		if err != nil {
+		if err = infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules); err != nil {
 			return errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
 		}
 	}
@@ -85,7 +90,11 @@ func updateTiflashTableReplacementPolicy(tblInfo *model.TableInfo, bundle *place
 	}
 
 	// 表级的Placement Policy，如果存在分区，也包含分区默认的Policy（不含独立配置Policy的分区）
-	rules := infosync.NewTiFlashTableRules(tblInfo, bundle)
+	var rules []*http.Rule
+	if rules, err = infosync.NewTiFlashTableRules(tblInfo, bundle); err != nil {
+		return err
+	}
+
 	if len(rules) > 0 {
 		err = infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules)
 	}
@@ -105,8 +114,8 @@ func updateNewTiflashTablePartitionsReplacementPolicy(tblInfo *model.TableInfo, 
 		bundle := findBundle(bundles, p.ID)
 		if bundle != nil {
 			// 分区存在独立的placement，添加新建的分区的placement policy的放置策略
-			rule := infosync.NewTiFlashPartitionRule(p.ID, tblInfo, bundle)
-			if rule != nil {
+			rule, err := infosync.NewTiFlashPartitionRule(p.ID, tblInfo, bundle)
+			if err != nil {
 				rules = append(rules, rule)
 			}
 		}
@@ -119,7 +128,10 @@ func updateNewTiflashTablePartitionsReplacementPolicy(tblInfo *model.TableInfo, 
 
 func updateTiflashTablePartitionReplacementPolicy(partitionID int64, tblInfo *model.TableInfo, bundle *placement.Bundle) error {
 	// 添加分区的placement policy的放置策略
-	rule := infosync.NewTiFlashPartitionRule(partitionID, tblInfo, bundle)
+	rule, err := infosync.NewTiFlashPartitionRule(partitionID, tblInfo, bundle)
+	if err != nil {
+		return err
+	}
 	if rule != nil {
 		return infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), []*http.Rule{rule})
 	}
@@ -136,7 +148,9 @@ func updateFullTiflashTableReplacementPolicy(tblInfo *model.TableInfo, bundles [
 	var rules []*http.Rule
 	bundle := findBundle(bundles, tblInfo.ID)
 	if bundle != nil {
-		rules = infosync.NewTiFlashTableRules(tblInfo, bundle)
+		if rules, err = infosync.NewTiFlashTableRules(tblInfo, bundle); err != nil {
+			return err
+		}
 	}
 
 	if tblInfo.Partition != nil {
@@ -155,7 +169,10 @@ func updateFullTiflashTableReplacementPolicy(tblInfo *model.TableInfo, bundles [
 				}
 			}
 			if partBundle != nil {
-				rule := infosync.NewTiFlashPartitionRule(p.ID, tblInfo, partBundle)
+				rule, err := infosync.NewTiFlashPartitionRule(p.ID, tblInfo, partBundle)
+				if err != nil {
+					return err
+				}
 				rules = append(rules, rule)
 			}
 		}
