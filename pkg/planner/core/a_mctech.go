@@ -125,7 +125,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var (
 		global     = false
 		excludes   = []string{}
-		tenant     string
+		tenantCode string
 		tenantFrom = "none"
 		params     = map[string]any{}
 		db         = e.SCtx().GetSessionVars().CurrentDB
@@ -139,9 +139,9 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 			global = result.Global()
 			params = result.Params()
 			excludes = result.Excludes()
-			tenant = result.Tenant()
-			if tenant != "" {
-				if result.TenantFromRole() {
+			tenantCode = result.Tenant().Code()
+			if tenantCode != "" {
+				if result.Tenant().FromRole() {
 					tenantFrom = "role"
 				} else {
 					tenantFrom = "hint"
@@ -162,7 +162,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var row = []*types.Datum{
 		createDatum(global),
 		createDatum(strings.Join(excludes, ",")),
-		createDatum(tenant),
+		createDatum(tenantCode),
 		createDatum(tenantFrom),
 		createDatum(db),
 		createDatum(int(index)),
@@ -242,7 +242,7 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 	var tenantValue expression.Expression
 	// 优先从sql语句中提取租户信息
 	if result := mctx.PrepareResult(); result != nil {
-		tenantCode := result.Tenant()
+		tenantCode := result.Tenant().Code()
 		if tenantCode != "" {
 			tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)
 		}
