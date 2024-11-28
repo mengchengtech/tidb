@@ -116,7 +116,7 @@ func attachLeaderRuleFromBundle(id int64, rule *placement.TiFlashRule, bundle *p
 	// 为了简单,只使用leader角色的配置.
 	var leaderRule *placement.Rule
 	for _, rule := range bundle.Rules {
-		if rule.Role == placement.Leader {
+		if rule.Role == placement.Voter {
 			leaderRule = rule
 			break
 		}
