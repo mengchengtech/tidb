@@ -7,6 +7,7 @@ go_library(
         "sequence_func.go",
         "sql_trace_func.go",
     ],
+    data = glob(["data/**"]),
     importpath = "github.com/pingcap/tidb/pkg/mctech/udf",
     visibility = ["//visibility:public"],
     deps = [

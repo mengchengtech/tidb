@@ -4,6 +4,7 @@ go_library(
     name = "interceptor",
     srcs = [
         "interceptor.go",
+        "intest.go",  #keep
         "logobject.go",
         "notest.go",
         "stats.go",

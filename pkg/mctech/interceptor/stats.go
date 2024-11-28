@@ -68,14 +68,12 @@ func newPlanStatCollector(stmtCtx *stmtctx.StatementContext) *planStatCollector 
 }
 
 // collect 获取sql执行算子的执行时间信息
-func (c *planStatCollector) collect() *planData {
-	ct := &planData{}
+func (c *planStatCollector) collect() (ct planData) {
 	// 捕获后续执行的异常，不再向外抛出
-	defer func() *planData {
+	defer func() {
 		if err := recover(); err != nil {
 			logutil.BgLogger().Warn("[collectCPUTime] 获取cpu运行时间出错", zap.Error(err.(error)), zap.Stack("stack"))
 		}
-		return ct
 	}()
 
 	c.collectFromFlatPlan()

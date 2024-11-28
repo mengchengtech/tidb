@@ -14,7 +14,6 @@ tests/integrationtest/integration-test.out
 tests/integrationtest/integrationtest_tidb-server
 tests/integrationtest/portgenerator
 tests/integrationtest/s/
-*.fail.go
 tools/bin/
 vendor
 /_tools/

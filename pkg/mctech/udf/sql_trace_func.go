@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -51,16 +52,25 @@ func GetFullSQL(at types.Time, txID int64) (sql string, isNull bool, err error) 
 	}
 
 	var fi *os.File
-	if fi, err = os.Open(fullPath); err != nil {
+	if fi, err = os.Open(filepath.Clean(fullPath)); err != nil {
 		return "", true, err
 	}
-	defer fi.Close()
+	defer func() {
+		if err := fi.Close(); err != nil {
+			logutil.BgLogger().Warn("[fi.Close] received error", zap.Error(err))
+		}
+	}()
+
 	var gz *gzip.Reader
 	if gz, err = gzip.NewReader(fi); err != nil {
 		return "", true, err
 	}
+	defer func() {
+		if err := gz.Close(); err != nil {
+			logutil.BgLogger().Warn("[gz.Close] received error", zap.Error(err))
+		}
+	}()
 
-	defer gz.Close()
 	var b []byte
 	if b, err = io.ReadAll(gz); err != nil {
 		return "", true, err
