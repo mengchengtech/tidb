@@ -342,22 +342,22 @@ func (tk *TestKit) Exec(sql string, args ...interface{}) (sqlexec.RecordSet, err
 // ExecWithContext executes a sql statement using the prepared stmt API
 func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...interface{}) (rs sqlexec.RecordSet, err error) {
 	defer tk.Session().GetSessionVars().ClearAlloc(&tk.alloc, err != nil)
+	// add by zhangbing
+	handler := mctech.GetHandler()
+	var mctechCtx mctech.Context
+	if ctx, mctechCtx, err = mctech.WithNewContext3(ctx, tk.Session(), false); err != nil {
+		return nil, err
+	}
+
+	if mctechCtx != nil {
+		if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+			return nil, err
+		}
+	}
+	// add end
 	if len(args) == 0 {
 		sc := tk.session.GetSessionVars().StmtCtx
 		prevWarns := sc.GetWarnings()
-		// add by zhangbing
-		handler := mctech.GetHandler()
-		mctechCtx, err := mctech.GetContext(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if mctechCtx != nil {
-			if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
-				return nil, err
-			}
-		}
-		// add end
 		var stmts []ast.StmtNode
 		if len(stmts) == 0 {
 			var err error
