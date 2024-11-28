@@ -57,7 +57,9 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	}
 	enc.AddString("conn", encode(st.conn))
 	if st.client != nil {
-		enc.AddObject("client", st.client)
+		if err := enc.AddObject("client", st.client); err != nil {
+			return err
+		}
 	}
 	enc.AddBool("inTX", st.inTX)
 	enc.AddString("cat", st.info.category)
@@ -72,17 +74,27 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddInt64("rows", st.rows)
 	enc.AddInt64("mem", st.mem)
 	enc.AddInt64("disk", st.disk)
-	enc.AddObject("times", &st.times)
-	enc.AddObject("ru", &st.ru)
+	if err := enc.AddObject("times", &st.times); err != nil {
+		return err
+	}
+	if err := enc.AddObject("ru", &st.ru); err != nil {
+		return err
+	}
 
 	if st.maxCop != nil {
-		enc.AddObject("maxCop", st.maxCop)
+		if err := enc.AddObject("maxCop", st.maxCop); err != nil {
+			return err
+		}
 	}
 	if st.tx != nil {
-		enc.AddObject("tx", st.tx)
+		if err := enc.AddObject("tx", st.tx); err != nil {
+			return err
+		}
 	}
 	if st.warnings != nil {
-		enc.AddObject("warnings", st.warnings)
+		if err := enc.AddObject("warnings", st.warnings); err != nil {
+			return err
+		}
 	}
 	if st.err != nil {
 		enc.AddString("error", st.err.Error())
@@ -165,9 +177,13 @@ func (lt *logTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("tidb", lt.tidb)
 	enc.AddDuration("ready", lt.all-lt.send) // 首行结果准备好时间(总执行时间除去发送结果耗时)
 	enc.AddDuration("send", lt.send)
-	enc.AddObject("cop", &lt.cop)
+	if err := enc.AddObject("cop", &lt.cop); err != nil {
+		return err
+	}
 	if lt.tx != nil {
-		enc.AddObject("tx", lt.tx)
+		if err := enc.AddObject("tx", lt.tx); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -217,7 +233,9 @@ type logWarningObjects struct {
 }
 
 func (lw *logWarningObjects) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddArray("topN", lw.topN)
+	if err := enc.AddArray("topN", lw.topN); err != nil {
+		return err
+	}
 	enc.AddInt("total", lw.total)
 	return nil
 }
@@ -226,7 +244,9 @@ type warningObjects []*logWarningObject
 
 func (w warningObjects) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	for _, o := range w {
-		enc.AppendObject(o)
+		if err := enc.AppendObject(o); err != nil {
+			return err
+		}
 	}
 	return nil
 }
