@@ -755,7 +755,7 @@ func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessio
 	}
 	if e.extractor == nil || !e.extractor.Enable {
 		totalFileNum = 1
-		file, err := os.Open(logFilePath)
+		file, err := os.Open(filepath.Clean(logFilePath))
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, nil
