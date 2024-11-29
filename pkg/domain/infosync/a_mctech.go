@@ -117,7 +117,7 @@ func attachLeaderRuleFromBundle(id int64, rule *pdhttp.Rule, bundle *placement.B
 	// 为了简单,只使用leader角色的配置.
 	var leaderRule *pdhttp.Rule
 	for _, rule := range bundle.Rules {
-		if rule.Role == pdhttp.Leader {
+		if rule.Role == pdhttp.Voter {
 			leaderRule = rule
 			break
 		}
