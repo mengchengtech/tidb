@@ -1186,7 +1186,11 @@ func (b *builtinConvSig) evalString(row chunk.Row) (res string, isNull bool, err
 	switch x := b.args[0].(type) {
 	case *Constant:
 		if x.Value.Kind() == types.KindBinaryLiteral {
-			str = x.Value.GetBinaryLiteral().ToBitLiteralString(true)
+			datum, err := x.Eval(row)
+			if err != nil {
+				return "", false, err
+			}
+			str = datum.GetBinaryLiteral().ToBitLiteralString(true)
 		}
 	case *ScalarFunction:
 		if x.FuncName.L == ast.Cast {
@@ -1733,7 +1737,7 @@ func (b *builtinExpSig) evalReal(row chunk.Row) (float64, bool, error) {
 	}
 	exp := math.Exp(val)
 	if math.IsInf(exp, 0) || math.IsNaN(exp) {
-		s := fmt.Sprintf("exp(%s)", b.args[0].String())
+		s := fmt.Sprintf("exp(%s)", b.args[0].StringWithCtx(false))
 		return 0, false, types.ErrOverflow.GenWithStackByArgs("DOUBLE", s)
 	}
 	return exp, false, nil
