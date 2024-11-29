@@ -373,7 +373,7 @@ func GetNextSequence() (int64, error) {
 }
 
 // GetBigIntValue gets the time value with type tp.
-func GetBigIntValue(ctx BuildContext, v interface{}, tp byte, fsp int) (d types.Datum, err error) {
+func GetBigIntValue(ctx BuildContext, v any, tp byte, fsp int) (d types.Datum, err error) {
 	var value int64
 	switch x := v.(type) {
 	case string:

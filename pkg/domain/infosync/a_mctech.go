@@ -106,11 +106,8 @@ func PutTiFlashRules(ctx context.Context, rules []*pdhttp.Rule) error {
 		return err
 	}
 
-	tiflashRules := make([]*pdhttp.Rule, 0, len(rules))
-	for _, r := range rules {
-		tiflashRules = append(tiflashRules, r)
-	}
-	return is.tiflashReplicaManager.SetPlacementRuleBatch(ctx, tiflashRules)
+	// 8.1+ SetPlacementRuleBatch传入参数变成了指针列表，所以此处不再需要生成非指针的列表
+	return is.tiflashReplicaManager.SetPlacementRuleBatch(ctx, rules)
 }
 
 func attachLeaderRuleFromBundle(id int64, rule *pdhttp.Rule, bundle *placement.Bundle) error {

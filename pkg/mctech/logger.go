@@ -90,7 +90,7 @@ func (e *largeQueryEncoder) AddUint32(string, uint32)                        {}
 func (e *largeQueryEncoder) AddUint16(string, uint16)                        {}
 func (e *largeQueryEncoder) AddUint8(string, uint8)                          {}
 func (e *largeQueryEncoder) AddUintptr(string, uintptr)                      {}
-func (e *largeQueryEncoder) AddReflected(string, interface{}) error          { return nil }
+func (e *largeQueryEncoder) AddReflected(string, any) error                  { return nil }
 func (e *largeQueryEncoder) OpenNamespace(string)                            {}
 
 func initLargeQueryLogger() *zap.Logger {

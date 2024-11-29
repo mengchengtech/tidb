@@ -106,7 +106,7 @@ func TestUserPrivileges(t *testing.T) {
 	}, nil, nil, nil))
 	// modify by zhangbing
 	constraintsTester.MustQuery(`select * from information_schema.TABLE_CONSTRAINTS WHERE TABLE_NAME != 'CLUSTER_SLOW_QUERY'
-		and TABLE_NAME != 'CLUSTER_MCTECH_LARGE_QUERY';`).Check([][]interface{}{})
+		and TABLE_NAME != 'CLUSTER_MCTECH_LARGE_QUERY';`).Check([][]any{})
 	// modify end
 
 	// test the privilege of user with privilege of mysql.gc_delete_range for information_schema.table_constraints
@@ -128,7 +128,7 @@ func TestUserPrivileges(t *testing.T) {
 	}, nil, nil, nil))
 	// modify by zhangbing
 	tk1.MustQuery(`select * from information_schema.STATISTICS WHERE TABLE_NAME != 'CLUSTER_SLOW_QUERY'
-		and TABLE_NAME != 'CLUSTER_MCTECH_LARGE_QUERY';`).Check([][]interface{}{})
+		and TABLE_NAME != 'CLUSTER_MCTECH_LARGE_QUERY';`).Check([][]any{})
 	// modify end
 
 	// test the privilege of user with some privilege for information_schema

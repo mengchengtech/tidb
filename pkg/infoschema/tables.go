@@ -395,7 +395,7 @@ func buildTableMeta(tableName string, cs []columnInfo) *model.TableInfo {
 		// modify by zhangbing
 		// if tblInfo.Name.O == ClusterTableSlowLog && mysql.HasPriKeyFlag(c.flag) {
 		if (tblInfo.Name.O == ClusterTableSlowLog || tblInfo.Name.O == ClusterTableMCTechLargeQuery) && mysql.HasPriKeyFlag(c.flag) {
-		// modify end
+			// modify end
 			switch c.tp {
 			case mysql.TypeLong, mysql.TypeLonglong,
 				mysql.TypeTiny, mysql.TypeShort, mysql.TypeInt24:
