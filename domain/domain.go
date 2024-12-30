@@ -165,6 +165,9 @@ type Domain struct {
 	logBackupAdvancer     *daemon.OwnerDaemon
 	historicalStatsWorker *HistoricalStatsWorker
 	ttlJobManager         atomic.Pointer[ttlworker.JobManager]
+	// add by zhangbing
+	denyDigestManager atomic.Pointer[denyDigestManager]
+	// add end
 
 	serverID             uint64
 	serverIDSession      *concurrency.Session

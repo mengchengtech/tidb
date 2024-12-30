@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "session",
     srcs = [
+        "a_mctech.go",
         "advisory_locks.go",
         "bootstrap.go",
         "mock_bootstrap.go",
@@ -121,6 +122,7 @@ go_test(
     name = "session_test",
     timeout = "moderate",
     srcs = [
+        "a_mctech_test.go",
         "bench_test.go",
         "bootstrap_test.go",
         "index_usage_sync_lease_test.go",
@@ -143,6 +145,8 @@ go_test(
         "//executor",
         "//expression",
         "//kv",
+        "//mctech/digestworker",
+        "//mctech/mock",
         "//meta",
         "//metrics",
         "//parser/ast",

@@ -2146,6 +2146,11 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 		return nil, err
 	}
 	normalizedSQL, digest := s.sessionVars.StmtCtx.SQLDigest()
+	// add by zhangbing
+	if err := CheckSQLDigest(s, digest.String()); err != nil {
+		return nil, err
+	}
+	// add end
 	cmdByte := byte(atomic.LoadUint32(&s.GetSessionVars().CommandValue))
 	if topsqlstate.TopSQLEnabled() {
 		s.sessionVars.StmtCtx.IsSQLRegistered.Store(true)
@@ -3498,6 +3503,9 @@ func BootstrapSession(store kv.Storage) (*domain.Domain, error) {
 		return s
 	}
 	dom.StartTTLJobManager()
+	// add by zhangbing
+	dom.StartDenyDigestManager()
+	// add end
 
 	analyzeCtxs, err := createSessions(store, analyzeConcurrencyQuota)
 	if err != nil {
