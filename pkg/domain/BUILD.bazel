@@ -3,6 +3,8 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "domain",
     srcs = [
+        "a_mctech.go",
+        "a_mctech_notest.go",
         "domain.go",
         "domain_sysvars.go",
         "domainctx.go",
@@ -44,6 +46,7 @@ go_library(
         "//pkg/infoschema/perfschema",
         "//pkg/keyspace",
         "//pkg/kv",
+        "//pkg/mctech/digestworker",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/meta/model",

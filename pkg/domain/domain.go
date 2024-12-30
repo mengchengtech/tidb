@@ -197,6 +197,9 @@ type Domain struct {
 	ttlJobManager            atomic.Pointer[ttlworker.JobManager]
 	runawayManager           *runaway.Manager
 	resourceGroupsController *rmclient.ResourceGroupsController
+	// add by zhangbing
+	denyDigestManager atomic.Pointer[denyDigestManager]
+	// add end
 
 	serverID             uint64
 	serverIDSession      *concurrency.Session
