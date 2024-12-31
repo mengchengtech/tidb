@@ -39,7 +39,7 @@ go_test(
     ],
     embed = [":prapared"],
     flaky = True,
-    shard_count = 11,
+    shard_count = 16,
     deps = [
         "//pkg/kv",
         "//pkg/mctech",
