@@ -285,7 +285,7 @@ func IsValidMCTechSequenceExpr(exprNode ast.ExprNode, _ *types.FieldType) bool {
 	return true
 }
 
-func getNextSequence() (int64, error) {
+func GetNextSequence() (int64, error) {
 	return udf.GetCache().Next()
 }
 
@@ -296,7 +296,7 @@ func GetBigIntValue(ctx BuildContext, v any, _ byte, _ int) (d types.Datum, err 
 	case string:
 		upperX := strings.ToUpper(x)
 		if upperX == strings.ToUpper(ast.MCTechSequence) {
-			if value, err = getNextSequence(); err != nil {
+			if value, err = GetNextSequence(); err != nil {
 				return d, err
 			}
 		} else {
