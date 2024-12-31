@@ -145,10 +145,11 @@ type PrepareResult struct {
 	tenant         string
 	globalInfo     *GlobalValueInfo
 	tenantFromRole bool
+	tenantOnlyRole bool
 }
 
 // NewPrepareResult create PrepareResult
-func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult, error) {
+func NewPrepareResult(tenantCode string, tenantOnly bool, params map[string]any) (*PrepareResult, error) {
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
 		params[ParamMPP] = config.GetMCTechConfig().MPP.DefaultValue
@@ -193,6 +194,7 @@ func NewPrepareResult(tenantCode string, params map[string]any) (*PrepareResult,
 
 	r := &PrepareResult{
 		tenantFromRole: fromRole,
+		tenantOnlyRole: tenantOnly,
 		tenant:         tenantCode,
 		dbPrefix:       dbPrefix,
 		globalInfo:     globalInfo,
@@ -230,6 +232,11 @@ func (r *PrepareResult) Tenant() string {
 // TenantFromRole tenant is from role
 func (r *PrepareResult) TenantFromRole() bool {
 	return r.tenantFromRole
+}
+
+// TenantOnlyRole current user has role 'tenant_only'
+func (r *PrepareResult) TenantOnlyRole() bool {
+	return r.tenantOnlyRole
 }
 
 // Global global
