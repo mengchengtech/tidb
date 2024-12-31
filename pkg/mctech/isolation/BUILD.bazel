@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "isolation",
+    srcs = [
+        "isolation_condition_visitor.go",
+        "util.go",
+    ],
+    importpath = "github.com/pingcap/tidb/pkg/mctech/isolation",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/mctech",
+        "//pkg/mctech/ddl",
+        "//pkg/parser/ast",
+        "//pkg/parser/model",
+        "//pkg/parser/opcode",
+    ],
+)
+
+go_test(
+    name = "isolation_test",
+    timeout = "short",
+    srcs = [
+        "isolation_condition_visitor_test.go",
+        "main_test.go",
+    ],
+    embed = [":isolation"],
+    flaky = True,
+    deps = [
+        "//pkg/mctech",
+        "//pkg/parser",
+        "//pkg/parser/format",
+        "//pkg/parser/test_driver",
+        "@com_github_stretchr_testify//require",
+    ],
+)

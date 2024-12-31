@@ -1,0 +1,33 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "ddl",
+    srcs = ["ddl_extension_visitor.go"],
+    importpath = "github.com/pingcap/tidb/pkg/mctech/ddl",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/mctech",
+        "//pkg/parser/ast",
+        "//pkg/parser/format",
+        "//pkg/parser/model",
+        "//pkg/parser/mysql",
+        "//pkg/parser/types",
+    ],
+)
+
+go_test(
+    name = "ddl_test",
+    timeout = "short",
+    srcs = [
+        "ddl_extension_visitor_test.go",
+        "main_test.go",
+    ],
+    embed = [":ddl"],
+    flaky = True,
+    deps = [
+        "//pkg/parser",
+        "//pkg/parser/format",
+        "//pkg/parser/test_driver",
+        "@com_github_stretchr_testify//require",
+    ],
+)

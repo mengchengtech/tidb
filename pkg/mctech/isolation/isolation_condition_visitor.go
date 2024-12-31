@@ -1,4 +1,4 @@
-package visitor
+package isolation
 
 import (
 	"container/list"
@@ -321,13 +321,12 @@ func (v *isolationConditionVisitor) createAndCondition(left ast.ExprNode, right 
 		return right
 	} else if right == nil {
 		return left
-	} else {
-		// left, right 都不为nil
-		return &ast.BinaryOperationExpr{
-			L:  left,
-			Op: opcode.LogicAnd,
-			R:  right,
-		}
+	}
+	// left, right 都不为nil
+	return &ast.BinaryOperationExpr{
+		L:  left,
+		Op: opcode.LogicAnd,
+		R:  right,
 	}
 }
 
