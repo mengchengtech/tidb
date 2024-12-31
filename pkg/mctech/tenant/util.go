@@ -6,12 +6,17 @@ import (
 )
 
 func ApplyTenantIsolation(context mctech.MCTechContext, node ast.Node,
-	charset string, collation string) (dbs []string, skipped bool) {
+	charset string, collation string) (dbs []string, skipped bool, err error) {
 	switch node.(type) {
 	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt, *ast.InsertStmt,
 		*ast.SetOprSelectList, *ast.SetOprStmt,
 		*ast.ExplainStmt:
 		v := NewTenantVisitor(context, charset, collation)
+		defer func() {
+			if e := recover(); e != nil {
+				err = e.(error)
+			}
+		}()
 		node.Accept(v)
 
 		dbs = make([]string, len(v.dbNames)+1)
@@ -25,8 +30,8 @@ func ApplyTenantIsolation(context mctech.MCTechContext, node ast.Node,
 		// node.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags|format.RestoreBracketAroundBinaryOperation, &sb))
 		// restoreSQL := sb.String()
 		// log.Info("<" + vars.CurrentDB + ">" + restoreSQL + "\r\n --> " + string(debug.Stack()))
-		return dbs, false
+		return dbs, false, nil
 	}
 
-	return nil, true
+	return nil, true, nil
 }
