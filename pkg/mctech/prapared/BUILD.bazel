@@ -18,6 +18,7 @@ go_library(
         "//pkg/parser/ast",
         "//pkg/sessionctx",
         "@com_github_patrickmn_go_cache//:go-cache",
+        "@com_github_pingcap_errors//:errors",
     ],
 )
 
@@ -28,11 +29,10 @@ go_test(
     embed = [":prapared"],
     flaky = True,
     deps = [
-        "//pkg/mctech/tenant",
-        "//pkg/parser",
+        "//pkg/kv",
         "//pkg/parser/auth",
-        "//pkg/parser/format",
         "//pkg/parser/test_driver",
+        "//pkg/session",
         "//pkg/testkit",
         "@com_github_stretchr_testify//require",
     ],
