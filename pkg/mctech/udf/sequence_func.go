@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/pingcap/log"
@@ -261,28 +260,31 @@ type SequenceMetrics struct {
 
 type SequenceCache struct {
 	frange *compositeRange
-	// 是否启动异步获取序列
-	fetching int32
 	// 定义后端获取序列的线程资源锁
 	sem *semaphore.Weighted
 	// 统计信息
 	metrics SequenceMetrics
 	// 服务地址前缀 'http://xxxx/'
 	serviceUrlPrefix string
+	// 每次最大取回的序列数
+	maxFetchCount int64
+	// 激活后台取序列的阈值
+	backendThreshold int64
 
-	maxFetchCount    int64 // 每次最大取回的序列数
-	backendThreshold int64 // 激活后台取序列的阈值
+	mock bool
 }
 
 func newSequenceCache() *SequenceCache {
 	sc := new(SequenceCache)
 	sc.frange = newCompositeRange()
 
+	sc.mock = option.getMock()
+
 	// 后台取序列的最大线程数
-	backendCount := getBackendCount()
-	sc.maxFetchCount = int64(1000)
+	backendCount := option.getBackendCount()
+	sc.maxFetchCount = option.getMaxFetchCount()
 	sc.sem = semaphore.NewWeighted(backendCount)
-	sc.serviceUrlPrefix = getSequenceServiceUrlPrefix()
+	sc.serviceUrlPrefix = option.getSequenceServiceUrlPrefix()
 	sc.backendThreshold = (sc.maxFetchCount * backendCount * 2) / 3
 	return sc
 }
@@ -292,6 +294,11 @@ func (s *SequenceCache) GetMetrics() *SequenceMetrics {
 }
 
 func (s *SequenceCache) Next() (int64, error) {
+	if s.mock {
+		// 用于调试场景
+		return 0, nil
+	}
+
 	// 数据是否可用
 	available := s.frange.Available()
 	var err error
@@ -312,6 +319,11 @@ func (s *SequenceCache) Next() (int64, error) {
 }
 
 func (s *SequenceCache) VersionJustPass() (int64, error) {
+	if s.mock {
+		// 用于调试场景
+		return 0, nil
+	}
+
 	url := s.serviceUrlPrefix + "version"
 	log.Debug("version just pass url", zap.String("url", url))
 	post, err := http.NewRequest(
@@ -366,7 +378,6 @@ func (s *SequenceCache) backendFetchSequenceIfNeeded() {
 		// fmt.Println("=====================load from backend")
 		var err error
 		rg, err := s.loadSequence(s.maxFetchCount)
-		atomic.CompareAndSwapInt32(&s.fetching, 1, 0)
 		if err != nil {
 			panic(err)
 		}
