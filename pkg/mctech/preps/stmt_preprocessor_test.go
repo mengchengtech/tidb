@@ -4,16 +4,19 @@ import (
 	"context"
 	"testing"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/stretchr/testify/require"
 )
 
 type mctechStmtResolverTestCase struct {
-	shortDb string
-	sql     string
-	expect  map[string]any
-	failure string
+	shortDb     string         // 当前数据库的短名
+	sql         string         // 传入的sql语句
+	expectDBs   []string       // 期望检测到使用过的数据库列表（排序后）
+	expectValue map[string]any // 期望的解析后的数据结构(一般属性)
+	failure     string         // 失败后抛出的异常信息
 }
 
 func (m *mctechStmtResolverTestCase) Failure() string {
@@ -27,49 +30,61 @@ func (m *mctechStmtResolverTestCase) Source() any {
 func TestStmtResolverWithRoot(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*mctechStmtResolverTestCase{
-		{"pf", "/*& tenant:gdcd */ /*& tenant:'gdcd' */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
-		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
-		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", nil, "多个 tenant hint包含不同的值: gdcd <=> gdcd1"},
-		{"test", "describe company", map[string]any{"db": "test", "params": map[string]any{"mpp": "allow"}}, ""},
-		{"test", "select * from company /*& global:true */", map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "db": "test"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:'gdcd' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& tenant:gdcd1 */ select * from company", nil, nil, "多个 tenant hint包含不同的值: gdcd <=> gdcd1"},
+		{"test", "describe company", nil, map[string]any{"db": "test", "params": map[string]any{"mpp": "allow"}}, ""},
+		{"test", "select * from company /*& global:true */", []string{"test"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "db": "test"}, ""},
 		//
-		{"pf", "/*& global:true */ select * from company", map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "db": "global_platform"}, ""},
-		{"test", "/*& global:true */ select * from company", map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "db": "test"}, ""},
-		{"pf", "/*& global:!ys2 */ select * from company", map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform"}, ""},
-		{"pf", "select * from company /*& global:!ys2,!ys3 */", map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform"}, ""},
+		{"pf", "/*& global:true */ select * from company", []string{"global_platform"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "db": "global_platform"}, ""},
+		{"test", "/*& global:true */ select * from company", []string{"test"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "db": "test"}, ""},
+		{"pf", "/*& global:!ys2 */ select * from company", []string{"global_platform"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform"}, ""},
+		{"pf", "select * from company /*& global:!ys2,!ys3 */", []string{"global_platform"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform"}, ""},
 		// hint 格式不匹配
-		{"pf", "/*  & global:true */ select * from company", nil, "当前用户root无法确定所属租户信息"},
-		{"pf", "/* global:true */ select * from company", nil, "当前用户root无法确定所属租户信息"},
-		{"test", "/* global:true */ select * from company", map[string]any{"params": map[string]any{"mpp": "allow"}, "db": "test"}, ""},
+		{"pf", "/*  & global:true */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		{"pf", "/* global:true */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		{"test", "/* global:true */ select * from company", []string{"test"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "db": "test"}, ""},
 		// tenant hint
-		{"pf", "/*& tenant:gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
-		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", nil, "存在tenant信息时，global不允许设置为true"},
+		{"pf", "/*& tenant:gdcd */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", nil, nil, "存在tenant信息时，global不允许设置为true"},
 
 		// request_id
-		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
 		// background
-		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "background": "true", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "background": "true", "mpp": "allow"}, "db": "global_platform"}, ""},
 		// across
-		{"pf", "/*& tenant:ztsj */ /*& across:global_cq3,global_ds */ select * from company", map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "across": "global_cq3|global_ds", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:ztsj */ /*& across:global_cq3,global_ds */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "across": "global_cq3|global_ds", "mpp": "allow"}, "db": "global_platform"}, ""},
 		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}, "db": "public_data"}, ""},
+		{"pd", "/*& dbPrefix:mock */ select * from company", []string{"public_data"}, map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}, "db": "public_data"}, ""},
 		// replace
-		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", map[string]any{"tenant": "gslq", "params": map[string]any{"tenant": "gslq", "mpp": "allow"}, "db": "public_data"}, ""},   // replace
-		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", map[string]any{"tenant": "gslq", "params": map[string]any{"tenant": "gslq", "mpp": "allow"}, "db": "public_data"}, ""}, // replace
-		{"pd", "/*& $replace:tenant=mctech */ select * from company", map[string]any{"params": map[string]any{"mpp": "allow"}, "db": "public_data"}, ""},
-		{"pd", "/*& $replace:tenant */ select * from company", nil, "执行[replace]时未找到名称为'tenant'的参数的值"},
+		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", []string{"public_data"}, map[string]any{"tenant": "gslq", "params": map[string]any{"tenant": "gslq", "mpp": "allow"}, "db": "public_data"}, ""},   // replace
+		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", []string{"public_data"}, map[string]any{"tenant": "gslq", "params": map[string]any{"tenant": "gslq", "mpp": "allow"}, "db": "public_data"}, ""}, // replace
+		{"pd", "/*& $replace:tenant=mctech */ select * from company", []string{"public_data"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "db": "public_data"}, ""},
+		{"pd", "/*& $replace:tenant */ select * from company", nil, nil, "执行[replace]时未找到名称为'tenant'的参数的值"},
 
 		// 新的值声明方式
-		{"pf", "/*& tenant|gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
-		{"pf", "/*& tenant|'gdcd' */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant|gdcd */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant|gdcd */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
 
 		// 租户隔离角色
-		{"pf", "/*& impersonate: tenant */ select * from company", nil, "impersonate的值错误。可选值为'tenant_only'"},
-		{"pf", "/*& impersonate: tenant_only */ select * from company", nil, "当前用户root无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */"},
-		{"pf", "/*& global:true */ /*& impersonate: tenant_only */ select * from company", nil, "当前数据库用户包含租户隔离角色，不允许启用 global hint"},
-		{"pf", "/*& tenant|gdcd */ /*& impersonate: tenant_only */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "impersonate": "tenant_only", "mpp": "allow"}, "db": "global_platform"}, ""},
+		{"pf", "/*& impersonate: tenant */ select * from company", nil, nil, "impersonate的值错误。可选值为'tenant_only'"},
+		{"pf", "/*& impersonate: tenant_only */ select * from company", nil, nil, "当前用户root无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */"},
+		{"pf", "/*& global:true */ /*& impersonate: tenant_only */ select * from company", nil, nil, "当前数据库用户包含租户隔离角色，不允许启用 global hint"},
+		{"pf", "/*& tenant|gdcd */ /*& impersonate: tenant_only */ select * from company", []string{"global_platform"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "impersonate": "tenant_only", "mpp": "allow"}, "db": "global_platform"}, ""},
 	}
 
+	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
+}
+
+func TestStmtResolverNormalizeDB(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/preps/SetSQLDBS",
+		mock.M(t, "global_mtlp,global_qa,global_platform,global_cq3,global_mtlp,global_cq3"))
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/preps/SetSQLDBS")
+
+	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	cases := []*mctechStmtResolverTestCase{
+		{"pf", "/*& tenant|gdcd */ select * from company", []string{"global_cq3", "global_mtlp", "global_platform", "global_qa"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform"}, ""},
+	}
 	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
 }
 
@@ -117,6 +132,13 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechC
 		}
 	}
 	info := mctechCtx.(mctech.ContextForTest).GetInfoForTest()
-	require.Equal(t, c.expect, info, c.Source())
+	if c.expectDBs == nil {
+		c.expectDBs = []string{}
+	}
+	if c.expectValue == nil {
+		c.expectValue = map[string]any{}
+	}
+	require.Equal(t, c.expectDBs, dbs, c.Source())
+	require.Equal(t, c.expectValue, info, c.Source())
 	return nil
 }
