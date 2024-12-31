@@ -24,6 +24,7 @@ go_library(
         "@com_github_pingcap_kvproto//pkg/kvrpcpb",
         "@com_github_pingcap_tipb//go-binlog",
         "@com_github_tikv_client_go_v2//oracle",
+        "@org_uber_go_zap//zapcore",
     ],
 )
 
