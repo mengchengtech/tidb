@@ -1,0 +1,39 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "prapared",
+    srcs = [
+        "context.go",
+        "db_checker.go",
+        "format.go",
+        "replace_action.go",
+        "sql_preprocessor.go",
+        "stmt_resolver.go",
+    ],
+    importpath = "github.com/pingcap/tidb/pkg/mctech/prapared",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/mctech",
+        "//pkg/mctech/tenant",
+        "//pkg/parser/ast",
+        "//pkg/sessionctx",
+        "@com_github_patrickmn_go_cache//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "prapared_test",
+    timeout = "short",
+    srcs = ["stmt_resolver_test.go"],
+    embed = [":prapared"],
+    flaky = True,
+    deps = [
+        "//pkg/mctech/tenant",
+        "//pkg/parser",
+        "//pkg/parser/auth",
+        "//pkg/parser/format",
+        "//pkg/parser/test_driver",
+        "//pkg/testkit",
+        "@com_github_stretchr_testify//require",
+    ],
+)

@@ -4,15 +4,16 @@ go_library(
     name = "tenant",
     srcs = [
         "tenant_visitor.go",
+        "types.go",
         "util.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech/tenant",
     visibility = ["//visibility:public"],
     deps = [
+        "//pkg/mctech",
         "//pkg/parser/ast",
         "//pkg/parser/model",
         "//pkg/parser/opcode",
-        "//pkg/sessionctx",
     ],
 )
 

@@ -32,7 +32,7 @@ go_library(
         "//pkg/extension",
         "//pkg/infoschema",
         "//pkg/kv",
-        "//pkg/mctech/tenant",
+        "//pkg/mctech/prapared",
         "//pkg/metrics",
         "//pkg/parser",
         "//pkg/parser/ast",

@@ -267,7 +267,7 @@ type SequenceCache struct {
 
 func newSequenceCache() *SequenceCache {
 	sc := new(SequenceCache)
-	option := mctech.GetMCTechOption()
+	option := mctech.GetOption()
 	sc.frange = newCompositeRange()
 
 	sc.mock = option.Sequence_Mock
