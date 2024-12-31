@@ -1789,9 +1789,13 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	}
 	// add by zhangbing
 	for _, stmt := range stmts {
-		if err = cc.onAfterParseSQL(stmt); err != nil {
-			cc.onExtensionStmtEnd(stmt, false, err)
-			return err
+		switch stmt.(type) {
+		case *ast.PrepareStmt, *ast.ExecuteStmt: // 跳过，此处不处理，在PrepareExec和ExecuteExec中处理
+		default:
+			if err = cc.onAfterParseSQL(stmt); err != nil {
+				cc.onExtensionStmtEnd(stmt, false, err)
+				return err
+			}
 		}
 	}
 	// add end

@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	// 强制调用preps包里的init方法
-
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/mctech/interceptor"
