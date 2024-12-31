@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "config",
     srcs = [
+        "a_mctech.go",
         "config.go",
         "config_util.go",
         "const.go",

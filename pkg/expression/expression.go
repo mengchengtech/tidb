@@ -1119,6 +1119,11 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 			return false
 		}
 		return true
+		// add by zhangbing
+		// mctech functions
+	case ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt:
+		return false
+		// add end
 	}
 	return false
 }
@@ -1279,6 +1284,11 @@ func scalarExprSupportedByFlash(function *ScalarFunction) bool {
 		return true
 	case ast.Grouping: // grouping function for grouping sets identification.
 		return true
+		// add by zhangbing
+		// mctech functions
+	case ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt:
+		return false
+		// add end
 	}
 	return false
 }
