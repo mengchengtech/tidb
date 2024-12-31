@@ -6,6 +6,7 @@ go_library(
         "context.go",
         "db_checker.go",
         "format.go",
+        "mctech_handler.go",
         "replace_action.go",
         "sql_preprocessor.go",
         "stmt_resolver.go",
