@@ -302,7 +302,9 @@ func updateExistPlacementPolicy(t *meta.Meta, policy *model.PolicyInfo) error {
 	// Reset bundle for partitions.
 	for _, id := range partIDs {
 		cp := bundle.Clone()
-		bundles = append(bundles, cp.Reset(placement.RuleIndexPartition, []int64{id}))
+		// modify by zhangbing
+		bundles = append(bundles, cp.Reset(placement.RuleIndexPartition, []int64{id.ID}))
+		// modify end
 	}
 
 	resetRangeFn := func(ctx context.Context, rangeName string) error {
@@ -336,6 +338,11 @@ func updateExistPlacementPolicy(t *meta.Meta, policy *model.PolicyInfo) error {
 		if err != nil {
 			return errors.Wrapf(err, "failed to notify PD the placement rules")
 		}
+		// add by zhangbing
+		if err = updateExistTiFlashPlacementPolicy(tblInfos, partIDs, bundle.Clone()); err != nil {
+			return errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		}
+		// add end
 	}
 	return nil
 }
@@ -394,14 +401,18 @@ func checkPlacementPolicyNotInUseFromRange(policy *model.PolicyInfo) error {
 	return checkFn(placement.TiDBBundleRangePrefixForMeta)
 }
 
-func getPlacementPolicyDependedObjectsIDs(t *meta.Meta, policy *model.PolicyInfo) (dbIDs, partIDs []int64, tblInfos []*model.TableInfo, err error) {
+// modify by zhangbing
+func getPlacementPolicyDependedObjectsIDs(t *meta.Meta, policy *model.PolicyInfo) (dbIDs []int64, partIDs []*innerPartInfo, tblInfos []*model.TableInfo, err error) {
+	// modify end
 	schemas, err := t.ListDatabases()
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// DB ids don't have to set the bundle themselves, but to check the dependency.
 	dbIDs = make([]int64, 0, len(schemas))
-	partIDs = make([]int64, 0, len(schemas))
+	// modify by zhangbing
+	partIDs = make([]*innerPartInfo, 0, len(schemas))
+	// modify end
 	tblInfos = make([]*model.TableInfo, 0, len(schemas))
 	for _, dbInfo := range schemas {
 		if dbInfo.PlacementPolicyRef != nil && dbInfo.PlacementPolicyRef.ID == policy.ID {
@@ -418,7 +429,9 @@ func getPlacementPolicyDependedObjectsIDs(t *meta.Meta, policy *model.PolicyInfo
 			if tblInfo.Partition != nil {
 				for _, part := range tblInfo.Partition.Definitions {
 					if part.PlacementPolicyRef != nil && part.PlacementPolicyRef.ID == policy.ID {
-						partIDs = append(partIDs, part.ID)
+						// modify by zhangbing
+						partIDs = append(partIDs, &innerPartInfo{ID: part.ID, tblInfo: tblInfo})
+						// modify end
 					}
 				}
 			}
