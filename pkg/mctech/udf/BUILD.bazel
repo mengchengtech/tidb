@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/mctech",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@com_github_pkg_errors//:errors",
         "@org_golang_x_sync//semaphore",
@@ -29,7 +30,8 @@ go_test(
     flaky = True,
     shard_count = 5,
     deps = [
-        "//pkg/mctech",
+        "//pkg/mctech/mock",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",
     ],
 )
