@@ -402,6 +402,7 @@ go_test(
         "//pkg/infoschema",
         "//pkg/kv",
         "//pkg/mctech",
+        "//pkg/mctech/preps",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/metrics",
