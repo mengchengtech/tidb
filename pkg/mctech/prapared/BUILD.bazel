@@ -25,9 +25,18 @@ go_library(
 go_test(
     name = "prapared_test",
     timeout = "short",
-    srcs = ["stmt_resolver_test.go"],
+    srcs = [
+        "context_test.go",
+        "db_checker_test.go",
+        "format_test.go",
+        "main_test.go",
+        "replace_action_test.go",
+        "sql_preprocessor_test.go",
+        "stmt_resolver_test.go",
+    ],
     embed = [":prapared"],
     flaky = True,
+    shard_count = 11,
     deps = [
         "//pkg/kv",
         "//pkg/mctech",

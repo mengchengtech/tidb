@@ -108,7 +108,7 @@ func (r *ResolveResult) GetInfoForTest() map[string]any {
 		info["prefix"] = r.dbPrefix
 	}
 	if r.tenantFromRole {
-		info["role"] = r.tenantFromRole
+		info["tenantFromRole"] = r.tenantFromRole
 	}
 	if len(r.tenant) > 0 {
 		info["tenant"] = r.tenant
@@ -150,7 +150,7 @@ type baseMCTechContext struct {
 	sqlWithGlobalPrefixDB bool
 }
 
-const DB_PUBLIC_DATA = "public_data"
+const DB_PUBLIC_PREFIX = "public_"
 const DB_ASSET_PREFIX = "asset_"
 const DB_GLOBAL_PREFIX = "global_"
 
@@ -274,7 +274,7 @@ func (d *baseMCTechContext) IsGlobalDb(db string) bool {
  */
 func isProductDatabase(logicDb string) bool {
 	return strings.HasPrefix(logicDb, DB_GLOBAL_PREFIX) || // global_*是租户相关的
-		DB_PUBLIC_DATA == logicDb || // public_data给将来留的，不花钱的
+		strings.HasPrefix(logicDb, DB_PUBLIC_PREFIX) || // public_data给将来留的，不花钱的给将来留的，不花钱的
 		strings.HasPrefix(logicDb, DB_ASSET_PREFIX) // asset_* 是花钱的
 }
 

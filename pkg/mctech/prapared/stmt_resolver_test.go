@@ -4,82 +4,63 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pingcap/tidb/pkg/kv"
-	"github.com/pingcap/tidb/pkg/mctech"
-	"github.com/pingcap/tidb/pkg/parser/auth"
-	_ "github.com/pingcap/tidb/pkg/parser/test_driver"
 	"github.com/pingcap/tidb/pkg/session"
-	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
 )
 
-func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
-	tk := testkit.NewTestKit(t, store)
-	tk.MustExec("drop database if exists global_platform")
-	tk.MustExec("create database global_platform")
-	tk.MustExec("use global_platform")
-	tk.MustExec("create table t(a int, b int, key(b))")
-
-	return tk
-}
-
-func createSession(t *testing.T, tk *testkit.TestKit, user string, roles []string) session.Session {
-	session := tk.Session()
-	if user == "" {
-		user = "root"
-	}
-	err := session.Auth(&auth.UserIdentity{Username: user, Hostname: "%"}, nil, nil, nil)
-	require.NoError(t, err)
-
-	if len(roles) > 0 {
-		ar := make([]*auth.RoleIdentity, len(roles))
-		for _, r := range roles {
-			ar = append(ar, &auth.RoleIdentity{Username: r, Hostname: "%"})
-		}
-		session.GetSessionVars().ActiveRoles = ar
-	}
-	return session
-}
-
-type mctechTestCase struct {
+type mctechStmtResolverTestCase struct {
 	shortDb string
 	sql     string
 	expect  map[string]any
 	failure string
 }
 
-var dbMap = map[string]string{
-	"pf": "global_platform",
-	"pd": "public_data",
-	"ac": "asset_component",
+func (m *mctechStmtResolverTestCase) Failure() string {
+	return m.failure
 }
 
-func doRunTest(t *testing.T, cases []*mctechTestCase) {
-	store := testkit.CreateMockStore(t)
-	tk := initMock(t, store)
-	session := createSession(t, tk, "root", nil)
+func (m *mctechStmtResolverTestCase) Source() any {
+	return m.sql
+}
 
-	for _, c := range cases {
-		err := runTestCase(t, c, session)
-		if err == nil {
-			continue
-		}
+func TestStmtResolverWithRoot(t *testing.T) {
+	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
+	cases := []*mctechStmtResolverTestCase{
+		{"test", "select * from company /*& global:true */", map[string]any{"global": map[string]any{"set": true}, "db": "test"}, ""},
+		//
+		{"pf", "/*& global:!ys2 */ select * from company", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform"}, ""},
+		{"pf", "select * from company /*& global:!ys2,!ys3 */", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform"}, ""},
+		// hint 格式不匹配
+		{"pf", "/* global:true */ select * from company", nil, "用户root所属的角色无法确定租户信息"},
+		{"test", "/* global:true */ select * from company", map[string]any{"db": "test"}, ""},
+		// tenant hint
+		{"pf", "/*& tenant:gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}, "db": "global_platform"}, ""},
+		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", nil, "存在tenant信息时，global不允许设置为true"},
 
-		if c.failure != "" {
-			require.ErrorContains(t, err, c.failure)
-		} else {
-			require.NoErrorf(t, err, "source %v", c.sql)
-		}
+		// request_id
+		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd"}, "db": "global_platform"}, ""},
+		// background
+		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "background": "true"}, "db": "global_platform"}, ""},
+		// dbPrefix
+		{"pd", "/*& dbPrefix:mock */ select * from company", map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock"}, "db": "public_data"}, ""},
+		// replace
+		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", map[string]any{"tenant": "gslq", "params": map[string]any{"tenant": "gslq"}, "db": "public_data"}, ""},   // replace
+		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", map[string]any{"tenant": "gslq", "params": map[string]any{"tenant": "gslq"}, "db": "public_data"}, ""}, // replace
+		{"pd", "/*& $replace:tenant=mctech */ select * from company", map[string]any{"db": "public_data"}, ""},
+		{"pd", "/*& $replace:tenant */ select * from company", nil, "执行[replace]时未找到名称为'tenant'的参数的值"},
 	}
+
+	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
 }
 
-func runTestCase(t *testing.T, c *mctechTestCase, session session.Session) error {
+func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, session session.Session) error {
 	resolver := NewStatementResolver()
-	sql := c.sql
 	db, ok := dbMap[c.shortDb]
 	if !ok {
 		db = "test"
 	}
+
+	sql := c.sql
 	session.GetSessionVars().CurrentDB = db
 	sql, err := resolver.PrepareSql(session, sql)
 	if err != nil {
@@ -102,47 +83,6 @@ func runTestCase(t *testing.T, c *mctechTestCase, session session.Session) error
 		return err
 	}
 	info := resolver.Context().GetInfoForTest()
-	require.Equal(t, c.expect, info, "source: %s, %s", c.shortDb, c.sql)
+	require.Equal(t, c.expect, info, c.Source())
 	return nil
-}
-
-func TestStmtResolverWithRoot(t *testing.T) {
-	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
-	cases := []*mctechTestCase{
-		{"test", "select * from company /*& global:true */", map[string]any{"global": map[string]any{"set": true}, "db": "test"}, ""},
-		//
-		{"pf", "/*& global:!ys2 */ select * from company", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform"}, ""},
-		{"pf", "select * from company /*& global:!ys2,!ys3 */", map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform"}, ""},
-		// // hint 格式不匹配
-		{"pf", "/* global:true */ select * from company", nil, "用户root所属的角色无法确定租户信息"},
-		{"test", "/* global:true */ select * from company", map[string]any{"db": "test"}, ""},
-		// tenant hint
-		{"pf", "/*& tenant:gdcd */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}, "db": "global_platform"}, ""},
-		{"pf", "/*& tenant:gdcd */ /*& global:1 */ select * from company", nil, "存在tenant信息时，global不允许设置为true"},
-
-		// request_id
-		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", map[string]any{"tenant": "gdcd", "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd"}, "db": "global_platform"}, ""},
-		// background
-		{"pf", "/*& tenant:ztsj */ /*& background:true */ select * from company", map[string]any{"tenant": "ztsj", "params": map[string]any{"tenant": "ztsj", "background": "true"}, "db": "global_platform"}, ""},
-		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock"}, "db": "public_data"}, ""},
-	}
-
-	doRunTest(t, cases)
-}
-
-func TestStmtResolverDW_WithRoot(t *testing.T) {
-	cases := []*mctechTestCase{
-		// dw
-		{"pd", "/*& global:true */ select * from global_dw.company", nil, "get dw index errors"},
-	}
-	doRunTest(t, cases)
-
-	option := mctech.GetOption()
-	option.DbChecker_ApiPrefix = "http://10.12.6.5:31051/"
-	cases = []*mctechTestCase{
-		// dw
-		{"pd", "/*& global:true */ select * from global_dw.company", map[string]any{"global": map[string]any{"set": true}, "db": "public_data"}, "get dw index errors"},
-	}
-	doRunTest(t, cases)
 }
