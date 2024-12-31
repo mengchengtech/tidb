@@ -3,13 +3,19 @@
 package executor_test
 
 import (
+	"context"
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/mctech"
+
+	// 强制调用preps包里的init方法
+	_ "github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/testkit"
+	"github.com/stretchr/testify/require"
 )
 
 type mctechStmtCases struct {
@@ -58,6 +64,67 @@ func TestForbiddenPrepare(t *testing.T) {
 	}
 }
 
+func TestPrepareByQuery(t *testing.T) {
+	option := mctech.GetOption()
+	forbidden := option.ForbiddenPrepare
+	option.ForbiddenPrepare = false
+	defer func() {
+		option.ForbiddenPrepare = forbidden
+	}()
+
+	store := testkit.CreateMockStore(t)
+	tk, sql := initDbAndData(t, store, option)
+
+	session := tk.Session()
+	var ctx context.Context
+	ctx, _ = mctech.WithNewContext3(context.Background(), session, true)
+	tk.MustExecWithContext(
+		ctx,
+		fmt.Sprintf(`prepare st from "%s"`, sql),
+	)
+
+	tk.MustExec(
+		"SET @p1 = 'termination', @p2 = 'finished', @p3 = 'none', @p4 = 'project'",
+	)
+
+	ctx, _ = mctech.WithNewContext(session)
+	rs := tk.MustQueryWithContext(
+		ctx,
+		`/*& tenant:mctest */ EXECUTE st USING @p1, @p2, @p3, @p4, @p4`,
+	)
+
+	rows1 := rs.Rows()
+	seqs1 := map[string]any{}
+	require.Len(t, rows1, 2)
+	for _, row := range rows1 {
+		seqs1[row[0].(string)] = true
+	}
+}
+
+func TestPrepareByCmd(t *testing.T) {
+	option := mctech.GetOption()
+	forbidden := option.ForbiddenPrepare
+	option.ForbiddenPrepare = false
+	defer func() {
+		option.ForbiddenPrepare = forbidden
+	}()
+
+	store := testkit.CreateMockStore(t)
+	tk, sql := initDbAndData(t, store, option)
+
+	session := tk.Session()
+	var ctx context.Context
+	ctx, _ = mctech.WithNewContext3(context.Background(), session, true)
+	result1 := tk.MustQueryWithContext(ctx, sql, "termination", "finished", "none", "project", "mctest")
+
+	rows1 := result1.Rows()
+	seqs1 := map[string]any{}
+	require.Len(t, rows1, 2)
+	for _, row := range rows1 {
+		seqs1[row[0].(string)] = true
+	}
+}
+
 func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("drop database if exists global_platform")
@@ -68,15 +135,7 @@ func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 	return tk
 }
 
-func TestPrepare(t *testing.T) {
-	option := mctech.GetOption()
-	forbidden := option.ForbiddenPrepare
-	option.ForbiddenPrepare = false
-	defer func() {
-		option.ForbiddenPrepare = forbidden
-	}()
-
-	store := testkit.CreateMockStore(t)
+func initDbAndData(t *testing.T, store kv.Storage, option *mctech.Option) (*testkit.TestKit, string) {
 	tk := initMock(t, store)
 
 	var createTableSQL0 = strings.Join([]string{
@@ -136,11 +195,8 @@ values
 ,(1241042011738624, 'crec4', 'project', 'project', 0)
 `)
 
-	session := tk.Session()
-	mctechCtx := mctech.NewContext(session, false)
-	mctech.SetContextForTest(session, mctechCtx)
-	tk.MustExec(`prepare st from "WITH orgs AS (
-		SELECT child_org_id FROM global_platform.org_relation WHERE org_id IS NOT NULL AND IFNULL(org_id, '') IN(
+	sql := `WITH orgs AS (
+		SELECT tenant,child_org_id FROM global_platform.org_relation WHERE org_id IS NOT NULL AND IFNULL(org_id, '') IN(
 			SELECT DISTINCT IFNULL(org_id, '') FROM global_platform.project WHERE org_id IS NOT NULL AND (
 is_removed=FALSE AND construct_status IN (?, ?, ?)
 			AND org_id IS NOT NULL AND IFNULL(org_id, '') IN(SELECT DISTINCT IFNULL(id, '') FROM global_platform.organization WHERE id IS NOT NULL AND (
@@ -148,17 +204,6 @@ org_type = ? AND ext_type = ? AND is_removed = FALSE
 ))
 )
 		)
-)SELECT * FROM orgs"`)
-
-	mctechCtx = mctech.NewContext(session, false)
-	mctech.SetContextForTest(session, mctechCtx)
-	tk.MustExec("SET @p1 = 'termination', @p2 = 'finished', @p3 = 'none', @p4 = 'project'")
-
-	mctechCtx = mctech.NewContext(session, false)
-	mctech.SetContextForTest(session, mctechCtx)
-	result := tk.MustQuery(
-		`/*& tenant:mctest */
-	EXECUTE st USING @p1, @p2, @p3, @p4, @p4
-	`)
-	print(result)
+)SELECT * FROM orgs`
+	return tk, sql
 }
