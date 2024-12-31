@@ -34,6 +34,7 @@ go_test(
 go_library(
     name = "visitor",
     srcs = [
+        "ddl_extension_visitor.go",
         "isolation_condition_visitor.go",
         "util.go",
     ],
@@ -42,14 +43,19 @@ go_library(
     deps = [
         "//pkg/mctech",
         "//pkg/parser/ast",
+        "//pkg/parser/format",
         "//pkg/parser/model",
+        "//pkg/parser/mysql",
         "//pkg/parser/opcode",
+        "//pkg/parser/types",
+        "@org_golang_x_exp//slices",
     ],
 )
 
 go_test(
     name = "visitor_test",
     srcs = [
+        "ddl_extension_visitor_test.go",
         "isolation_condition_visitor_test.go",
         "main_test.go",
     ],
