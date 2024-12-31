@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "plan_test",
+    timeout = "short",
+    srcs = ["join_where_test.go"],
+    flaky = True,
+    deps = [
+        "//pkg/kv",
+        "//pkg/parser/auth",
+        "//pkg/testkit",
+    ],
+)
