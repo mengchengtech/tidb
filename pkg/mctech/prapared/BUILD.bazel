@@ -17,7 +17,7 @@ go_library(
         "//pkg/mctech/tenant",
         "//pkg/parser/ast",
         "//pkg/sessionctx",
-        "@com_github_patrickmn_go_cache//:go_default_library",
+        "@com_github_patrickmn_go_cache//:go-cache",
     ],
 )
 
