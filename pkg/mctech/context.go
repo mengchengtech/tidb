@@ -3,6 +3,7 @@ package mctech
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 )
 
@@ -18,6 +19,7 @@ type MCTechContext interface {
 	SetSqlRewrited(rewrited bool)
 	SqlWithGlobalPrefixDB() bool
 	SetSqlWithGlobalPrefixDB(sqlWithGlobalPrefixDB bool)
+	GetInfoForTest() map[string]any
 }
 
 type DBSelector interface {
@@ -33,6 +35,18 @@ type GlobalValueInfo struct {
 	Excludes []string
 }
 
+func NewGlobalValueInfo(global bool, excludes ...string) *GlobalValueInfo {
+	return &GlobalValueInfo{Global: global, Excludes: excludes}
+}
+
+func (g *GlobalValueInfo) GetInfoForTest() map[string]any {
+	info := map[string]any{"set": g.Global}
+	if len(g.Excludes) > 0 {
+		info["excludes"] = g.Excludes
+	}
+	return info
+}
+
 type ResolveResult struct {
 	params         map[string]any
 	dbPrefix       string
@@ -41,7 +55,7 @@ type ResolveResult struct {
 	tenantFromRole bool
 }
 
-func NewResolveResult(tenant string, params map[string]any) *ResolveResult {
+func NewResolveResult(tenant string, params map[string]any) (*ResolveResult, error) {
 	fromRole := tenant != ""
 	if !fromRole {
 		// 如果从角色中无法找到租户信息，并且查询的是global库，必须有hint，如果没有报错，如果hint写了租户，自动按写的租户补条件
@@ -57,11 +71,12 @@ func NewResolveResult(tenant string, params map[string]any) *ResolveResult {
 	if !ok {
 		globalInfo = &GlobalValueInfo{}
 	} else {
+		delete(params, PARAM_GLOBAL)
 		globalInfo = v.(*GlobalValueInfo)
 	}
 
 	if tenant != "" && globalInfo.Global {
-		panic(errors.New("存在tenant信息时，global不允许设置为true"))
+		return nil, errors.New("存在tenant信息时，global不允许设置为true")
 	}
 
 	var dbPrefix string
@@ -81,7 +96,27 @@ func NewResolveResult(tenant string, params map[string]any) *ResolveResult {
 		globalInfo:     globalInfo,
 		params:         newParams,
 	}
-	return r
+	return r, nil
+}
+
+func (r *ResolveResult) GetInfoForTest() map[string]any {
+	info := map[string]any{}
+	if len(r.params) > 0 {
+		info["params"] = maps.Clone(r.params)
+	}
+	if len(r.dbPrefix) > 0 {
+		info["prefix"] = r.dbPrefix
+	}
+	if r.tenantFromRole {
+		info["role"] = r.tenantFromRole
+	}
+	if len(r.tenant) > 0 {
+		info["tenant"] = r.tenant
+	}
+	if r.globalInfo.Global {
+		info["global"] = r.globalInfo.GetInfoForTest()
+	}
+	return info
 }
 
 func (r *ResolveResult) Tenant() string {
@@ -108,13 +143,6 @@ func (r *ResolveResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
-func (r *ResolveResult) TenantSafe() string {
-	if r.tenant == "" {
-		panic(errors.New("tenant不能为空"))
-	}
-	return r.tenant
-}
-
 type baseMCTechContext struct {
 	selector              DBSelector
 	resolveResult         *ResolveResult
@@ -131,6 +159,10 @@ func NewBaseMCTechContext(resolveResult *ResolveResult, dbSelector DBSelector) M
 		resolveResult: resolveResult,
 		selector:      dbSelector,
 	}
+}
+
+func (d *baseMCTechContext) GetInfoForTest() map[string]any {
+	return d.resolveResult.GetInfoForTest()
 }
 
 func (d *baseMCTechContext) CurrentDB() string {

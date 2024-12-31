@@ -110,23 +110,24 @@ func NewStringFilter(pattern string) *StringFilter {
 	return filter
 }
 
-func (f *StringFilter) Match(text string) bool {
+func (f *StringFilter) Match(text string) (bool, error) {
+	var (
+		matched = true
+		err     error
+	)
 	switch f.action {
 	case "starts-with":
-		return strings.HasPrefix(text, f.pattern)
+		matched = strings.HasPrefix(text, f.pattern)
 	case "ends-with":
-		return strings.HasSuffix(text, f.pattern)
+		matched = strings.HasSuffix(text, f.pattern)
 	case "contains":
-		return strings.Contains(text, f.pattern)
+		matched = strings.Contains(text, f.pattern)
 	case "regex":
-		match, err := regexp.MatchString(f.pattern, text)
-		if err != nil {
-			panic(err)
-		}
-		return match
+		matched, err = regexp.MatchString(f.pattern, text)
 	default:
-		return f.pattern == text
+		matched = f.pattern == text
 	}
+	return matched, err
 }
 
 /**
@@ -192,7 +193,12 @@ func (c *MutexDatabaseChecker) Check(context mctech.MCTechContext, dbs []string)
 	logicNames := make([]string, len(dbs))
 	for _, dbName := range dbs {
 		logicName := context.ToLogicDbName(dbName)
-		if c.dbPredicate(logicName) {
+		matched, err := c.dbPredicate(logicName)
+		if err != nil {
+			return err
+		}
+
+		if matched {
 			logicNames = append(logicNames, logicName)
 		}
 	}
@@ -205,22 +211,32 @@ func (c *MutexDatabaseChecker) Check(context mctech.MCTechContext, dbs []string)
 	return fmt.Errorf("dbs not allow in the same statement.  %s", groupDbs)
 }
 
-func (c *MutexDatabaseChecker) dbPredicate(dbName string) bool {
+func (c *MutexDatabaseChecker) dbPredicate(dbName string) (bool, error) {
 	for _, f := range c.mutexFilters {
-		if f.Match(dbName) {
+		matched, err := f.Match(dbName)
+		if err != nil {
+			return false, err
+		}
+
+		if matched {
 			continue
 		}
 
 		for _, f := range c.excludeFilters {
-			if f.Match(dbName) {
+			matched, err := f.Match(dbName)
+			if err != nil {
+				return false, err
+			}
+
+			if matched {
 				// 需要排除，不当作互斥数据库处理
-				return false
+				return false, nil
 			}
 		}
 
 		// 符合互斥数据库
-		return true
+		return true, nil
 	}
 	// 不符合互斥数据库
-	return false
+	return false, nil
 }
