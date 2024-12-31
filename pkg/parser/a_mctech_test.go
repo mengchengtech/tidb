@@ -1,15 +1,4 @@
-// Copyright 2015 PingCAP, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// add by zhangbing
 
 package parser_test
 
@@ -17,10 +6,20 @@ import (
 	"testing"
 )
 
-func TestMCTechFunctionDelete(t *testing.T) {
+func TestMCTechFunction(t *testing.T) {
 	cases := []testCase{
 		{"/*& tenant:gslq */ select mctech_sequence() as full_id", true,
 			"SELECT MCTECH_SEQUENCE() AS `full_id`"},
+	}
+
+	RunTest(t, cases, false)
+}
+
+func TestMCTechStmt(t *testing.T) {
+	cases := []testCase{
+		{"mctech SELECT * FROM test.demo", true, "MCTECH SELECT * FROM `test`.`demo`"},
+		{"mctech FORMAT = row SELECT * FROM test.demo", true, "MCTECH SELECT * FROM `test`.`demo`"},
+		{"mctech FORMAT = 'row' SELECT * FROM test.demo", true, "MCTECH SELECT * FROM `test`.`demo`"},
 	}
 
 	RunTest(t, cases, false)

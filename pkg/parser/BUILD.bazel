@@ -8,6 +8,7 @@ exports_files([
 go_library(
     name = "parser",
     srcs = [
+        "a_mctech.go",
         "digester.go",
         "hintparser.go",
         "hintparserimpl.go",
