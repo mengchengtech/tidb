@@ -20,6 +20,7 @@ go_library(
         "//pkg/domain",
         "//pkg/expression",
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/meta/model",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
