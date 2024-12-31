@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "ddl",
-    srcs = ["ddl_extension_visitor.go"],
+    srcs = [
+        "ddl_extension_visitor.go",
+        "util.go",
+    ],
     importpath = "github.com/pingcap/tidb/pkg/mctech/ddl",
     visibility = ["//visibility:public"],
     deps = [
@@ -25,6 +28,7 @@ go_test(
     embed = [":ddl"],
     flaky = True,
     deps = [
+        "//pkg/mctech",
         "//pkg/parser",
         "//pkg/parser/format",
         "//pkg/parser/test_driver",

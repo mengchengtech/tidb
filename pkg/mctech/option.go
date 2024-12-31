@@ -33,6 +33,7 @@ type Option struct {
 
 	DDLVersionColumnEnabled bool
 	DDLVersionColumnName    string
+	DDLVersionFilters       []string
 }
 
 var mctechOpts *Option
@@ -76,6 +77,7 @@ func initMCTechOption() *Option {
 
 		DDLVersionColumnEnabled: opts.DDL.Version.Enabled,
 		DDLVersionColumnName:    opts.DDL.Version.Name,
+		DDLVersionFilters:       opts.DDL.Version.DbMatches,
 	}
 
 	return option
