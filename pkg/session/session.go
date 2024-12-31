@@ -2122,15 +2122,6 @@ func (s *session) ExecuteStmt(ctx context.Context, stmtNode ast.StmtNode) (sqlex
 					zap.String("SQL", sql))
 			}
 		}
-
-		// add by zhangbing
-		db, user, client := sessionctx.ResolveSession(s)
-		logutil.Logger(ctx).Warn("mctech compile sql failed",
-			zap.Error(err),
-			zap.String("token", mctech.MCTechLogFilterToken),
-			zap.String("db", db), zap.String("user", user), zap.String("client", client),
-			zap.String("SQL", stmtNode.Text()))
-		// add end
 		return nil, err
 	}
 
