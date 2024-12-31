@@ -9,7 +9,7 @@ go_test(
     deps = [
         "//pkg/kv",
         "//pkg/mctech",
-        "//pkg/mctech/prapared",
+        "//pkg/mctech/preps",
         "//pkg/parser/auth",
         "//pkg/testkit",
         "@com_github_stretchr_testify//require",

@@ -1,4 +1,4 @@
-package prapared
+package preps
 
 import (
 	"testing"
