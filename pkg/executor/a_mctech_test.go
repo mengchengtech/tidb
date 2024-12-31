@@ -297,17 +297,6 @@ func TestTableTTLInfoGeneratedColumn(t *testing.T) {
 	))
 }
 
-func TestGetSeriveFromSql(t *testing.T) {
-	cases := []*getServiceCase{
-		{"/* from:'tenant-service', host */ select 1", "tenant-service"},
-		{"select 1", ""},
-	}
-	for _, c := range cases {
-		service := executor.GetSeriveFromSQL(c.sql)
-		require.Equal(t, c.service, service)
-	}
-}
-
 func TestLargeQueryWithoutLogFile(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),

@@ -4,6 +4,7 @@ go_library(
     name = "preps",
     srcs = [
         "cache.go",
+        "comment.go",
         "context.go",
         "db_checker.go",
         "db_index.go",

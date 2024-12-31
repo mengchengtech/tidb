@@ -19,10 +19,11 @@ go_test(
         "main_test.go",
         "misc_extension_visitor_test.go",
     ],
-    embed = [":misc"],
     flaky = True,
     deps = [
+        ":misc",
         "//pkg/mctech",
+        "//pkg/mctech/preps",
         "//pkg/parser",
         "//pkg/parser/format",
         "//pkg/parser/test_driver",

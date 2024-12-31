@@ -93,7 +93,8 @@ func (r *mctechStatementPreprocessor) PrepareSQL(
 
 	preprocessor := newSQLPreprocessor(sql)
 	var preparedSQL string
-	result, err := preprocessor.Prepare(mctx, actions, params)
+	comments := GetCustomCommentFromSQL(sql)
+	result, err := preprocessor.Prepare(mctx, actions, comments, params)
 	if err != nil {
 		return preparedSQL, nil, err
 	}
