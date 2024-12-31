@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "mctech",
-    srcs = ["option.go"],
+    srcs = [
+        "http_rpc.go",
+        "option.go",
+    ],
     importpath = "github.com/pingcap/tidb/pkg/mctech",
     visibility = ["//visibility:public"],
     deps = [
