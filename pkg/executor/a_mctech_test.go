@@ -12,6 +12,8 @@ import (
 	"github.com/pingcap/tidb/pkg/mctech"
 
 	// 强制调用preps包里的init方法
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/mctech/mock"
 	_ "github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/testkit"
@@ -44,13 +46,10 @@ func TestMCTechStatementsSummary(t *testing.T) {
 }
 
 func TestForbiddenPrepare(t *testing.T) {
-	option := mctech.GetOption()
-	forbidden := option.ForbiddenPrepare
-	option.ForbiddenPrepare = true
-	defer func() {
-		option.ForbiddenPrepare = forbidden
-	}()
-
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"ForbiddenPrepare": true}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
@@ -86,15 +85,12 @@ func TestIntegerAutoIncrement(t *testing.T) {
 }
 
 func TestPrepareByQuery(t *testing.T) {
-	option := mctech.GetOption()
-	forbidden := option.ForbiddenPrepare
-	option.ForbiddenPrepare = false
-	defer func() {
-		option.ForbiddenPrepare = forbidden
-	}()
-
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
 	store := testkit.CreateMockStore(t)
-	tk, sql := initDbAndData(t, store, option)
+	tk, sql := initDbAndData(t, store)
 
 	session := tk.Session()
 	var ctx context.Context
@@ -126,15 +122,13 @@ func TestPrepareByQuery(t *testing.T) {
 }
 
 func TestPrepareByCmd(t *testing.T) {
-	option := mctech.GetOption()
-	forbidden := option.ForbiddenPrepare
-	option.ForbiddenPrepare = false
-	defer func() {
-		option.ForbiddenPrepare = forbidden
-	}()
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"ForbiddenPrepare": false, "TenantEnabled": true}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
 
 	store := testkit.CreateMockStore(t)
-	tk, sql := initDbAndData(t, store, option)
+	tk, sql := initDbAndData(t, store)
 
 	session := tk.Session()
 	var ctx context.Context
@@ -150,12 +144,10 @@ func TestPrepareByCmd(t *testing.T) {
 }
 
 func TestPrepareByCmdNoTenant(t *testing.T) {
-	option := mctech.GetOption()
-	forbidden := option.ForbiddenPrepare
-	option.ForbiddenPrepare = false
-	defer func() {
-		option.ForbiddenPrepare = forbidden
-	}()
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"ForbiddenPrepare": false}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
 
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
@@ -172,7 +164,7 @@ func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 	return tk
 }
 
-func initDbAndData(t *testing.T, store kv.Storage, option *mctech.Option) (*testkit.TestKit, string) {
+func initDbAndData(t *testing.T, store kv.Storage) (*testkit.TestKit, string) {
 	tk := initMock(t, store)
 
 	var createTableSQL0 = strings.Join([]string{
