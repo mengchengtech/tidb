@@ -6,18 +6,18 @@ import (
 	"net/http"
 )
 
-type GetDoFuncType func(req *http.Request) (*http.Response, error)
+type getDoFuncType func(req *http.Request) (*http.Response, error)
 
-var GetDoFunc GetDoFuncType
+var getDoFunc getDoFuncType
 
-type MockClient struct {
+type mockClient struct {
 }
 
-func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
-	return GetDoFunc(req)
+func (m *mockClient) Do(req *http.Request) (*http.Response, error) {
+	return getDoFunc(req)
 }
 
-func createGetDoFunc(text string) GetDoFuncType {
+func createGetDoFunc(text string) getDoFuncType {
 	return func(req *http.Request) (*http.Response, error) {
 		res := &http.Response{
 			StatusCode: 200,

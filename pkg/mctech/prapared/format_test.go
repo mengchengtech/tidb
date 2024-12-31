@@ -49,7 +49,7 @@ func TestValueConverter(t *testing.T) {
 }
 
 func convertRunTestCase(t *testing.T, c *converterTestCase) error {
-	gc := NewGlobalValueFormatter()
+	gc := newGlobalValueFormatter()
 	out, err := gc.Format(c.name, c.value)
 	if err != nil {
 		return err

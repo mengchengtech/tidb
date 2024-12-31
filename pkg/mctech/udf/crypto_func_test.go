@@ -26,10 +26,10 @@ func TestMCTechCrypto(t *testing.T) {
 }
 
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
-	var rpcClient = mctech.GetRpcClient()
-	mctech.SetRpcClientForTest(&MockClient{})
-	defer mctech.SetRpcClientForTest(rpcClient)
-	GetDoFunc = createGetDoFunc(
+	var rpcClient = mctech.GetRPCClient()
+	mctech.SetRPCClientForTest(&mockClient{})
+	defer mctech.SetRPCClientForTest(rpcClient)
+	getDoFunc = createGetDoFunc(
 		fmt.Sprintf(`{"key":"%s", "iv":"%s"}`, "W1gfHNQTARa7Uxt7wua8Aw==", "a9Z5R6YCjYx1QmoG5WF9BQ=="),
 	)
 
