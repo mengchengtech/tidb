@@ -34,7 +34,7 @@ go_library(
         "//pkg/extension",
         "//pkg/infoschema",
         "//pkg/kv",
-        "//pkg/mctech/prapared",
+        "//pkg/mctech",
         "//pkg/metrics",
         "//pkg/param",
         "//pkg/parser",

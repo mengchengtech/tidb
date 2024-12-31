@@ -4,6 +4,7 @@ go_library(
     name = "mctech",
     srcs = [
         "context.go",
+        "handler.go",
         "http_rpc.go",
         "option.go",
     ],
@@ -11,6 +12,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/config",
+        "//pkg/parser/ast",
         "//pkg/sessionctx",
         "@com_github_pingcap_log//:log",
         "@org_uber_go_zap//:zap",
