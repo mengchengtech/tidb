@@ -4,7 +4,6 @@ go_library(
     name = "udf",
     srcs = [
         "crypto_func.go",
-        "http_rpc.go",
         "sequence_func.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech/udf",
