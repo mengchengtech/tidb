@@ -24,6 +24,30 @@ var (
 	_ builtinFunc = &builtinMCTechEncryptSig{}
 )
 
+var sequenceCache *udf.SequenceCache
+
+func init() {
+	sequenceCache = udf.GetCache()
+
+	// mctech function.
+	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
+	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
+	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
+	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
+
+	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
+	deferredFunctions[ast.MCTechSequence] = struct{}{}
+	deferredFunctions[ast.MCTechVersionJustPass] = struct{}{}
+
+	// 不可折叠函数（一般用在projection中表函数表达式中，整个sql中只按sql字面出现次数调用还是返回结果中每一行都调用一次）
+	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
+	unFoldableFunctions[ast.MCTechVersionJustPass] = struct{}{}
+
+	// mutableEffectsFunctions集合中保存的函数名称sql中不缓存，每次（行）执行的结果可能都不一样
+	mutableEffectsFunctions[ast.MCTechSequence] = struct{}{}
+	mutableEffectsFunctions[ast.MCTechVersionJustPass] = struct{}{}
+}
+
 type mctechSequenceFunctionClass struct {
 	baseFunctionClass
 }
@@ -52,7 +76,7 @@ func (b *builtinMCTechSequenceSig) Clone() builtinFunc {
 }
 
 func (*builtinMCTechSequenceSig) evalInt(_ chunk.Row) (int64, bool, error) {
-	v, err := udf.GetCache().Next()
+	v, err := sequenceCache.Next()
 	if err != nil {
 		return 0, true, err
 	}
@@ -87,7 +111,7 @@ func (b *builtinMCTechVersionJustPassSig) Clone() builtinFunc {
 }
 
 func (*builtinMCTechVersionJustPassSig) evalInt(_ chunk.Row) (int64, bool, error) {
-	v, err := udf.GetCache().VersionJustPass()
+	v, err := sequenceCache.VersionJustPass()
 	if err != nil {
 		return 0, true, err
 	}
@@ -174,15 +198,4 @@ func (b *builtinMCTechEncryptSig) evalString(row chunk.Row) (string, bool, error
 	}
 
 	return cipher, false, nil
-}
-
-func init() {
-	// mctech function.
-	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
-	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
-	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
-	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
-
-	// unFoldableFunctions集合中保存的函数名称sql中不缓存，每次（行）执行的结果都不一样
-	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
 }
