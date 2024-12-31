@@ -28,9 +28,11 @@ go_test(
     embed = [":ddl"],
     flaky = True,
     deps = [
+        "//pkg/mctech/mock",
         "//pkg/parser",
         "//pkg/parser/format",
         "//pkg/parser/test_driver",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",
     ],
 )
