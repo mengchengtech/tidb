@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/pingcap/failpoint"
 )
 
 // RPCClient rpc invoke client
@@ -36,11 +39,10 @@ func GetRPCClient() RPCClient {
 }
 
 // DoRequest invoke rpc api
-func DoRequest(request *http.Request) ([]byte, error) {
-	var err error
+func DoRequest(request *http.Request) (body []byte, err error) {
 	retryCount := 3
 	for retryCount > 0 {
-		body, err := do(request)
+		body, err = do(request)
 		if err == nil {
 			return body, nil
 		}
@@ -51,6 +53,13 @@ func DoRequest(request *http.Request) ([]byte, error) {
 }
 
 func do(request *http.Request) ([]byte, error) {
+	failpoint.Inject("MockMctechHttp", func(val failpoint.Value) {
+		path := request.URL.Path
+		if !strings.HasPrefix(path, "/rpc-test") {
+			failpoint.Return(nil, nil)
+		}
+	})
+
 	response, err := apiClient.Do(request)
 	if err != nil {
 		// 网络问题或者是服务器不定时出的502错误，重试几次

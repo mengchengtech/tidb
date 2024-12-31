@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "mctech",
@@ -15,7 +15,20 @@ go_library(
         "//pkg/config",
         "//pkg/parser/ast",
         "//pkg/sessionctx",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@org_uber_go_zap//:zap",
+    ],
+)
+
+go_test(
+    name = "mctech_test",
+    timeout = "short",
+    srcs = ["http_rpc_test.go"],
+    embed = [":mctech"],
+    flaky = True,
+    deps = [
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_stretchr_testify//require",
     ],
 )
