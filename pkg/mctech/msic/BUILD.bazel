@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "msic",
+    srcs = ["util.go"],
+    importpath = "github.com/pingcap/tidb/pkg/mctech/msic",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/mctech",
+        "//pkg/parser/ast",
+    ],
+)
+
+go_test(
+    name = "msic_test",
+    timeout = "short",
+    srcs = [
+        "main_test.go",
+        "msic_extension_visitor_test.go",
+    ],
+    embed = [":msic"],
+    flaky = True,
+    deps = [
+        "//pkg/mctech",
+        "//pkg/parser",
+        "//pkg/parser/format",
+        "//pkg/parser/test_driver",
+        "@com_github_stretchr_testify//require",
+    ],
+)
