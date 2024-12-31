@@ -32,6 +32,7 @@ go_test(
     name = "config_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "config_test.go",
         "config_util_test.go",
         "main_test.go",
@@ -39,7 +40,7 @@ go_test(
     data = glob(["**"]),
     embed = [":config"],
     flaky = True,
-    shard_count = 24,
+    shard_count = 26,
     deps = [
         "//pkg/testkit/testsetup",
         "//pkg/util/logutil",
