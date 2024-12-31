@@ -90,6 +90,7 @@ type DbChecker struct {
 	Mutex      []string `toml:"mutex" json:"mutex"`           //
 	Exclude    []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
 	Across     []string `toml:"across" json:"across"`         // 额外允许跨库查询的数据库对。每一项为'|'分隔的数据库名
+	Excepts    []string `toml:"excepts" json:"excepts"`       // 排除在跨库约束检查之外的服务或依赖包列表。每一项的格式为: 1. {service}; 2. {service}.{product line}; 3. {package name}
 }
 
 // Tenant append tenant condition used
@@ -179,6 +180,8 @@ var (
 
 	// DefaultDbCheckerMutex default value of config.DbChecker.Mutex
 	DefaultDbCheckerMutex = []string{"asset_*", "global_*"}
+	// DefaultDbCheckerExcepts default value of config.DbChecker.Excepts
+	DefaultDbCheckerExcepts = []string{}
 	// DefaultDbCheckerExclude default value of config.DbChecker.Exclude
 	DefaultDbCheckerExclude = []string{
 		"global_platform",
@@ -302,6 +305,8 @@ func GetMCTechConfig() *MCTech {
 				opts.DbChecker.Compatible = toBool(v)
 			case "DbChecker.Across":
 				opts.DbChecker.Across = toList(v)
+			case "DbChecker.Excepts":
+				opts.DbChecker.Excepts = toList(v)
 			case "Encryption.Mock":
 				opts.Encryption.Mock = toBool(v)
 			case "Tenant.Enabled":
