@@ -100,7 +100,7 @@ func (e *MCTech) RenderResult(ctx context.Context) error {
 }
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
-func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) (error) {
+func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) error {
 	mctx, err := mctech.GetContext(ctx)
 	if err != nil {
 		return err
@@ -184,31 +184,20 @@ func isDefaultValMCSymFunc(expr ast.ExprNode) bool {
 
 // ----------------------------------------------------------------
 
-const tenantParamName = "__mc_tenant_code"
-
-var tenantParamTp *types.FieldType
-
-func init() {
-	tenantParamTp = &types.FieldType{}
-	tenantParamTp.SetType(mysql.TypeVarString)
-	tenantParamTp.SetFlen(types.UnspecifiedLength)
-	tenantParamTp.SetDecimal(types.UnspecifiedLength)
-}
-
-func (e *Execute) getExtensionParams() []types.ParamMarkerOffset {
+func (e *Execute) getExtensionParams() ([]types.ParamMarkerOffset, int) {
 	prepared := e.PrepStmt
 	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
 		return p.(types.ParamMarkerOffset).GetOffset() == mctech.ExtensionParamMarkerOffset
 	})
 
 	if index < 0 {
-		return nil
+		return nil, -1
 	}
 	extParams := make([]types.ParamMarkerOffset, 0, len(prepared.Params)-index)
 	for _, v := range prepared.Params[index:] {
 		extParams = append(extParams, v.(types.ParamMarkerOffset))
 	}
-	return extParams
+	return extParams, index
 }
 
 type extensionArgCreator[T any] func() (T, error)
@@ -230,9 +219,10 @@ func appendExtensionArgs[T any](
 	return extensions, nil
 }
 
+// AppendVarExprs append custom extension parameters
 func (e *Execute) AppendVarExprs(ctx context.Context) error {
 	// 获取扩展参数列表
-	extParams := e.getExtensionParams()
+	extParams, from := e.getExtensionParams()
 	if len(extParams) == 0 {
 		return nil
 	}
@@ -242,34 +232,33 @@ func (e *Execute) AppendVarExprs(ctx context.Context) error {
 		return err
 	}
 
-	var tenantCode string
-	if mctx == nil {
-		return nil
+	var tenantValue expression.Expression
+	if mctx != nil {
+		// 优先从sql语句中提取租户信息
+		if result := mctx.PrepareResult(); result != nil {
+			tenantCode := result.Tenant()
+			tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)
+		}
 	}
 
-	result := mctx.PrepareResult()
-	if result != nil {
-		tenantCode = result.Tenant()
+	if tenantValue == nil {
+		// 其次从参数中提取租户变量
+		if len(e.Params) > from {
+			tenantValue = e.Params[from]
+			// 暂时先移除参数租户参数
+			e.Params = e.Params[:from]
+		}
 	}
 
 	sctx := mctx.Session()
 	sessionVars := sctx.GetSessionVars()
-	if tenantCode == "" {
+	if tenantValue == nil {
 		user := sessionVars.User.Username
 		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
 	}
 
-	// 初始化租户条件参数
-	if tenantCode == "" {
-		sessionVars.UnsetUserVar(tenantParamName)
-	} else {
-		sessionVars.SetStringUserVar(tenantParamName, tenantCode, "")
-	}
-
 	extArgs, err := appendExtensionArgs(extParams, func() (expression.Expression, error) {
-		return expression.BuildGetVarFunction(sctx.GetExprCtx(),
-			expression.DatumToConstant(types.NewDatum(tenantParamName), mysql.TypeString, 0),
-			tenantParamTp)
+		return tenantValue, nil
 	})
 
 	if err == nil {
