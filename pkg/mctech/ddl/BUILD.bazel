@@ -28,7 +28,6 @@ go_test(
     embed = [":ddl"],
     flaky = True,
     deps = [
-        "//pkg/mctech",
         "//pkg/parser",
         "//pkg/parser/format",
         "//pkg/parser/test_driver",
