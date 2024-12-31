@@ -16,6 +16,7 @@ go_library(
         "//pkg/parser/ast",
         "//pkg/sessionctx",
         "//pkg/util/intest",
+        "//pkg/util/logutil",
         "@com_github_pingcap_errors//:errors",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
@@ -28,7 +29,10 @@ go_library(
 go_test(
     name = "mctech_test",
     timeout = "short",
-    srcs = ["http_rpc_test.go"],
+    srcs = [
+        "http_rpc_test.go",
+        "logger_test.go",
+    ],
     embed = [":mctech"],
     flaky = True,
     deps = [
