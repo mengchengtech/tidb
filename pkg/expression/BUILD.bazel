@@ -196,6 +196,7 @@ go_test(
         "//pkg/config",
         "//pkg/errno",
         "//pkg/kv",
+        "//pkg/mctech/mock",
         "//pkg/parser",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
