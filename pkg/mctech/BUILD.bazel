@@ -4,6 +4,7 @@ go_library(
     name = "mctech",
     srcs = [
         "context.go",
+        "filter.go",
         "handler.go",
         "http_rpc.go",
         "option.go",

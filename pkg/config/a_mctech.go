@@ -48,8 +48,9 @@ type DDL struct {
 
 // VersionColumn auto add version column
 type VersionColumn struct {
-	Enabled bool   `toml:"enabled" json:"enabled"`
-	Name    string `toml:"name" json:"name"`
+	Enabled   bool     `toml:"enabled" json:"enabled"`
+	Name      string   `toml:"name" json:"name"`
+	DbMatches []string `toml:"db-matches" json:"db-matches"`
 }
 
 func init() {
