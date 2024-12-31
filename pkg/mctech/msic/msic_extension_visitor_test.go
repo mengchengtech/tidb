@@ -47,6 +47,9 @@ func (t *msicMCTechTestCase) Failure() string {
 var (
 	useCases = []*msicMCTechTestCase{
 		{"use global_platform", "USE `mock_global_platform`", ""},
+		{"use global_dw", "USE `mock_global_dw_1`", ""},
+		{"show tables in global_dw", "SHOW TABLES IN `mock_global_dw_1`", ""},
+		{"analyze table global_dw.table1", "ANALYZE TABLE `mock_global_dw_1`.`table1`", ""},
 	}
 )
 
