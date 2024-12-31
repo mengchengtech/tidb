@@ -137,6 +137,7 @@ go_library(
         "//pkg/kv",
         "//pkg/lightning/log",
         "//pkg/lightning/mydump",
+        "//pkg/mctech",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/metrics",
