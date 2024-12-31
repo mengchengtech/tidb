@@ -12,9 +12,11 @@ go_test(
     deps = [
         "//pkg/kv",
         "//pkg/mctech",
+        "//pkg/mctech/mock",
         "//pkg/mctech/preps",
         "//pkg/parser/auth",
         "//pkg/testkit",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",
     ],
 )
