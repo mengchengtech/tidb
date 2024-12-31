@@ -1,10 +1,10 @@
 package udf
 
 import (
-	"fmt"
 	"testing"
 
-	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,6 +16,10 @@ type encryptionTestCases struct {
 }
 
 func TestMCTechCrypto(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption",
+		mock.M(t, map[string]bool{"EncryptionMock": false}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/GetMctechOption")
 	cases := []*encryptionTestCases{
 		{true, "13511868785", "{crypto}HMvlbGus4V3geqwFULvOUw==", ""},
 		{false, "{crypto}HMvlbGus4V3geqwFULvOUw==", "13511868785", ""},
@@ -26,12 +30,12 @@ func TestMCTechCrypto(t *testing.T) {
 }
 
 func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
-	var rpcClient = mctech.GetRPCClient()
-	mctech.SetRPCClientForTest(&mockClient{})
-	defer mctech.SetRPCClientForTest(rpcClient)
-	getDoFunc = createGetDoFunc(
-		fmt.Sprintf(`{"key":"%s", "iv":"%s"}`, "W1gfHNQTARa7Uxt7wua8Aw==", "a9Z5R6YCjYx1QmoG5WF9BQ=="),
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
+		mock.M(t, map[string]any{
+			"Crypto.AES": map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+		}),
 	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp")
 
 	client := newAesCryptoClientFromService()
 	for _, c := range cases {

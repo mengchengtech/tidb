@@ -1,6 +1,7 @@
 package mctech
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,32 +11,11 @@ import (
 	"github.com/pingcap/failpoint"
 )
 
-// RPCClient rpc invoke client
-type RPCClient interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
-var (
-	apiClient RPCClient
-)
-
-func init() {
-	apiClient = &http.Client{
-		Transport: &http.Transport{
-			IdleConnTimeout: time.Second,
-			// DisableKeepAlives: true,
-		},
-	}
-}
-
-// SetRPCClientForTest for test
-func SetRPCClientForTest(client RPCClient) {
-	apiClient = client
-}
-
-// GetRPCClient get rpc invoke client
-func GetRPCClient() RPCClient {
-	return apiClient
+var apiClient = &http.Client{
+	Transport: &http.Transport{
+		IdleConnTimeout: time.Second,
+		// DisableKeepAlives: true,
+	},
 }
 
 // DoRequest invoke rpc api
@@ -54,7 +34,46 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 
 func do(request *http.Request) ([]byte, error) {
 	failpoint.Inject("MockMctechHttp", func(val failpoint.Value) {
+		values := make(map[string]any)
+		var err error
+		if val != nil {
+			err = json.Unmarshal([]byte(val.(string)), &values)
+			if err != nil {
+				panic(err)
+			}
+		}
 		path := request.URL.Path
+		var (
+			res any
+			ok  bool
+		)
+		switch {
+		case strings.HasSuffix(path, "/db/aes"):
+			res, ok = values["Crypto.AES"]
+		case strings.HasSuffix(path, "/version"):
+			res, ok = values["Sequence.Version"]
+		case strings.HasSuffix(path, "/nexts"):
+			res, ok = values["Sequence.Nexts"]
+		case strings.HasSuffix(path, "/current-db"):
+			res, ok = values["DbIndex.CurrentDB"]
+		case strings.HasPrefix(path, "/db;by-request"):
+			res, ok = values["DbIndex.DBByRequest"]
+		}
+
+		if ok {
+			var data []byte
+			switch x := res.(type) {
+			case string:
+				data = []byte(x)
+			default:
+				data, err = json.Marshal(x)
+				if err != nil {
+					panic(err)
+				}
+			}
+			failpoint.Return(data, nil)
+		}
+
 		if !strings.HasPrefix(path, "/rpc-test") {
 			failpoint.Return(nil, nil)
 		}
