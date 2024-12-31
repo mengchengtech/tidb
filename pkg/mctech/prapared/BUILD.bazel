@@ -15,7 +15,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/mctech",
-        "//pkg/mctech/visitor",
+        "//pkg/mctech/isolation",
         "//pkg/parser/ast",
         "//pkg/sessionctx",
         "@com_github_patrickmn_go_cache//:go-cache",

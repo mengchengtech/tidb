@@ -1,15 +1,16 @@
-package visitor
+package ddl
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	f "github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/parser/types"
-	"golang.org/x/exp/slices"
 )
 
 func compareDefaultValue(expr ast.ExprNode) (match bool) {
@@ -183,4 +184,20 @@ func (v *ddlExtensionVisitor) addVersionColumn(node *ast.CreateTableStmt) error 
 
 	node.Cols = append(node.Cols, v.versionColumn)
 	return nil
+}
+
+func ApplyDDLExtension(node ast.Node) (err error) {
+	option := mctech.GetOption()
+	if !option.DDLVersionColumnEnabled {
+		return
+	}
+
+	v := newDDLExtensionVisitor(option.DDLVersionColumnName)
+	defer func() {
+		if e := recover(); e != nil {
+			err = e.(error)
+		}
+	}()
+	node.Accept(v)
+	return err
 }
