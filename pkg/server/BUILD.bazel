@@ -34,6 +34,7 @@ go_library(
         "//pkg/extension",
         "//pkg/infoschema",
         "//pkg/kv",
+        "//pkg/mctech/tenant",
         "//pkg/metrics",
         "//pkg/param",
         "//pkg/parser",
