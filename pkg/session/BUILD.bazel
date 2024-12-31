@@ -32,6 +32,7 @@ go_library(
         "//pkg/extension/extensionimpl",
         "//pkg/infoschema",
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/meta",
         "//pkg/metrics",
         "//pkg/owner",

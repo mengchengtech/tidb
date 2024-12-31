@@ -394,6 +394,7 @@ go_test(
         "//pkg/expression/aggregation",
         "//pkg/infoschema",
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/metrics",
