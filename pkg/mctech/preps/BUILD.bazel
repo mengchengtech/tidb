@@ -26,6 +26,7 @@ go_library(
         "//pkg/sessionctx/variable",
         "//pkg/util/intest",
         "@com_github_patrickmn_go_cache//:go-cache",
+        "@com_github_pingcap_log//:log",
         "@com_github_pkg_errors//:errors",
     ],
 )

@@ -93,7 +93,7 @@ func doRunMsicMCTechTestCase(t *testing.T, c *msicMCTechTestCase) error {
 }
 
 func newTestMCTechContext() (mctech.Context, error) {
-	result, err := mctech.NewPrepareResult("gslq4dev", map[string]any{
+	result, err := mctech.NewPrepareResult("gslq4dev", true, map[string]any{
 		"dbPrefix": "mock",
 	})
 
