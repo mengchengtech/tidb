@@ -16,31 +16,34 @@ type Filter interface {
 }
 
 // NewStringFilter function
-func NewStringFilter(pattern string) Filter {
-	index := strings.Index(pattern, ":")
-	filter := &stringFilter{}
-	if index > 0 {
-		filter.action = pattern[0:index]
-		filter.pattern = pattern[index+1:]
-	} else {
-		filter.action = ""
-		filter.pattern = pattern
+func NewStringFilter(pattern string) (Filter, bool) {
+	pattern = strings.TrimSpace(pattern)
+	if pattern == "" || pattern == "*" {
+		return nil, false
 	}
 
-	if filter.action == "regex" {
-		filter.pattern = "(?i)" + filter.pattern
+	count := strings.Count(pattern, "*")
+	var filter Filter
+	if count == 0 {
+		filter = &stringFilter{action: filterContains, pattern: pattern}
+	} else if count == 1 {
+		if strings.HasPrefix(pattern, "*") {
+			filter = &stringFilter{action: filterEndsWith, pattern: pattern[1:]}
+		} else if strings.HasSuffix(pattern, "*") {
+			filter = &stringFilter{action: filterStartsWith, pattern: pattern[:len(pattern)-1]}
+		}
 	}
-	return filter
-}
 
-// PrefixFilterPattern function
-func PrefixFilterPattern(text string) string {
-	return filterStartsWith + ":" + text
-}
-
-// SuffixFilterPattern function
-func SuffixFilterPattern(text string) string {
-	return filterEndsWith + ":" + text
+	if filter == nil {
+		tokens := strings.Split(pattern, "*")
+		var newTokens []string
+		for _, tk := range tokens {
+			newTokens = append(newTokens, regexp.QuoteMeta(tk))
+		}
+		pattern = strings.Join(newTokens, ".*")
+		filter = &stringFilter{action: filterRegex, pattern: "(?i)" + pattern}
+	}
+	return filter, true
 }
 
 const (
