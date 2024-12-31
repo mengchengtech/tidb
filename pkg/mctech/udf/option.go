@@ -9,41 +9,45 @@ import (
 	"go.uber.org/zap"
 )
 
-func getBackendCount() int64 {
+type mctechOption struct {
+}
+
+func (o *mctechOption) getMock() bool {
+	mock := config.GetGlobalConfig().MCTech.Sequence.Mock
+	log.Info("mock sequence service ?", zap.Bool("mock", mock))
+	return mock
+}
+
+func (o *mctechOption) getMaxFetchCount() int64 {
+	maxFetchCount := config.GetGlobalConfig().MCTech.Sequence.MaxFetchCount
+	return maxFetchCount
+}
+
+func (o *mctechOption) getBackendCount() int64 {
 	backend := config.GetGlobalConfig().MCTech.Sequence.Backend
 	log.Info("Get backend sequence goroutines.",
 		zap.Int64("backend", backend))
 	return backend
 }
 
-func getSequenceServiceUrlPrefix() string {
+func (o *mctechOption) getSequenceServiceUrlPrefix() string {
 	// 先从配置中获取
 	apiPrefix := config.GetGlobalConfig().MCTech.Sequence.ApiPrefix
-	if apiPrefix == "" {
-		apiPrefix = "http://node-infra-sequence-service.mc/"
-	}
-
 	apiPrefix = formatUrl(apiPrefix)
 	log.Info("Get sequence service api prefix.",
 		zap.String("apiPrefix", apiPrefix))
 	return apiPrefix
 }
 
-func getAesAccessId() string {
+func (o *mctechOption) getAesAccessId() string {
 	// 先从配置中获取
 	accessId := config.GetGlobalConfig().MCTech.Encryption.AccessId
-	if accessId == "" {
-		accessId = "oJEKJh1wvqncJYASxp1Iiw"
-	}
 	return accessId
 }
 
-func getEncryptionServiceUrlPrefix() string {
+func (o *mctechOption) getEncryptionServiceUrlPrefix() string {
 	// 先从配置中获取
 	apiPrefix := config.GetGlobalConfig().MCTech.Encryption.ApiPrefix
-	if apiPrefix == "" {
-		apiPrefix = "http://node-infra-encryption-service.mc/"
-	}
 	apiPrefix = formatUrl(apiPrefix)
 	log.Info("Get crypto service api prefix.",
 		zap.String("apiPrefix", apiPrefix))
@@ -65,3 +69,5 @@ func formatUrl(str string) string {
 	apiPrefix := u.String()
 	return apiPrefix
 }
+
+var option = new(mctechOption)
