@@ -30,6 +30,7 @@ go_test(
     flaky = True,
     deps = [
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/parser/auth",
         "//pkg/parser/test_driver",
         "//pkg/session",
