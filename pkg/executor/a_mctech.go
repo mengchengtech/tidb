@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor/internal/exec"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -89,8 +90,8 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 }
 
 func (e *PrepareExec) beforePrepare(ctx context.Context) error {
-	option := mctech.GetOption()
-	if option.ForbiddenPrepare {
+	option := config.GetOption()
+	if option.TenantForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
 	return nil

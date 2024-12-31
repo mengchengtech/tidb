@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/pingcap/tidb/pkg/mctech/udf",
     visibility = ["//visibility:public"],
     deps = [
+        "//pkg/config",
         "//pkg/mctech",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",

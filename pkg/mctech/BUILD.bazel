@@ -9,7 +9,6 @@ go_library(
         "handler.go",
         "http_rpc.go",
         "logger.go",
-        "option.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech",
     visibility = ["//visibility:public"],

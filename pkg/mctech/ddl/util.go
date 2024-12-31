@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
@@ -76,7 +77,7 @@ func getDDLExtension() *_ddlExtension {
 	}
 
 	ddlResolverInitOne.Do(func() {
-		option := mctech.GetOption()
+		option := config.GetOption()
 		e := &_ddlExtension{
 			versionEnabled: option.DDLVersionColumnEnabled,
 		}
