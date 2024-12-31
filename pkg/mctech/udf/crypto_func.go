@@ -17,20 +17,20 @@ import (
 	"go.uber.org/zap"
 )
 
-const CRYPTO_PFEFIX = "{crypto}"
+const cryptoPrefix = "{crypto}"
 
-var cryptoPfrefixLength = len(CRYPTO_PFEFIX)
+var cryptoPfrefixLength = len(cryptoPrefix)
 
-type AesCryptoClient struct {
+type aesCryptoClient struct {
 	mock bool
 	key  []byte
 	iv   []byte
 }
 
-func newAesCryptoClientFromService() *AesCryptoClient {
-	c := new(AesCryptoClient)
+func newAesCryptoClientFromService() *aesCryptoClient {
+	c := new(aesCryptoClient)
 	option := mctech.GetOption()
-	c.mock = option.Encryption_Mock
+	c.mock = option.EncryptionMock
 
 	key, iv, err := loadCryptoParams(option)
 	if err == nil {
@@ -63,14 +63,8 @@ func newAesCryptoClientFromService() *AesCryptoClient {
 	return c
 }
 
-func NewAesCryptoClient(key string, iv string) *AesCryptoClient {
-	c := new(AesCryptoClient)
-	c.key, _ = base64.StdEncoding.DecodeString(key)
-	c.iv, _ = base64.StdEncoding.DecodeString(iv)
-	return c
-}
-
-func (c *AesCryptoClient) Encrypt(plainText string) (string, error) {
+// Encrypt encrypt plain text
+func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
 	if c.mock {
 		// 用于调试场景
 		return plainText, nil
@@ -91,17 +85,18 @@ func (c *AesCryptoClient) Encrypt(plainText string) (string, error) {
 	//加密处理
 	crypted := make([]byte, len(origData)) //存放加密后的密文
 	blockMode.CryptBlocks(crypted, origData)
-	cypher = CRYPTO_PFEFIX + base64.StdEncoding.EncodeToString(crypted)
+	cypher = cryptoPrefix + base64.StdEncoding.EncodeToString(crypted)
 	return cypher, nil
 }
 
-func (c *AesCryptoClient) Decrypt(content string) (string, error) {
+// Decrypt decrypt cipher text
+func (c *aesCryptoClient) Decrypt(content string) (string, error) {
 	if c.mock {
 		// 用于调试场景
 		return content, nil
 	}
 
-	if !strings.HasPrefix(content, CRYPTO_PFEFIX) {
+	if !strings.HasPrefix(content, cryptoPrefix) {
 		return content, nil
 	}
 
@@ -127,17 +122,17 @@ func (c *AesCryptoClient) Decrypt(content string) (string, error) {
 	return raw, nil
 }
 
-func loadCryptoParams(option *mctech.MCTechOption) (key []byte, iv []byte, err error) {
+func loadCryptoParams(option *mctech.Option) (key []byte, iv []byte, err error) {
 	// 从配置中获取
-	apiPrefix := option.Encryption_ApiPrefix
-	serviceUrl := apiPrefix + "db/aes"
-	get, err := http.NewRequest("GET", serviceUrl, nil)
+	apiPrefix := option.EncryptionAPIPrefix
+	serviceURL := apiPrefix + "db/aes"
+	get, err := http.NewRequest("GET", serviceURL, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	get.Header = map[string][]string{
-		"x-access-id": {option.Encryption_AccessId},
+		"x-access-id": {option.EncryptionAccessID},
 	}
 
 	body, err := mctech.DoRequest(get)
@@ -177,10 +172,11 @@ func pkcs7Unpadding(data []byte) []byte {
 	return data[:length-unpadding]
 }
 
-var client *AesCryptoClient
+var client *aesCryptoClient
 var cryptoInitOnce sync.Once
 
-func GetClient() *AesCryptoClient {
+// GetClient get crypto client
+func GetClient() *aesCryptoClient {
 	cryptoInitOnce.Do(func() {
 		client = newAesCryptoClientFromService()
 		log.Debug("init crypto client")

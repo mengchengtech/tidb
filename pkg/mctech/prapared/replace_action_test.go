@@ -42,14 +42,14 @@ func testReplaceCase(t *testing.T, c *replaceTestCase) error {
 	if strings.Contains(c.format, "%") {
 		args = fmt.Sprintf(c.format, c.tenant)
 	}
-	action := &ReplaceAction{}
-	outSql, err := action.Resolve(sql, args, c.params)
+	action := &replaceAction{}
+	outSQL, err := action.Resolve(sql, args, c.params)
 
 	if err != nil {
 		return err
 	}
 
-	require.NotContains(t, outSql, "{{tenant}}")
-	require.Contains(t, outSql, fmt.Sprintf("%s_", c.tenant), c.Source())
+	require.NotContains(t, outSQL, "{{tenant}}")
+	require.Contains(t, outSQL, fmt.Sprintf("%s_", c.tenant), c.Source())
 	return nil
 }
