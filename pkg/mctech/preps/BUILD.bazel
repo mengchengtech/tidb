@@ -16,6 +16,7 @@ go_library(
     importpath = "github.com/pingcap/tidb/pkg/mctech/preps",
     visibility = ["//visibility:public"],
     deps = [
+        "//pkg/config",
         "//pkg/mctech",
         "//pkg/mctech/ddl",
         "//pkg/mctech/isolation",

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"time"
 
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/mctech"
 	_ "github.com/pingcap/tidb/pkg/mctech/preps"
@@ -89,7 +90,7 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 		return err
 	}
 
-	if opts := mctech.GetOption(); !opts.QueryLogEnabled {
+	if opts := config.GetOption(); !opts.MetricsQueryLogEnabled {
 		for _, stmt := range stmts {
 			dbs := mctx.GetDbs(stmt)
 			if dbs != nil {
@@ -122,8 +123,8 @@ func (cc *clientConn) afterParseSql(ctx context.Context, mctx mctech.Context, sq
 			}
 
 			origSql := stmt.OriginalText()
-			if len(origSql) > opts.QueryLogMaxLength {
-				origSql = origSql[0:opts.QueryLogMaxLength]
+			if len(origSql) > opts.MetricsQueryLogMaxLength {
+				origSql = origSql[0:opts.MetricsQueryLogMaxLength]
 			}
 			db, user, client := sessionctx.ResolveSession(cc.getCtx())
 			logutil.Logger(ctx).Warn("MCTECH SQL handleQuery",
@@ -148,7 +149,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 		panic(err)
 	}
 
-	opts := mctech.GetOption()
+	opts := config.GetOption()
 	var dbs []string
 	if mctx != nil {
 		dbs = mctx.GetDbs(stmt)
@@ -179,7 +180,7 @@ func (cc *clientConn) afterHandleStmt(ctx context.Context, stmt ast.StmtNode, er
 
 // 记录超长sql
 func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest *parser.Digest) {
-	opts := mctech.GetOption()
+	opts := config.GetOption()
 	sessVars := cc.ctx.GetSessionVars()
 	stmtCtx := sessVars.StmtCtx
 	sqlType := "other"
@@ -194,10 +195,10 @@ func (cc *clientConn) logLargeSql(ctx context.Context, stmt ast.StmtNode, digest
 		sqlType = "update"
 	}
 
-	if slices.Contains(opts.LargeQueryTypes, sqlType) {
+	if slices.Contains(opts.MetricsLargeQueryTypes, sqlType) {
 		origSql := stmt.OriginalText()
 		sqlLength := len(origSql)
-		if sqlLength > opts.LargeQueryThreshold {
+		if sqlLength > opts.MetricsLargeQueryThreshold {
 			if digest == nil {
 				_, digest = stmtCtx.SQLDigest() //
 			}
@@ -299,7 +300,7 @@ func (cc *clientConn) traceFullSql(ctx context.Context, stmt ast.StmtNode, diges
 		_, digest = stmtCtx.SQLDigest() //
 	}
 
-	if len(origSql) > mctech.GetOption().SqlTraceCompressThreshold {
+	if len(origSql) > config.GetOption().SqlTraceCompressThreshold {
 		var b bytes.Buffer
 		gz := gzip.NewWriter(&b)
 		if _, err := gz.Write([]byte(origSql)); err == nil {
