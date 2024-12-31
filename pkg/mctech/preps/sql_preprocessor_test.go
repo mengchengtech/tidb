@@ -57,7 +57,7 @@ func TestProcessorWithRoot(t *testing.T) {
 func TestPreprocessorWithGlobalAndTenentOnlyUser(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, map[string]any{"global": "true"}, nil, "", "当前数据库用户不允许启用 global hint"},
+		{"select * from company", nil, map[string]any{"global": "true"}, nil, "", "当前数据库用户包含租户隔离角色，不允许启用 global hint"},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "tenant_only")

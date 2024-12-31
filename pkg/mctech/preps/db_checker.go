@@ -1,6 +1,7 @@
 package preps
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -12,33 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type dbGroup interface {
-	groupSet() // 无实际意义的接口方法，仅仅为了表示实现了DbGroup接口
-	String() string
-}
-
-type multiDbGroup struct {
-	dbNames []string
-}
-
-func (g *multiDbGroup) groupSet() {
-}
-
-func (g *multiDbGroup) String() string {
-	return "{" + strings.Join(g.dbNames, ",") + "}"
-}
-
-type singleDbGroup struct {
-	dbName string
-}
-
-func (g *singleDbGroup) groupSet() {
-}
-
-func (g *singleDbGroup) String() string {
-	return g.dbName
-}
-
 type databaseGrouper struct {
 	groups []string
 }
@@ -49,47 +23,34 @@ func newDatabaseGrouper(groups []string) *databaseGrouper {
 	}
 }
 
-func (g *databaseGrouper) GroupBy(dbNames []string) []dbGroup {
-	// 合并前数据库只有一个
-	results := make([]dbGroup, 0, 10)
-	used := map[string]bool{}
+// MatchGroup 检查给定的数据库名称是否完全包含于某个分组中
+// dbNames: 要分组的数据库称表
+// specialGroups: 除了初始默认的分组条件外，额外传入的只对本次生效的分组条件
+func (g *databaseGrouper) MatchGroup(dbNames []string, specialGroup string) bool {
+	gps := g.groups
+	if len(specialGroup) > 0 {
+		gps = append([]string{}, gps...)
+		gps = append(gps, specialGroup)
+	}
 
 	// 先处理在分组中的数据库
-	for _, gp := range g.groups {
-		var lst []string
+	for _, gp := range gps {
+		match := true
 		for _, dbName := range dbNames {
-			if strings.Contains(gp, dbName) {
-				// 包含在当前分组中
-				if lst == nil {
-					lst = make([]string, 0, 10)
-				}
-				used[dbName] = true
-				lst = append(lst, dbName)
+			if !strings.Contains(gp, dbName) {
+				// 不包含在当前规则中
+				match = false
+				break
 			}
 		}
 
-		if lst != nil {
-			if len(lst) > 1 {
-				slices.SortFunc(lst, func(a, b string) int {
-					return strings.Compare(strings.ToLower(a), strings.ToLower(b))
-				})
-				results = append(results, &multiDbGroup{dbNames: lst})
-			} else {
-				results = append(results, &singleDbGroup{dbName: lst[0]})
-			}
+		if match {
+			// 当前规则不能全包含所有用到的数据库
+			return true
 		}
 	}
 
-	for _, dbName := range dbNames {
-		// 排除前面在分组数据库中已处理的
-		if _, ok := used[dbName]; ok {
-			continue
-		}
-
-		results = append(results, &singleDbGroup{dbName: dbName})
-	}
-
-	return results
+	return false
 }
 
 // StmtTextAware stmt aware
@@ -171,9 +132,25 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 			logicNames = append(logicNames, logicName)
 		}
 	}
-	groupDbs := c.acrossGrouper.GroupBy(logicNames)
-	// 合并后数据库只有一个
-	if len(groupDbs) <= 1 {
+
+	var specialGroup string
+	if result := mctx.PrepareResult(); result != nil {
+		params := result.Params()
+		if v, ok := params[mctech.ParamAcross]; ok {
+			var across string
+			if across, ok = v.(string); !ok {
+				return errors.New("'across'参数类型必须是字符串")
+			}
+			specialGroup = across
+		}
+	}
+	if len(logicNames) <= 1 {
+		// 数据库只有一个
+		return nil
+	}
+
+	if match := c.acrossGrouper.MatchGroup(logicNames, specialGroup); match {
+		// 数据库全部属于一个分组
 		return nil
 	}
 
@@ -184,10 +161,10 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 		if length > maxQueryLen {
 			sql = fmt.Sprintf("%.*q(len:%d)", maxQueryLen, sql, length)
 		}
-		log.Warn(fmt.Sprintf("dbs not allow in the same statement. %s", groupDbs), zap.String("SQL", sql))
+		log.Warn(fmt.Sprintf("dbs not allow in the same statement. %s", logicNames), zap.String("SQL", sql))
 		return nil
 	}
-	return fmt.Errorf("dbs not allow in the same statement.  %s", groupDbs)
+	return fmt.Errorf("dbs not allow in the same statement.  %s", logicNames)
 }
 
 func (c *mutexDatabaseChecker) dbPredicate(dbName string) bool {
