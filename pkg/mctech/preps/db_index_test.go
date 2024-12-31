@@ -27,8 +27,8 @@ func TestDbSelectorGetDbIndex(t *testing.T) {
 	cases := []*testContextCase{
 		{"gslq", `{"current": ""}`, 1, map[string]any{"background": true}, "cannot unmarshal"},
 		{"gslq", `{"db": ""}`, 1, map[string]any{"requestId": "12345678"}, "cannot unmarshal"},
-		{"gslq", `{"current": 2}`, 2, nil, ""},
-		{"gslq", `{"current": 2}`, 2, nil, ""}, // 测试缓存中获取
+		{"gslq", `{"current": 2}`, 2, map[string]any{}, ""},
+		{"gslq", `{"current": 2}`, 2, map[string]any{}, ""}, // 测试缓存中获取
 		{"gslq", `{"current": 2}`, 1, map[string]any{"background": true}, ""},
 		{"gslq", `{"db": 1}`, 1, map[string]any{"requestId": "12345678"}, ""},
 		{"gslq", `{"db": 1}`, 1, map[string]any{"requestId": "12345678"}, ""}, // 测试重复执行缓存
@@ -43,7 +43,7 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	defer mctech.SetRPCClientForTest(rpcClient)
 	getDoFunc = createGetDoFunc(c.response)
 
-	result, err := mctech.NewPrepareResult("gslq", c.params)
+	result, err := mctech.NewPrepareResult(c.tenant, c.params)
 	if err != nil {
 		return err
 	}

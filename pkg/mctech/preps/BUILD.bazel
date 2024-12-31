@@ -48,7 +48,6 @@ go_test(
         "//pkg/mctech",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
-        "//pkg/parser/test_driver",
         "//pkg/session",
         "//pkg/testkit",
         "@com_github_stretchr_testify//require",

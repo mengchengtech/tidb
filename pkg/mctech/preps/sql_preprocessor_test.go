@@ -29,25 +29,25 @@ func TestProcessorWithRoot(t *testing.T) {
 	// TODO: 完成单元测试
 	cases := []*preprocessorTestCase{
 		// global
-		{"select * from company", nil, map[string]any{"global": "true"}, map[string]any{"global": map[string]any{"set": true}}, "", ""},
-		{"select * from company", nil, map[string]any{"global": "!ys2"}, map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2"}}}, "", ""},
-		{"select * from company", nil, map[string]any{"global": "!ys2,!ys3"}, map[string]any{"global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "true"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "!ys2"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2"}}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "!ys2,!ys3"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}}, "", ""},
 		// tenant hint
-		{"select * from company", nil, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}}, "", ""},
+		{"select * from company", nil, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}}, "", ""},
 		{"select * from company", nil, map[string]any{"tenant": "gdcd", "global": "true"}, nil, "", "存在tenant信息时，global不允许设置为true"},
 
 		// request_id
-		{"select * from company", nil, map[string]any{"tenant": "gdcd", "requestId": "abc123456"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "requestId": "abc123456"}}, "", ""},
+		{"select * from company", nil, map[string]any{"tenant": "gdcd", "requestId": "abc123456"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "requestId": "abc123456", "mpp": "allow"}}, "", ""},
 		// background
-		{"select * from company", nil, map[string]any{"tenant": "ztsj", "background": "true"}, map[string]any{"tenant": "ztsj", "params": map[string]any{"background": "true", "tenant": "ztsj"}}, "", ""},
+		{"select * from company", nil, map[string]any{"tenant": "ztsj", "background": "true"}, map[string]any{"tenant": "ztsj", "params": map[string]any{"background": "true", "tenant": "ztsj", "mpp": "allow"}}, "", ""},
 		// dbPrefix
-		{"select * from company", nil, map[string]any{"dbPrefix": "mock"}, map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock"}}, "", ""},
+		{"select * from company", nil, map[string]any{"dbPrefix": "mock"}, map[string]any{"prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}}, "", ""},
 		// action
 		// $replace
-		{"select * from custom.company", []*actionInfo{{"nop", ""}}, nil, nil, "", "不支持的action操作"},
-		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant=gslq"}}, nil, map[string]any{}, "select * from gslq_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd"}}, "select * from gdcd_custom.company", ""},
-		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, nil, nil, "", "执行[replace]时未找到名称为'tenant'的参数的值"},
+		{"select * from custom.company", []*actionInfo{{"nop", ""}}, map[string]any{}, nil, "", "不支持的action操作"},
+		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant=gslq"}}, map[string]any{}, map[string]any{"params": map[string]any{"mpp": "allow"}}, "select * from gslq_custom.company", ""},
+		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, map[string]any{"tenant": "gdcd"}, map[string]any{"tenant": "gdcd", "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}}, "select * from gdcd_custom.company", ""},
+		{"select * from {{tenant}}_custom.company", []*actionInfo{{"replace", "tenant"}}, map[string]any{}, nil, "", "执行[replace]时未找到名称为'tenant'的参数的值"},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "root")
@@ -64,7 +64,7 @@ func TestPreprocessorWithGlobalAndTenentOnlyUser(t *testing.T) {
 
 func TestPreprocessorWithoutGlobalAndTenentOnlyUser(t *testing.T) {
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, map[string]any{"global": "false"}, map[string]any{}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "false"}, map[string]any{"params": map[string]any{"mpp": "allow"}}, "", ""},
 	}
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "tenant_only")
 }
@@ -72,7 +72,7 @@ func TestPreprocessorWithoutGlobalAndTenentOnlyUser(t *testing.T) {
 func TestPreprocessorWithGlobalAndNotTenentOnlyUser(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, map[string]any{"global": "true"}, map[string]any{"global": map[string]any{"set": true}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "true"}, map[string]any{"params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}}, "", ""},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "tenant_only1")
@@ -90,7 +90,7 @@ func TestPreprocessorTenentCodeConflict(t *testing.T) {
 func TestPreprocessorTenentCodeFromRole(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, map[string]any{}, map[string]any{"tenant": "gslq", "tenantFromRole": true}, "", ""},
+		{"select * from company", nil, map[string]any{}, map[string]any{"tenant": "gslq", "tenantFromRole": true, "params": map[string]any{"mpp": "allow"}}, "", ""},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "code_gslq")
@@ -99,7 +99,7 @@ func TestPreprocessorTenentCodeFromRole(t *testing.T) {
 func TestPreprocessorWithTenentUser(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, nil, map[string]any{"tenant": "gslq", "tenantFromRole": true}, "", ""},
+		{"select * from company", nil, map[string]any{}, map[string]any{"tenant": "gslq", "tenantFromRole": true, "params": map[string]any{"mpp": "allow"}}, "", ""},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases, "mock_write", "code_gslq")
@@ -108,7 +108,7 @@ func TestPreprocessorWithTenentUser(t *testing.T) {
 func TestPreprocessorMultiRoleFailure(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, nil, nil, "", "用户mock_write所属的角色存在多个租户的信息"},
+		{"select * from company", nil, map[string]any{}, nil, "", "用户mock_write所属的角色存在多个租户的信息"},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase,
@@ -118,7 +118,7 @@ func TestPreprocessorMultiRoleFailure(t *testing.T) {
 func TestPreprocessorMultiRoleSuccess(t *testing.T) {
 	// {{{dbPrefix,tenant,tenantFromRole,[params],{global,excludes}}},currentDb}
 	cases := []*preprocessorTestCase{
-		{"select * from company", nil, nil, map[string]any{"tenant": "gslq", "tenantFromRole": true}, "", ""},
+		{"select * from company", nil, map[string]any{}, map[string]any{"tenant": "gslq", "tenantFromRole": true, "params": map[string]any{"mpp": "allow"}}, "", ""},
 	}
 
 	doRunWithSessionTest(t, preprocessorRunTestCase, cases,
