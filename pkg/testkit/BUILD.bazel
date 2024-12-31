@@ -19,6 +19,7 @@ go_library(
         "//pkg/domain/infosync",
         "//pkg/expression",
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
         "//pkg/parser/terror",
