@@ -15,6 +15,7 @@ go_library(
         "//pkg/config",
         "//pkg/parser/ast",
         "//pkg/sessionctx",
+        "//pkg/util/intest",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@org_uber_go_zap//:zap",
