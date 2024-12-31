@@ -1821,6 +1821,9 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 				break
 			}
 		}
+		// add by zhangbing
+		cc.afterHandleStmt(ctx, stmt, sql, err)
+		// add end
 	}
 
 	if lastStmt != nil {
