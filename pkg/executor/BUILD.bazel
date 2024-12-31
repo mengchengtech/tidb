@@ -136,6 +136,7 @@ go_library(
         "//pkg/infoschema",
         "//pkg/keyspace",
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/metrics",
