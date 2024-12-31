@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "restore",
     srcs = [
+        "a_mctech.go",
         "batcher.go",
         "client.go",
         "data.go",
