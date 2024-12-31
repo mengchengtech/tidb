@@ -45,28 +45,31 @@ func (h *MctechHandler) PrapareSql() (sql string, err error) {
 	return sql, nil
 }
 
-func (h *MctechHandler) ResolveAndValidate(stmts []ast.StmtNode) error {
+func (h *MctechHandler) ResolveAndValidate(stmts []ast.StmtNode) (changed bool, err error) {
 	option := mctech.GetOption()
 	charset, collation := h.session.GetSessionVars().GetCharsetInfo()
 	for _, stmt := range stmts {
-		h.resolver.Context().Reset()
 		var (
 			dbs     []string
-			skipped bool
-			err     error
+			skipped = true
 		)
 
 		if option.Tenant_Enabled {
+			h.resolver.Context().Reset()
 			// 启用租户隔离，改写SQL，添加租户隔离信息
 			if dbs, skipped, err = h.resolver.ResolveStmt(stmt, charset, collation); err != nil {
-				return err
+				return false, err
 			}
 		}
 
-		if option.DbChecker_Enabled {
+		if !skipped {
+			changed = true
+		}
+
+		if option.DbChecker_Enabled && len(dbs) > 0 {
 			// 启用数据库联合查询规则检查
 			if err = h.resolver.CheckDB(dbs); err != nil {
-				return err
+				return changed, err
 			}
 		}
 
@@ -78,9 +81,9 @@ func (h *MctechHandler) ResolveAndValidate(stmts []ast.StmtNode) error {
 			// 启用租户隔离，改写SQL，检查租户隔离信息
 			err = h.resolver.Validate(h.session)
 			if err != nil {
-				return err
+				return changed, err
 			}
 		}
 	}
-	return nil
+	return changed, nil
 }

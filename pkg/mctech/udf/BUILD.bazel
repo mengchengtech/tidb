@@ -19,9 +19,15 @@ go_library(
 go_test(
     name = "udf_test",
     timeout = "short",
-    srcs = ["crypto_func_test.go"],
+    srcs = [
+        "crypto_func_test.go",
+        "main_test.go",
+        "sequence_func_test.go",
+    ],
     embed = [":udf"],
     flaky = True,
-    shard_count = 4,
-    deps = ["@com_github_stretchr_testify//require"],
+    deps = [
+        "//pkg/mctech",
+        "@com_github_stretchr_testify//require",
+    ],
 )
