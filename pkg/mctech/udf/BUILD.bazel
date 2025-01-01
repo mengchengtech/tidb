@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//pkg/mctech",
         "@com_github_pingcap_log//:log",
+        "@com_github_pkg_errors//:errors",
         "@org_golang_x_sync//semaphore",
         "@org_uber_go_zap//:zap",
     ],
@@ -26,7 +27,7 @@ go_test(
     ],
     embed = [":udf"],
     flaky = True,
-    shard_count = 3,
+    shard_count = 5,
     deps = [
         "//pkg/mctech",
         "@com_github_stretchr_testify//require",
