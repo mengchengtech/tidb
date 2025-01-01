@@ -43,7 +43,7 @@ func (r *_miscExtension) changeToPhysicalDb(
 var miscResolver *_miscExtension
 var miscResolverInitOne sync.Once
 
-func getMiscExtension() *_miscExtension {
+func getMsicExtension() *_miscExtension {
 	if miscResolver != nil {
 		return miscResolver
 	}
@@ -57,6 +57,6 @@ func getMiscExtension() *_miscExtension {
 
 // ApplyExtension apply misc
 func ApplyExtension(mctx mctech.Context, node ast.Node) (matched bool, err error) {
-	ext := getMiscExtension()
+	ext := getMsicExtension()
 	return ext.Apply(mctx, node)
 }
