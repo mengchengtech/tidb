@@ -218,6 +218,7 @@ go_test(
         "//pkg/expression/exprctx",
         "//pkg/expression/exprstatic",
         "//pkg/kv",
+        "//pkg/mctech/mock",
         "//pkg/meta/model",
         "//pkg/parser",
         "//pkg/parser/ast",
