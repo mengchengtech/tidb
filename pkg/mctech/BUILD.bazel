@@ -3,13 +3,17 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "mctech",
     srcs = [
+        "context.go",
         "http_rpc.go",
         "option.go",
+        "resolver.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/config",
+        "//pkg/parser/ast",
+        "//pkg/sessionctx",
         "@com_github_pingcap_log//:log",
         "@org_uber_go_zap//:zap",
     ],
