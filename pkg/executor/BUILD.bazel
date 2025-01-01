@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "executor",
     srcs = [
+        "a_mctech.go",
         "adapter.go",
         "admin.go",
         "admin_plugins.go",
