@@ -8,14 +8,23 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/kvproto/pkg/coprocessor"
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/expression"
+	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/tablecodec"
 	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/chunk"
+	"github.com/pingcap/tidb/pkg/util/codec"
+	"github.com/pingcap/tidb/pkg/util/rowcodec"
 )
 
 func (b *PlanBuilder) buildMCTech(ctx context.Context, stmt *ast.MCTechStmt) (Plan, error) {
@@ -264,4 +273,124 @@ func (e *Execute) AppendVarExprs(ctx context.Context) error {
 		e.Params = append(e.Params, extArgs...)
 	}
 	return err
+}
+
+// --------------------------------- MCTechLargeQuery --------------------------------------
+
+// MCTechLargeQueryExtractor is used to extract some predicates of `large_sql_query`
+type MCTechLargeQueryExtractor struct {
+	extractHelper
+
+	SkipRequest bool
+	TimeRanges  []*TimeRange
+	// Enable is true means the executor should use the time range to locate the large-query-log file that need to be parsed.
+	// Enable is false, means the executor should keep the behavior compatible with before, which is only parse the
+	// current large-query-log file.
+	Enable bool
+	Desc   bool
+}
+
+// Extract implements the MemTablePredicateExtractor Extract interface
+func (e *MCTechLargeQueryExtractor) Extract(
+	ctx sessionctx.Context,
+	schema *expression.Schema,
+	names []*types.FieldName,
+	predicates []expression.Expression,
+) []expression.Expression {
+	remained, startTime, endTime := e.extractTimeRange(ctx, schema, names, predicates, "time", ctx.GetSessionVars().StmtCtx.TimeZone())
+	e.setTimeRange(startTime, endTime)
+	e.SkipRequest = e.Enable && e.TimeRanges[0].StartTime.After(e.TimeRanges[0].EndTime)
+	if e.SkipRequest {
+		return nil
+	}
+	return remained
+}
+
+func (e *MCTechLargeQueryExtractor) explainInfo(p *PhysicalMemTable) string {
+	if e.SkipRequest {
+		return "skip_request: true"
+	}
+	if !e.Enable {
+		return fmt.Sprintf("only search in the current '%v' file", config.GetMCTechConfig().Metrics.LargeQuery.Filename)
+	}
+	startTime := e.TimeRanges[0].StartTime.In(p.SCtx().GetSessionVars().StmtCtx.TimeZone())
+	endTime := e.TimeRanges[0].EndTime.In(p.SCtx().GetSessionVars().StmtCtx.TimeZone())
+	return fmt.Sprintf("start_time:%v, end_time:%v",
+		types.NewTime(types.FromGoTime(startTime), mysql.TypeDatetime, types.MaxFsp).String(),
+		types.NewTime(types.FromGoTime(endTime), mysql.TypeDatetime, types.MaxFsp).String())
+}
+
+func (e *MCTechLargeQueryExtractor) setTimeRange(start, end int64) {
+	const defaultLargeQueryDuration = 24 * time.Hour
+	var startTime, endTime time.Time
+	if start == 0 && end == 0 {
+		return
+	}
+	if start != 0 {
+		startTime = e.convertToTime(start)
+	}
+	if end != 0 {
+		endTime = e.convertToTime(end)
+	}
+	if start == 0 {
+		startTime = endTime.Add(-defaultLargeQueryDuration)
+	}
+	if end == 0 {
+		endTime = startTime.Add(defaultLargeQueryDuration)
+	}
+	timeRange := &TimeRange{
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+	e.TimeRanges = append(e.TimeRanges, timeRange)
+	e.Enable = true
+}
+
+func (e *MCTechLargeQueryExtractor) buildTimeRangeFromKeyRange(keyRanges []*coprocessor.KeyRange) error {
+	for _, kr := range keyRanges {
+		startTime, err := e.decodeBytesToTime(kr.Start)
+		if err != nil {
+			return err
+		}
+		endTime, err := e.decodeBytesToTime(kr.End)
+		if err != nil {
+			return err
+		}
+		e.setTimeRange(startTime, endTime)
+	}
+	return nil
+}
+
+func (e *MCTechLargeQueryExtractor) decodeBytesToTime(bs []byte) (int64, error) {
+	if len(bs) >= tablecodec.RecordRowKeyLen {
+		t, err := tablecodec.DecodeRowKey(bs)
+		if err != nil {
+			return 0, nil
+		}
+		return e.decodeToTime(t)
+	}
+	return 0, nil
+}
+
+func (*MCTechLargeQueryExtractor) decodeToTime(handle kv.Handle) (int64, error) {
+	tp := types.NewFieldType(mysql.TypeDatetime)
+	col := rowcodec.ColInfo{Ft: tp}
+	chk := chunk.NewChunkWithCapacity([]*types.FieldType{tp}, 1)
+	coder := codec.NewDecoder(chk, nil)
+	_, err := coder.DecodeOne(handle.EncodedCol(0), 0, col.Ft)
+	if err != nil {
+		return 0, err
+	}
+	datum := chk.GetRow(0).GetDatum(0, tp)
+	mysqlTime := (&datum).GetMysqlTime()
+	timestampInNano := time.Date(mysqlTime.Year(),
+		time.Month(mysqlTime.Month()),
+		mysqlTime.Day(),
+		mysqlTime.Hour(),
+		mysqlTime.Minute(),
+		mysqlTime.Second(),
+		mysqlTime.Microsecond()*1000,
+		time.UTC,
+	).UnixNano()
+	return timestampInNano, err
 }

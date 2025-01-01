@@ -21,6 +21,7 @@ go_library(
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@org_uber_go_zap//:zap",
+        "@org_uber_go_zap//buffer",
         "@org_uber_go_zap//zapcore",
     ],
 )

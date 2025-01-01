@@ -731,6 +731,10 @@ const (
 	TpFKCascadeRuntimeStats
 	// TpRURuntimeStats is the tp for RURuntimeStats
 	TpRURuntimeStats
+	// add by zhangbing
+	// TpMCTechLargeQueryRuntimeStat is the tp for TpMCTechLargeQueryRuntimeStat
+	TpMCTechLargeQueryRuntimeStat
+	// add end
 )
 
 // RuntimeStats is used to express the executor runtime information.
