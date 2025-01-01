@@ -659,6 +659,15 @@ func (e *ShowExec) fetchShowColumns(ctx context.Context) error {
 				}
 				defaultValStr = timeValue.GetMysqlTime().String()
 			}
+			// add by zhangbing
+			if col.GetType() == mysql.TypeLonglong && defaultValStr != "0" && !strings.HasPrefix(strings.ToUpper(defaultValStr), strings.ToUpper(ast.MCTechSequence)) {
+				longValue, err := table.GetColDefaultValue(e.Ctx().GetExprCtx(), col.ToInfo())
+				if err != nil {
+					return errors.Trace(err)
+				}
+				defaultValStr = strconv.FormatInt(longValue.GetInt64(), 10)
+			}
+			// add end
 			if col.GetType() == mysql.TypeBit {
 				defaultValBinaryLiteral := types.BinaryLiteral(defaultValStr)
 				columnDefault = defaultValBinaryLiteral.ToBitLiteralString(true)
@@ -1032,6 +1041,10 @@ func constructResultOfShowCreateTable(ctx sessionctx.Context, dbName *model.CISt
 						}
 						buf.WriteString(" DEFAULT NULL")
 					}
+				// add by zhangbing
+				case "MCTECH_SEQUENCE":
+					buf.WriteString(" DEFAULT MCTECH_SEQUENCE")
+				// add end
 				case "CURRENT_TIMESTAMP":
 					buf.WriteString(" DEFAULT ")
 					buf.WriteString(defaultValue.(string))
@@ -1069,7 +1082,14 @@ func constructResultOfShowCreateTable(ctx sessionctx.Context, dbName *model.CISt
 				}
 			}
 			if mysql.HasOnUpdateNowFlag(col.GetFlag()) {
-				buf.WriteString(" ON UPDATE CURRENT_TIMESTAMP")
+				// modify by zhangbing
+				// buf.WriteString(" ON UPDATE CURRENT_TIMESTAMP")
+				if col.FieldType.GetType() == mysql.TypeLonglong {
+					buf.WriteString(" ON UPDATE MCTECH_SEQUENCE")
+				} else {
+					buf.WriteString(" ON UPDATE CURRENT_TIMESTAMP")
+				}
+				// modify end
 				buf.WriteString(table.OptionalFsp(&col.FieldType))
 			}
 		}
