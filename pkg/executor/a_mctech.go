@@ -1185,3 +1185,40 @@ func GetSeriveFromSQL(sql string) string {
 	fmt.Println(matches)
 	return matches[1]
 }
+
+// --------------------------------------------------------------------------------
+
+func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(sctx sessionctx.Context, schemas []model.CIStr) error {
+	checker := privilege.GetPrivilegeManager(sctx)
+	var rows [][]types.Datum
+	for _, schema := range schemas {
+		tables := e.is.SchemaTableInfos(schema)
+		for _, tbl := range tables {
+			if tbl.TTLInfo == nil {
+				continue
+			}
+
+			if checker != nil && !checker.RequestVerification(sctx.GetSessionVars().ActiveRoles, schema.L, tbl.Name.L, "", mysql.AllPrivMask) {
+				continue
+			}
+
+			if !tbl.IsView() {
+				ttlInfo := tbl.TTLInfo
+				ttlUnit := ast.TimeUnitType(ttlInfo.IntervalTimeUnit).String()
+				record := types.MakeDatums(
+					schema.O,                             // TABLE_SCHEMA
+					tbl.Name.O,                           // TABLE_NAME
+					tbl.ID,                               // TIDB_TABLE_ID
+					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
+					ttlInfo.IntervalExprStr,              // TTL
+					ttlUnit,                              // TTL_UNIT
+					variable.BoolToOnOff(ttlInfo.Enable), // TTL_ENABLE
+					ttlInfo.JobInterval,                  // TTL_JOB_INTERVAL
+				)
+				rows = append(rows, record)
+			}
+		}
+	}
+	e.rows = rows
+	return nil
+}

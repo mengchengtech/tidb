@@ -121,7 +121,7 @@ func attachLeaderRuleFromBundle(id int64, rule *http.Rule, bundle *placement.Bun
 	}
 
 	if leaderRule == nil {
-		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule don't exists in Bundle!", placement.GroupID(id))
+		return errors.Errorf("[attachLeaderRuleFromBundle] groupId %s, leader rule don't exists in Bundle", placement.GroupID(id))
 	}
 
 	for _, c := range leaderRule.LabelConstraints {
