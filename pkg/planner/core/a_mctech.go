@@ -20,6 +20,7 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/planner/core/base"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/tablecodec"
 	"github.com/pingcap/tidb/pkg/types"
 	"github.com/pingcap/tidb/pkg/util/chunk"
@@ -95,10 +96,10 @@ func (e *MCTech) prepareSchema() error {
 }
 
 // RenderResult renders the mctech result as specified format.
-func (e *MCTech) RenderResult(ctx context.Context) error {
+func (e *MCTech) RenderResult(_ context.Context) error {
 	switch strings.ToLower(e.Format) {
 	case types.ExplainFormatROW:
-		if err := e.mctechPlanInRowFormat(ctx); err != nil {
+		if err := e.mctechPlanInRowFormat(); err != nil {
 			return err
 		}
 	default:
@@ -108,9 +109,14 @@ func (e *MCTech) RenderResult(ctx context.Context) error {
 }
 
 // explainPlanInRowFormat generates mctech information for root-tasks.
-func (e *MCTech) mctechPlanInRowFormat(ctx context.Context) error {
-	mctx, err := mctech.GetContext(ctx)
+func (e *MCTech) mctechPlanInRowFormat() (err error) {
+	sctx, err := AsSctx(e.SCtx())
 	if err != nil {
+		return err
+	}
+
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(sctx); err != nil {
 		return err
 	}
 
@@ -227,15 +233,15 @@ func appendExtensionArgs[T any](
 }
 
 // AppendVarExprs append custom extension parameters
-func (e *Execute) AppendVarExprs(ctx context.Context) error {
+func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 	// 获取扩展参数列表
 	extParams, from := e.getExtensionParams()
 	if len(extParams) == 0 {
 		return nil
 	}
 
-	mctx, err := mctech.GetContext(ctx)
-	if err != nil {
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(sctx); err != nil {
 		return err
 	}
 
@@ -257,7 +263,6 @@ func (e *Execute) AppendVarExprs(ctx context.Context) error {
 		}
 	}
 
-	sctx := mctx.Session()
 	sessionVars := sctx.GetSessionVars()
 	if tenantValue == nil {
 		user := sessionVars.User.Username

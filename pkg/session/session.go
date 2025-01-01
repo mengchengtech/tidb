@@ -2470,9 +2470,6 @@ func (s *session) PrepareStmt(sql string) (stmtID uint32, paramCount int, fields
 	if err = sessiontxn.GetTxnManager(s).AdviseWarmup(); err != nil {
 		return
 	}
-	// add by zhangbing
-	ctx, _, sql, err = mctech.GetInterceptor().BeforeParseSQL(ctx, s, sql)
-	// add end
 	prepareExec := executor.NewPrepareExec(s, sql)
 	err = prepareExec.Next(ctx, nil)
 	// Rollback even if err is nil.
