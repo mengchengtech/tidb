@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "expression",
     srcs = [
+        "a_mctech.go",
         "builtin.go",
         "builtin_arithmetic.go",
         "builtin_arithmetic_vec.go",
@@ -79,6 +80,7 @@ go_library(
         "//pkg/extension",
         "//pkg/infoschema/context",
         "//pkg/kv",
+        "//pkg/mctech/udf",
         "//pkg/parser",
         "//pkg/parser/ast",
         "//pkg/parser/auth",
@@ -133,6 +135,7 @@ go_test(
     name = "expression_test",
     timeout = "moderate",
     srcs = [
+        "a_mctech_test.go",
         "bench_test.go",
         "builtin_arithmetic_test.go",
         "builtin_arithmetic_vec_test.go",

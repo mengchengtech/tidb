@@ -39,6 +39,7 @@ go_test(
     name = "parser_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "bench_test.go",
         "consistent_test.go",
         "digester_test.go",
