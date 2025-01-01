@@ -1,7 +1,6 @@
 package mctech
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -21,6 +20,8 @@ import (
 type Context interface {
 	// 获取tidb session
 	Session() sessionctx.Context
+	// 清除session中添加的自定义变量
+	Clear()
 
 	// @title InPrepareStmt
 	// @description 当前请求是否是prepare语句中
@@ -96,7 +97,7 @@ type ModifyContext interface {
 
 // SessionMPPVarsContext interface
 type SessionMPPVarsContext interface {
-	StoreSessionMPPVars(ctx context.Context, mpp string) (err error)
+	StoreSessionMPPVars(mpp string) (err error)
 
 	ReloadSessionMPPVars() (err error)
 
@@ -301,9 +302,14 @@ func (d *baseContext) Session() sessionctx.Context {
 	panic(errors.New("[Session] not implemented"))
 }
 
+func (d *baseContext) Clear() {
+	log.Error("Session: " + string(debug.Stack()))
+	panic(errors.New("[Clear] not implemented"))
+}
+
 // ------------------------------------------------
 
-func (d *baseContext) StoreSessionMPPVars(ctx context.Context, mpp string) (err error) {
+func (d *baseContext) StoreSessionMPPVars(mpp string) (err error) {
 	log.Error("Session: " + string(debug.Stack()))
 	panic(errors.New("[StoreSessionMPPVars] not implemented"))
 }
@@ -485,43 +491,30 @@ const (
 	SECOND // 0x02
 )
 
-type contextKey struct{}
-
-var customContextKey = contextKey{}
-
 // NewContext function callback
-var NewContext func(session sessionctx.Context, usingTenantParam bool) Context
+var NewContext func(sctx sessionctx.Context, usingTenantParam bool) Context
 
 // WithNewContext create mctech.Context
-// @Param session sessionctx.Context -
-func WithNewContext(session sessionctx.Context) (context.Context, Context, error) {
-	return WithNewContext3(context.Background(), session, false)
-}
-
-// WithNewContext3 create mctech.Context
-// @Param parent context.Context -
-// @Param session sessionctx.Context -
-// @Param usingTenantParam bool 添加租户条件时，是否使用参数占位符方式
-func WithNewContext3(parent context.Context,
-	session sessionctx.Context, usingTenantParam bool) (context.Context, Context, error) {
+// @Param sctx sessionctx.Context -
+func WithNewContext(sctx sessionctx.Context) (Context, error) {
 	if NewContext == nil {
 		var err error
 		if !intest.InTest {
 			err = errors.New("function variable 'mctech.NewContext' is nil")
 		}
-		return parent, nil, err
+		return nil, err
 	}
 
-	mctx := NewContext(session, usingTenantParam)
-	ctx := context.WithValue(parent, customContextKey, mctx)
-	return ctx, mctx, nil
+	mctx := NewContext(sctx, false)
+	sctx.SetValue(MCContextVarKey, mctx)
+	return mctx, nil
 }
 
 var errContextNotExists = errors.New("CAN NOT Found 'mctech.Context'")
 
 // GetContext get mctech context from session
-func GetContext(ctx context.Context) (Context, error) {
-	val := ctx.Value(customContextKey)
+func GetContext(sctx sessionctx.Context) (Context, error) {
+	val := sctx.Value(MCContextVarKey)
 	if sp, ok := val.(Context); ok {
 		return sp, nil
 	}
@@ -534,6 +527,15 @@ func GetContext(ctx context.Context) (Context, error) {
 	}
 
 	return nil, errContextNotExists
+}
+
+// GetContextStrict get mctech context from session
+func GetContextStrict(sctx sessionctx.Context) Context {
+	mctx, err := GetContext(sctx)
+	if err != nil {
+		panic(err)
+	}
+	return mctx
 }
 
 // ExtensionParamMarkerOffset 添加的租户条件假的文本位置偏移量
@@ -549,3 +551,16 @@ func (k MCExecStmtVarKeyType) String() string {
 
 // MCExecStmtVarKey is a variable key for ExecStmt.
 const MCExecStmtVarKey MCExecStmtVarKeyType = 0
+
+// -----------------------------------------------------------------
+
+// MCContextVarKeyType is a dummy type to avoid naming collision in context.
+type MCContextVarKeyType int
+
+// String defines a Stringer function for debugging and pretty printing.
+func (k MCContextVarKeyType) String() string {
+	return "mc___context_var_key"
+}
+
+// MCContextVarKey is a variable key for ExecStmt.
+const MCContextVarKey MCContextVarKeyType = 0
