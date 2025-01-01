@@ -277,7 +277,7 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceFullSQLDir, skipInit: true, Type: TypeStr, Value: "",
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceFullSQLDir, Type: TypeStr, Value: "",
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return config.GetMCTechConfig().Metrics.SQLTrace.FullSQLDir, nil
 			},
