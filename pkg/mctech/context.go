@@ -185,6 +185,11 @@ type TenantInfo interface {
 	GetInfoForTest() map[string]any
 }
 
+// MutableTenantInfo tenant info
+type MutableTenantInfo interface {
+	SetCode(string) // 当前租户code
+}
+
 // tenantValueInfo tenant info
 type tenantValueInfo struct {
 	code     string // 当前租户code
@@ -194,6 +199,10 @@ type tenantValueInfo struct {
 // Code tenant code
 func (ti *tenantValueInfo) Code() string {
 	return ti.code
+}
+
+func (ti *tenantValueInfo) SetCode(code string) {
+	ti.code = code
 }
 
 // FromRole tenant code is from role?
