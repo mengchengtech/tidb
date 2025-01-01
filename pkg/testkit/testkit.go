@@ -424,9 +424,13 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 		}
 		// add by zhangbing
 		for _, stmt := range stmts {
-			if err = tk.onAfterParseSQL(stmt); err != nil {
-				tk.onAfterHandleStmt(stmt, err)
-				return nil, err
+			switch stmt.(type) {
+			case *ast.PrepareStmt, *ast.ExecuteStmt: // 跳过，此处不处理，在PrepareExec和ExecuteExec中处理
+			default:
+				if err = tk.onAfterParseSQL(stmt); err != nil {
+					tk.onAfterHandleStmt(stmt, err)
+					return nil, err
+				}
 			}
 		}
 		// add end

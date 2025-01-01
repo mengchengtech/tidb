@@ -185,6 +185,11 @@ func (*ExecuteExec) Next(context.Context, *chunk.Chunk) error {
 // Build builds a prepared statement into an executor.
 // After Build, e.StmtExec will be used to do the real execution.
 func (e *ExecuteExec) Build(b *executorBuilder) error {
+	// add by zhangbing
+	if err := e.onAfterParseSQL(e.stmt); err != nil {
+		return err
+	}
+	// add end
 	stmtExec := b.build(e.plan)
 	if b.err != nil {
 		log.Warn("rebuild plan in EXECUTE statement failed", zap.String("labelName of PREPARE statement", e.name))

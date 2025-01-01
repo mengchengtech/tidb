@@ -250,7 +250,22 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 	//
 	// stmt 是解析sql后拆分的一条一条独立的sql语法树对象，与当前sql是密切相关的
 	if stmt != nil {
-		origSQL = stmt.OriginalText()
+		switch typedStmt := stmt.(type) {
+		// 对Execute/Prepare的特殊处理说明
+		// 有两种方式执行Execute/Prepare，分别是 SQL 和 Binary
+		// * 当使用 SQL 方式时，执行Prepare语句，调用方会给要执行的SQL指定一个名字。 Execute语句使用同样的名字引用前面的SQL。
+		//    此时 Prepare 语句中的完整SQL会当作普通 SQL 语句记录下SQL就可以了，无需特殊处理。
+		//         Execute 语句执行后记录SQL时，需要把传入参数也一起记录下来，而不是只记录一个变量名，方便查看和回放时使用
+		// * 当命名用 Binary 方式时，调用端无法提供前一种方式的Name信息，只能被动接受服务端返回的临时语句ID，后续使用这个ID来引用SQL。
+		//    此时的 Prepare 在日志中没有什么意义，也不会记录。
+		//          Execute 记录的SQL信息中会用Prepare步骤中传入的SQL替代，同时记录传入的参数。
+		//    回放时需要用Execute步骤记录的SQL先执行Prepare，取得ID后再执行Execute步骤
+		case *ast.ExecuteStmt:
+			// 从对应的prepare语句中提取sql
+			origSQL = fetchFullExecuteSQL(typedStmt, sessVars)
+		default:
+			origSQL = stmt.OriginalText()
+		}
 	}
 	if info = getSQLStmtInfo(stmt, sctx.GetSessionVars()); info == nil {
 		// 返回空值表示不记录trace 日志
@@ -393,50 +408,16 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 	render(sctx, traceLog)
 }
 
-// MustCompressForTest 仅供测试代码使用
-func MustCompressForTest(sqlLen int, threshold int) (int, int, bool) {
-	return mustCompress(sqlLen, threshold)
-}
-
-// mustCompress SQL记录日志时是否需要压缩存储
-// :params sqlLen:int 原始sql长度
-func mustCompress(sqlLen int, threshold int) (int, int, bool) {
-	if sqlLen <= threshold {
-		// 不需要压缩
-		return -1, -1, false
-	}
-
-	// sql 语句中的一些重要信息一般在开始和结束位置，预留一部分给sql末尾的字符串
-	// 当 threshold >= sqlReserveBothLen 时。
-	// * prefixEnd=threshold-sqlSuffixLen, suffixStart=sqlLen-sqlSuffixLen
-	//
-	// 当 sqlReserveBothLen > threshold >= sqlPrefixLen 时，优先保证前面的字符串（长度为sqlPrefixLen），不足部分从后面的字符串长度扣除（实际长度为threshold - sqlPrefixLen）
-	// * prefixEnd=sqlPrefixLen, suffixStart=sqlLen-(threshold-sqlPrefixLen)
-	//
-	// 当 sqlPrefixLen > threshold 时，prefixEnd取值为实际的threshold（长度为threshold），suffixStart始终为sqlLen（长度为0）
-	// * prefixEnd=threshold, suffixStart=sqlLen
-
-	// 截取sql最前面字符串的结束位置
-	prefixEnd := min(threshold, max(sqlPrefixLen, threshold-sqlSuffixLen))
-	// 截取sql最后字符串的起始位置
-	suffixStart := sqlLen - max(0, min(sqlSuffixLen, threshold-sqlPrefixLen))
-	return prefixEnd, suffixStart, true
-}
-
 func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sqlStmtInfo) {
 	switch s := stmt.(type) {
 	case *ast.ExecuteStmt:
-		var (
-			prepStmt *core.PlanCacheStmt
-			err      error
-		)
-		if prepStmt, err = core.GetPreparedStmt(s, sessVars); err != nil {
+		if prepStmt, err := core.GetPreparedStmt(s, sessVars); err != nil {
 			panic(err)
-		}
-
-		raw := getSQLStmtInfo(prepStmt.PreparedAst.Stmt, sessVars)
-		if raw != nil {
-			info = &sqlStmtInfo{"exec", raw.sqlType, raw.modified}
+		} else {
+			raw := getSQLStmtInfo(prepStmt.PreparedAst.Stmt, sessVars)
+			if raw != nil {
+				info = &sqlStmtInfo{"exec", raw.sqlType, raw.modified}
+			}
 		}
 	case *ast.PrepareStmt:
 		info = sqlPrepareInfo
@@ -483,20 +464,7 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		info = sqlDoInfo
 	default:
 		// stmt 为 nil 或者除以上各个 case 项以外的类型
+		info = nil
 	}
 	return info
-}
-
-func min(a, b int) int {
-	if a > b {
-		return b
-	}
-	return a
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

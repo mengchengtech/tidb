@@ -3,11 +3,93 @@ package interceptor
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/format"
+	"github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 )
+
+func minInt(a, b int) int {
+	if a > b {
+		return b
+	}
+	return a
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// MustCompressForTest 仅供测试代码使用
+func MustCompressForTest(sqlLen int, threshold int) (int, int, bool) {
+	return mustCompress(sqlLen, threshold)
+}
+
+// mustCompress SQL记录日志时是否需要压缩存储
+// :params sqlLen:int 原始sql长度
+func mustCompress(sqlLen int, threshold int) (int, int, bool) {
+	if sqlLen <= threshold {
+		// 不需要压缩
+		return -1, -1, false
+	}
+
+	// sql 语句中的一些重要信息一般在开始和结束位置，预留一部分给sql末尾的字符串
+	// 当 threshold >= sqlReserveBothLen 时。
+	// * prefixEnd=threshold-sqlSuffixLen, suffixStart=sqlLen-sqlSuffixLen
+	//
+	// 当 sqlReserveBothLen > threshold >= sqlPrefixLen 时，优先保证前面的字符串（长度为sqlPrefixLen），不足部分从后面的字符串长度扣除（实际长度为threshold - sqlPrefixLen）
+	// * prefixEnd=sqlPrefixLen, suffixStart=sqlLen-(threshold-sqlPrefixLen)
+	//
+	// 当 sqlPrefixLen > threshold 时，prefixEnd取值为实际的threshold（长度为threshold），suffixStart始终为sqlLen（长度为0）
+	// * prefixEnd=threshold, suffixStart=sqlLen
+
+	// 截取sql最前面字符串的结束位置
+	prefixEnd := minInt(threshold, maxInt(sqlPrefixLen, threshold-sqlSuffixLen))
+	// 截取sql最后字符串的起始位置
+	suffixStart := sqlLen - maxInt(0, minInt(sqlSuffixLen, threshold-sqlPrefixLen))
+	return prefixEnd, suffixStart, true
+}
+
+func fetchFullExecuteSQL(executeStmt *ast.ExecuteStmt, sessVars *variable.SessionVars) (origSQL string) {
+	var (
+		prepStmt *core.PlanCacheStmt
+		err      error
+	)
+	if prepStmt, err = core.GetPreparedStmt(executeStmt, sessVars); err != nil {
+		panic(err)
+	}
+	origSQL = prepStmt.PreparedAst.Stmt.OriginalText()
+
+	var sb strings.Builder
+	if executeStmt.Name != "" {
+		sb.WriteString(";Type=SQL;Name=" + executeStmt.Name)
+	} else {
+		sb.WriteString(";Type=Binary")
+	}
+	sb.WriteString(";Params=[")
+	for i, p := range prepStmt.Params {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		expr := ast.NewValueExpr(p.GetValue(), "", "")
+		if err := expr.Restore(format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)); err != nil {
+			panic(err)
+		}
+	}
+	sb.WriteByte(']')
+	if sb.Len() > 0 {
+		origSQL += sb.String()
+	}
+	return origSQL
+}
 
 func render(sctx sessionctx.Context, traceLog *logSQLTraceObject) {
 	failpoint.Inject("MockTraceLogData", func(val failpoint.Value) {
