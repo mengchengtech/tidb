@@ -139,6 +139,7 @@ import (
 	exists            "EXISTS"
 	exit              "EXIT"
 	explain           "EXPLAIN"
+	mctech            "MCTECH"
 	falseKwd          "FALSE"
 	fetch             "FETCH"
 	firstValue        "FIRST_VALUE"
@@ -990,6 +991,7 @@ import (
 	EmptyStmt                  "empty statement"
 	ExecuteStmt                "Execute statement"
 	ExplainStmt                "EXPLAIN statement"
+	MCTechStmt                 "MCTECH statement"
 	ExplainableStmt            "explainable statement"
 	FlushStmt                  "Flush statement"
 	FlashbackTableStmt         "Flashback table statement"
@@ -5434,6 +5436,29 @@ ReleaseSavepointStmt:
 	"RELEASE" "SAVEPOINT" Identifier
 	{
 		$$ = &ast.ReleaseSavepointStmt{Name: $3}
+	}
+
+MCTechStmt:
+	"MCTECH" ExplainableStmt
+	{
+		$$ = &ast.MCTechStmt{
+			Stmt:   $2,
+			Format: "row",
+		}
+	}
+|	"MCTECH" "FORMAT" "=" ExplainFormatType ExplainableStmt
+	{
+		$$ = &ast.MCTechStmt{
+			Stmt:   $5,
+			Format: $4,
+		}
+	}
+|	"MCTECH" "FORMAT" "=" stringLit ExplainableStmt
+	{
+		$$ = &ast.MCTechStmt{
+			Stmt:   $5,
+			Format: $4,
+		}
 	}
 
 /*******************************************************************
@@ -12007,6 +12032,7 @@ Statement:
 |	ExecuteStmt
 |	ExplainStmt
 |	CalibrateResourceStmt
+|	MCTechStmt
 |	ChangeStmt
 |	CreateDatabaseStmt
 |	CreateIndexStmt

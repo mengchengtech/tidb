@@ -298,6 +298,7 @@ go_test(
     name = "executor_test",
     timeout = "moderate",
     srcs = [
+        "a_mctech_test.go",
         "adapter_test.go",
         "analyze_test.go",
         "analyze_utils_test.go",
