@@ -1229,6 +1229,20 @@ func generateOriginDefaultValue(col *model.ColumnInfo, ctx sessionctx.Context) (
 		}
 		return odValue, nil
 	}
+	// add by zhangbing
+	if odValue == strings.ToUpper(ast.MCTechSequence) {
+		if ctx == nil {
+			odValue = "0"
+		} else {
+			seq, err := expression.GetNextSequence()
+			if err != nil {
+				return nil, err
+			}
+			odValue = strconv.FormatInt(seq, 10)
+		}
+		return odValue, nil
+	}
+	// add end
 
 	if col.DefaultIsExpr && ctx != nil {
 		valStr, ok := odValue.(string)
@@ -1251,19 +1265,6 @@ func generateOriginDefaultValue(col *model.ColumnInfo, ctx sessionctx.Context) (
 			return nil, errors.Trace(err)
 		}
 	}
-	// add by zhangbing
-	if odValue == strings.ToUpper(ast.MCTechSequence) {
-		if ctx == nil {
-			odValue = "0"
-		} else {
-			seq, err := expression.GetNextSequence()
-			if err != nil {
-				return nil, err
-			}
-			odValue = strconv.FormatInt(seq, 10)
-		}
-	}
-	// add end
 	return odValue, nil
 }
 

@@ -412,7 +412,6 @@ go_test(
         "//pkg/extension",
         "//pkg/infoschema",
         "//pkg/kv",
-        "//pkg/mctech",
         "//pkg/mctech/mock",
         "//pkg/mctech/preps",
         "//pkg/meta",

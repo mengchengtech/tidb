@@ -398,24 +398,24 @@ func (tk *TestKit) Exec(sql string, args ...any) (sqlexec.RecordSet, error) {
 // ExecWithContext executes a sql statement using the prepared stmt API
 func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any) (rs sqlexec.RecordSet, err error) {
 	defer tk.Session().GetSessionVars().ClearAlloc(&tk.alloc, err != nil)
+	// add by zhangbing
+	handler := mctech.GetHandler()
+	var mctechCtx mctech.Context
+	if ctx, mctechCtx, err = mctech.WithNewContext3(ctx, tk.Session(), false); err != nil {
+		return nil, err
+	}
+
+	if mctechCtx != nil {
+		if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
+			return nil, err
+		}
+	}
+	// add end
 
 	cursorExists := tk.Session().GetSessionVars().HasStatusFlag(mysql.ServerStatusCursorExists)
 	if len(args) == 0 {
 		sc := tk.session.GetSessionVars().StmtCtx
 		prevWarns := sc.GetWarnings()
-		// add by zhangbing
-		handler := mctech.GetHandler()
-		mctechCtx, err := mctech.GetContext(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if mctechCtx != nil {
-			if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
-				return nil, err
-			}
-		}
-		// add end
 		var stmts []ast.StmtNode
 		if len(stmts) == 0 {
 			var err error

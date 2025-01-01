@@ -107,7 +107,10 @@ func TestUserPrivileges(t *testing.T) {
 		Username: "constraints_tester",
 		Hostname: "127.0.0.1",
 	}, nil, nil, nil))
-	constraintsTester.MustQuery("select * from information_schema.TABLE_CONSTRAINTS WHERE TABLE_NAME != 'CLUSTER_SLOW_QUERY';").Check([][]any{})
+	// modify by zhangbing
+	constraintsTester.MustQuery(`select * from information_schema.TABLE_CONSTRAINTS WHERE TABLE_NAME != 'CLUSTER_SLOW_QUERY'
+		and TABLE_NAME != 'CLUSTER_MCTECH_LARGE_QUERY';`).Check([][]any{})
+	// modify end
 
 	// test the privilege of user with privilege of mysql.gc_delete_range for information_schema.table_constraints
 	tk.MustExec("CREATE ROLE r_gc_delete_range ;")
@@ -126,7 +129,10 @@ func TestUserPrivileges(t *testing.T) {
 		Username: "tester1",
 		Hostname: "127.0.0.1",
 	}, nil, nil, nil))
-	tk1.MustQuery("select * from information_schema.STATISTICS WHERE TABLE_NAME != 'CLUSTER_SLOW_QUERY';").Check([][]any{})
+	// modify by zhangbing
+	tk1.MustQuery(`select * from information_schema.STATISTICS WHERE TABLE_NAME != 'CLUSTER_SLOW_QUERY'
+		and TABLE_NAME != 'CLUSTER_MCTECH_LARGE_QUERY';`).Check([][]any{})
+	// modify end
 
 	// test the privilege of user with some privilege for information_schema
 	tk.MustExec("create user tester2")

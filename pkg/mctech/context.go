@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -269,6 +270,10 @@ type baseContext struct {
 	dbsDict          map[ast.StmtNode][]string
 }
 
+var (
+	_ Context = &baseContext{}
+)
+
 // DbPublicPrefix public类数据库前缀
 const DbPublicPrefix = "public_"
 
@@ -289,16 +294,6 @@ func NewBaseContext(usingTenantParam bool) Context {
 func (d *baseContext) CurrentDB() string {
 	log.Error("CurrentDB: " + string(debug.Stack()))
 	panic(errors.New("[CurrentDB] not implemented"))
-}
-
-func (d *baseContext) PrepareSQL(rawSQL string) (sql string, err error) {
-	log.Error("PrepareSQL: " + string(debug.Stack()))
-	panic(errors.New("[PrepareSQL] not implemented"))
-}
-
-func (d *baseContext) ApplyAndCheck(stmts []ast.StmtNode) (changed bool, err error) {
-	log.Error("ApplyAndCheck: " + string(debug.Stack()))
-	panic(errors.New("[ApplyAndCheck] not implemented"))
 }
 
 func (d *baseContext) Session() sessionctx.Context {
@@ -522,6 +517,8 @@ func WithNewContext3(parent context.Context,
 	return ctx, mctx, nil
 }
 
+var errContextNotExists = errors.New("CAN NOT Found 'mctech.Context'")
+
 // GetContext get mctech context from session
 func GetContext(ctx context.Context) (Context, error) {
 	val := ctx.Value(customContextKey)
@@ -530,11 +527,13 @@ func GetContext(ctx context.Context) (Context, error) {
 	}
 
 	if intest.InTest {
+		failpoint.Inject("EnsureContext", func() {
+			failpoint.Return(nil, errContextNotExists)
+		})
 		return nil, nil
 	}
 
-	err := errors.New("CAN NOT Found 'mctech.Context'")
-	return nil, err
+	return nil, errContextNotExists
 }
 
 // ExtensionParamMarkerOffset 添加的租户条件假的文本位置偏移量
