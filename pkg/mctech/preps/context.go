@@ -34,8 +34,8 @@ type tidbSessionMCTechContext struct {
 	storedVars []varValue
 }
 
-// NewContext function
-func NewContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
+// newContext function
+func newContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
 	baseCtx := mctech.NewBaseContext(usingTenantParam)
 	return &tidbSessionMCTechContext{
 		Context: baseCtx,
@@ -48,7 +48,7 @@ var (
 )
 
 func init() {
-	mctech.NewContext = NewContext
+	mctech.NewContext = newContext
 }
 
 func (d *tidbSessionMCTechContext) CurrentDB() string {
