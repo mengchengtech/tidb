@@ -248,10 +248,14 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 		return err
 	}
 
-	var tenantValue expression.Expression
+	var (
+		tenantValue expression.Expression
+		result      mctech.PrepareResult
+		tenantCode  string
+	)
 	// 优先从sql语句中提取租户信息
-	if result := mctx.PrepareResult(); result != nil {
-		tenantCode := result.Tenant().Code()
+	if result = mctx.PrepareResult(); result != nil {
+		tenantCode = result.Tenant().Code()
 		if tenantCode != "" {
 			tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)
 		}
@@ -261,13 +265,28 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 		// 其次从参数中提取租户变量
 		if len(e.Params) > from {
 			tenantValue = e.Params[from]
+			if result != nil && tenantValue != nil {
+				var (
+					code   string
+					isNull bool
+				)
+				if code, isNull, err = tenantValue.EvalString(sctx.GetExprCtx().GetEvalCtx(), chunk.Row{}); err != nil {
+					return err
+				}
+
+				if !isNull {
+					// 提取从参数上获取到的租户code
+					tenantCode = code
+					result.Tenant().(mctech.MutableTenantInfo).SetCode(code)
+				}
+			}
 			// 暂时先移除参数租户参数
 			e.Params = e.Params[:from]
 		}
 	}
 
 	sessionVars := sctx.GetSessionVars()
-	if tenantValue == nil {
+	if tenantValue == nil || tenantCode == "" {
 		user := sessionVars.User.Username
 		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
 	}
