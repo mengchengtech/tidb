@@ -66,6 +66,7 @@ import (
 	"github.com/pingcap/tidb/pkg/extension"
 	"github.com/pingcap/tidb/pkg/infoschema"
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/preps"
 	"github.com/pingcap/tidb/pkg/metrics"
 	"github.com/pingcap/tidb/pkg/parser"
@@ -1698,9 +1699,10 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	sc := sessVars.StmtCtx
 	prevWarns := sc.GetWarnings()
 	// add by zhangbing
-	session := cc.ctx.Session
-	handler := preps.GetHandlerFactory().CreateHandler()
-	if sql, err = handler.PrepareSQL(session, sql); err != nil {
+	handler := mctech.GetHandler()
+	mctechCtx := preps.NewContext(cc.ctx.Session)
+	ctx = mctech.WithContext(ctx, mctechCtx)
+	if sql, err = handler.PrepareSQL(mctechCtx, sql); err != nil {
 		return err
 	}
 	// add end
@@ -1715,7 +1717,7 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 		return cc.writeOK(ctx)
 	}
 	// add by zhangbing
-	if _, err = handler.ApplyAndCheck(session, stmts); err != nil {
+	if _, err = handler.ApplyAndCheck(mctechCtx, stmts); err != nil {
 		return err
 	}
 	// add end
