@@ -1,7 +1,7 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
-    name = "prapared",
+    name = "preps",
     srcs = [
         "context.go",
         "db_checker.go",
@@ -9,9 +9,9 @@ go_library(
         "mctech_handler.go",
         "replace_action.go",
         "sql_preprocessor.go",
-        "stmt_resolver.go",
+        "stmt_preprocessor.go",
     ],
-    importpath = "github.com/pingcap/tidb/pkg/mctech/prapared",
+    importpath = "github.com/pingcap/tidb/pkg/mctech/preps",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/mctech",
@@ -26,7 +26,7 @@ go_library(
 )
 
 go_test(
-    name = "prapared_test",
+    name = "preps_test",
     timeout = "short",
     srcs = [
         "context_test.go",
@@ -36,9 +36,9 @@ go_test(
         "mctech_handler_test.go",
         "replace_action_test.go",
         "sql_preprocessor_test.go",
-        "stmt_resolver_test.go",
+        "stmt_preprocessor_test.go",
     ],
-    embed = [":prapared"],
+    embed = [":preps"],
     flaky = True,
     shard_count = 16,
     deps = [

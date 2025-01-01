@@ -1,4 +1,4 @@
-package prapared
+package preps
 
 import (
 	"errors"
@@ -15,19 +15,19 @@ import (
 
 var mctechHintPattern = regexp.MustCompile(`(?i)/*&\s*(\$?[a-z_0-9]+):(.*?)\s*\*/`)
 
-type mctechStatementResolver struct {
+type mctechStatementPreprocessor struct {
 	context mctech.Context
 	checker *mutexDatabaseChecker
 }
 
-func (r *mctechStatementResolver) Context() mctech.Context {
+func (r *mctechStatementPreprocessor) Context() mctech.Context {
 	return r.context
 }
 
 /**
  * 预解析sql，解析的结果存到MCTechContext中
  */
-func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string) (string, error) {
+func (r *mctechStatementPreprocessor) PrepareSQL(ctx sessionctx.Context, sql string) (string, error) {
 	if r.context != nil {
 		return "", errors.New("[mctech] PrepareSQL failure, Context exists")
 	}
@@ -77,7 +77,7 @@ func (r *mctechStatementResolver) PrepareSQL(ctx sessionctx.Context, sql string)
 	return preparedSQL, nil
 }
 
-func (r *mctechStatementResolver) ResolveStmt(
+func (r *mctechStatementPreprocessor) ResolveStmt(
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
 	dbs, skipped, err = r.rewriteStmt(stmt, charset, collation)
 	if err != nil {
@@ -87,11 +87,11 @@ func (r *mctechStatementResolver) ResolveStmt(
 	return dbs, skipped, nil
 }
 
-func (r *mctechStatementResolver) CheckDB(dbs []string) error {
+func (r *mctechStatementPreprocessor) CheckDB(dbs []string) error {
 	return r.checker.Check(r.context, dbs)
 }
 
-func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
+func (r *mctechStatementPreprocessor) Validate(ctx sessionctx.Context) error {
 	prepareResult := r.context.PrepareResult()
 	// 执行到此处说明当前语句一定是DML或QUERY
 	// sql没有被改写，但是用到了global_xxx数据库，并且没有设置global为true
@@ -104,7 +104,7 @@ func (r *mctechStatementResolver) Validate(ctx sessionctx.Context) error {
 	return nil
 }
 
-func (r *mctechStatementResolver) rewriteStmt(
+func (r *mctechStatementPreprocessor) rewriteStmt(
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
 	dbs, skipped, err = isolation.ApplyExtension(r.context, stmt, charset, collation)
 	if skipped || err != nil {
