@@ -3,6 +3,8 @@
 package expression
 
 import (
+	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +31,7 @@ var (
 	_ builtinFunc = &builtinMCTechSequenceSig{}
 	_ builtinFunc = &builtinMCTechVersionJustPassSig{}
 	_ builtinFunc = &builtinMCTechDecryptSig{}
+	_ builtinFunc = &builtinMCTechDecryptAndMaskSig{}
 	_ builtinFunc = &builtinMCTechEncryptSig{}
 	_ builtinFunc = &builtinMCTechSequenceDecodeSig{}
 	_ builtinFunc = &builtinMCTechGetFullSQLSig{}
@@ -38,14 +41,14 @@ func init() {
 	// mctech function.
 	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCSeq, 0, 0}}
 	funcs[ast.MCVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCVersionJustPass, 0, 0}}
-	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 1}}
+	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 4}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
 	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 2}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
-	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
+	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 4}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
 	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
@@ -201,11 +204,34 @@ func (c *mctechDecryptFunctionClass) getFunction(ctx BuildContext, args []Expres
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, types.ETString)
+	var (
+		argTps []types.EvalType
+		sig    builtinFunc
+	)
+	length := len(args) // 参数个数
+	switch length {
+	case 1:
+		argTps = append(argTps, types.ETString)
+	case 3:
+		argTps = append(argTps, types.ETString, types.ETInt, types.ETInt)
+	case 4:
+		argTps = append(argTps, types.ETString, types.ETInt, types.ETInt, types.ETString)
+	default:
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, argTps...)
 	if err != nil {
 		return nil, err
 	}
-	sig := &builtinMCTechDecryptSig{bf}
+	switch {
+	case length == 1:
+		sig = &builtinMCTechDecryptSig{bf}
+	case length >= 3:
+		sig = &builtinMCTechDecryptAndMaskSig{bf}
+	default:
+		// Should never happens.
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
+	}
 	bf.tp.SetFlen(mysql.MaxFieldCharLength)
 	return sig, nil
 }
@@ -232,6 +258,100 @@ func (b *builtinMCTechDecryptSig) evalString(ctx EvalContext, row chunk.Row) (st
 	}
 
 	return plain, false, nil
+}
+
+var maskStrs = []string{}
+
+func init() {
+	for i := 0; i < 20; i++ {
+		maskStrs = append(maskStrs, strings.Repeat("*", i))
+	}
+}
+
+type builtinMCTechDecryptAndMaskSig struct {
+	baseBuiltinFunc
+}
+
+func (b *builtinMCTechDecryptAndMaskSig) Clone() builtinFunc {
+	newSig := &builtinMCTechDecryptAndMaskSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinMCTechDecryptAndMaskSig) evalString(ctx EvalContext, row chunk.Row) (string, bool, error) {
+	val, isNull, err := b.args[0].EvalString(ctx, row)
+	if isNull || err != nil {
+		return "", isNull, err
+	}
+
+	var (
+		maskFrom   int64
+		maskLength int64
+		maskChar   = ""
+	)
+	if maskFrom, isNull, err = b.args[1].EvalInt(ctx, row); isNull || err != nil {
+		return "", isNull, err
+	}
+
+	if maskLength, isNull, err = b.args[2].EvalInt(ctx, row); isNull || err != nil {
+		return "", isNull, err
+	}
+
+	if len(b.args) == 4 {
+		// 传入替换的char
+		if maskChar, isNull, err = b.args[3].EvalString(ctx, row); isNull || err != nil {
+			return "", isNull, err
+		}
+	}
+
+	plain, err := replaceMask(val, maskFrom, maskLength, maskChar)
+	return plain, false, err
+}
+
+func replaceMask(cipher string, maskFrom, maskLength int64, customMaskChar string) (string, error) {
+	if maskFrom < 1 {
+		// 遵循sql字符串约定，索引参数从1开始
+		return "", fmt.Errorf("'maskFrom' (%d) out of range [1, +inf]", maskFrom)
+	}
+
+	if maskLength < 1 || maskLength > math.MaxInt8 {
+		return "", fmt.Errorf("'maskLength' (%d) out of range [1, %d]", maskLength, math.MaxInt8)
+	}
+
+	plain, err := udf.GetClient().Decrypt(cipher)
+	if err != nil {
+		return "", err
+	}
+
+	length := int64(len(plain))
+	if length < maskFrom {
+		// maskFrom 大于 字符串长度时，忽略替换操作
+		return plain, nil
+	}
+
+	// 转换成从0开始的索引
+	start := maskFrom - 1
+	end := start + maskLength
+	repeat := int(maskLength)
+
+	tokens := []string{}
+	if start > 0 {
+		tokens = append(tokens, plain[:start])
+	}
+	if end > length {
+		end = length
+		repeat = int(end - start)
+	}
+
+	if repeat <= len(maskStrs) && len(customMaskChar) == 0 {
+		tokens = append(tokens, maskStrs[repeat])
+	} else {
+		tokens = append(tokens, strings.Repeat(customMaskChar, repeat))
+	}
+	if end < length {
+		tokens = append(tokens, plain[end:])
+	}
+	return strings.Join(tokens, ""), nil
 }
 
 // --------------------------------------------------------------
