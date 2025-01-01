@@ -1,7 +1,6 @@
 package preps
 
 import (
-	"context"
 	"errors"
 
 	"github.com/pingcap/tidb/pkg/mctech"
@@ -42,6 +41,10 @@ func NewContext(session sessionctx.Context, usingTenantParam bool) mctech.Contex
 	}
 }
 
+var (
+	_ mctech.SessionMPPVarsContext = &tidbSessionMCTechContext{}
+)
+
 func init() {
 	mctech.NewContext = NewContext
 }
@@ -69,7 +72,7 @@ func (d *tidbSessionMCTechContext) BaseContext() mctech.Context {
 
 // ------------------------------------------------
 
-func (d *tidbSessionMCTechContext) StoreSessionMPPVars(ctx context.Context, mpp string) (err error) {
+func (d *tidbSessionMCTechContext) StoreSessionMPPVars(mpp string) (err error) {
 	// 根据传入参数转换成会话中添加的mpp相关的参数名和值
 	var defaultVars []*varValue
 	if defaultVars, err = d.getTargetMPPVars(mpp); err != nil {
@@ -80,12 +83,9 @@ func (d *tidbSessionMCTechContext) StoreSessionMPPVars(ctx context.Context, mpp 
 	storedVars := []varValue{}
 	// 缓存当前会话中同名参数的值
 	for _, v := range defaultVars {
-		var value string
-		value, err = sessionVars.GetSessionOrGlobalSystemVar(ctx, v.name)
-		if err != nil {
-			return
+		if value, ok := sessionVars.GetSystemVar(v.name); ok {
+			storedVars = append(storedVars, varValue{v.name, value})
 		}
-		storedVars = append(storedVars, varValue{v.name, value})
 	}
 	d.storedVars = storedVars
 	return
@@ -127,4 +127,11 @@ func (d *tidbSessionMCTechContext) getTargetMPPVars(mpp string) ([]*varValue, er
 	}
 
 	return nil, errors.New("mpp值不正确。可选值为 force, allow, disable")
+}
+
+func (d *tidbSessionMCTechContext) Clear() {
+	d.ReloadSessionMPPVars()
+
+	d.session.ClearValue(mctech.MCExecStmtVarKey)
+	d.session.ClearValue(mctech.MCContextVarKey)
 }

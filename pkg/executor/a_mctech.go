@@ -122,16 +122,16 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 // 等到对应的 Execute 语句执行时，才考虑租户，考虑这些参数的实际值
 //
 
-func (e *PrepareExec) onCheckPrepare(ctx context.Context) error {
+func (*PrepareExec) onCheckPrepare() error {
 	if config.GetMCTechConfig().Tenant.ForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
 	return nil
 }
 
-func (e *PrepareExec) onAfterParseSQL(ctx context.Context, stmt ast.StmtNode) (err error) {
+func (e *PrepareExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 	var mctx mctech.Context
-	if mctx, err = mctech.GetContext(ctx); err != nil {
+	if mctx, err = mctech.GetContext(e.Ctx()); err != nil {
 		return err
 	}
 
@@ -144,7 +144,7 @@ func (e *PrepareExec) onAfterParseSQL(ctx context.Context, stmt ast.StmtNode) (e
 	defer modifyCtx.SetUsingTenantParam(value)
 
 	modifyCtx.SetUsingTenantParam(true)
-	return mctech.GetInterceptor().AfterParseSQL(ctx, e.Ctx(), mctx, stmt)
+	return mctech.GetInterceptor().AfterParseSQL(e.Ctx(), stmt)
 }
 
 // ---------------------------------------------- large query -----------------------------------------------
@@ -1068,7 +1068,7 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 }
 
 // SaveLargeQuery is used to print the large query in the log files.
-func (a *ExecStmt) SaveLargeQuery(ctx context.Context, sqlType string, succ bool) {
+func (a *ExecStmt) SaveLargeQuery(sqlType string, succ bool) {
 	sessVars := a.Ctx.GetSessionVars()
 	cfg := config.GetMCTechConfig()
 	threshold := cfg.Metrics.LargeQuery.Threshold
@@ -1111,7 +1111,7 @@ func (a *ExecStmt) SaveLargeQuery(ctx context.Context, sqlType string, succ bool
 	}
 	largeQuery, err := sessVars.LargeQueryFormat(largeItems)
 	if err != nil {
-		logutil.Logger(ctx).Error("record large query error", zap.Error(err), zap.Stack("stack"))
+		logutil.BgLogger().Error("record large query error", zap.Error(err), zap.Stack("stack"))
 		return
 	}
 
