@@ -5591,6 +5591,19 @@ def go_deps():
         ],
     )
     go_repository(
+        name = "com_github_patrickmn_go_cache",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/patrickmn/go-cache",
+        sha256 = "d5d1c13e3c9cfeb04a943f656333ec68627dd6ce136af67e2aa5881ad7353c55",
+        strip_prefix = "github.com/patrickmn/go-cache@v2.1.0+incompatible",
+        urls = [
+            "http://bazel-cache.pingcap.net:8080/gomod/github.com/patrickmn/go-cache/com_github_patrickmn_go_cache-v2.1.0+incompatible.zip",
+            "http://ats.apps.svc/gomod/github.com/patrickmn/go-cache/com_github_patrickmn_go_cache-v2.1.0+incompatible.zip",
+            "https://cache.hawkingrei.com/gomod/github.com/patrickmn/go-cache/com_github_patrickmn_go_cache-v2.1.0+incompatible.zip",
+            "https://storage.googleapis.com/pingcapmirror/gomod/github.com/patrickmn/go-cache/com_github_patrickmn_go_cache-v2.1.0+incompatible.zip",
+        ],
+    )
+    go_repository(
         name = "com_github_pbnjay_memory",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/pbnjay/memory",
