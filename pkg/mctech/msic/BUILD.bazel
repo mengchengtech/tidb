@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//pkg/mctech",
         "//pkg/parser/ast",
+        "//pkg/parser/model",
     ],
 )
 
