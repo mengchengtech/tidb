@@ -93,6 +93,7 @@ go_test(
     name = "variable_test",
     timeout = "short",
     srcs = [
+        "a_mctech_test.go",
         "main_test.go",
         "mock_globalaccessor_test.go",
         "removed_test.go",
@@ -107,6 +108,7 @@ go_test(
     shard_count = 50,
     deps = [
         "//pkg/config",
+        "//pkg/executor",
         "//pkg/kv",
         "//pkg/parser",
         "//pkg/parser/auth",
