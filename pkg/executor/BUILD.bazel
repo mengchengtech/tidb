@@ -412,6 +412,7 @@ go_test(
         "//pkg/extension",
         "//pkg/infoschema",
         "//pkg/kv",
+        "//pkg/mctech",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/meta/model",
