@@ -31,13 +31,14 @@ import (
 // |       └─Selection_44(Probe)      | 90.86    | 23271780.76 | 24252   | cop[tikv] |                                                                                           | time:199ms, loops:33, cop_task: {num: 7, max: 90.8ms, min: 9.05ms, avg: 22.7ms, p95: 90.8ms, max_proc_keys: 20480, p95_proc_keys: 20480, tot_proc: 57.7ms, tot_wait: 237.5µs, rpc_num: 7, rpc_time: 158.8ms, copr_cache_hit_ratio: 0.86, build_task_duration: 222.2µs, max_distsql_concurrency: 1}, tikv_task:{proc max:60ms, min:8ms, avg: 24.6ms, p80:40ms, p95:60ms, iters:90, tasks:7}, scan_detail: {total_process_keys: 20480, total_process_keys_size: 9196862, total_keys: 20484, get_snapshot_time: 79.1µs, rocksdb: {key_skipped_count: 40805, block: {cache_hit_count: 385}}} | eq(global_ec3.project_construction_quantity_contract_bill_part.construction_quantity_id, 1784483382014976), eq(global_ec3.project_construction_quantity_contract_bill_part.is_removed, 0), eq(global_ec3.project_construction_quantity_contract_bill_part.value_type, "part")                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | N/A     | N/A      |
 // |         └─TableRowIDScan_43      | 39705.48 | 23152664.31 | 56588   | cop[tikv] | table:project_construction_quantity_contract_bill_part                                    | tikv_task:{proc max:56ms, min:8ms, avg: 24ms, p80:40ms, p95:56ms, iters:90, tasks:7}
 
-func TestFullSQLLog(t *testing.T) {
+func TestSelectStmtFullSQLLog(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
-		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "keys": int(100), "rows": int64(1024), "affected": int64(1111),
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "rows": int64(1024), "maxAct": int64(2024),
 		"rru": int(1111), "wru": int(22),
 	}))
 	defer func() {
@@ -46,22 +47,219 @@ func TestFullSQLLog(t *testing.T) {
 	}()
 	store := testkit.CreateMockStore(t)
 	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
 
-	sql := createTestSQL()
+	sql := createSelectTestSQL()
+	tk.MustExec(sql)
+	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
+	require.NoError(t, err)
+	require.NotNil(t, logData)
+
+	times := logData["times"].(map[string]any)
+	require.NotContains(t, times, "tx")
+	require.NotContains(t, logData, "tx")
+
+	require.Equal(t, map[string]any{
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "3.315821ms", "send": "10ms",
+			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
+			"tiflash": "12µs",
+		},
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem":    float64(151300), "disk": float64(9527), "rows": float64(1024),
+		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
+		"sql":    sql,
+	}, logData)
+}
+
+func TestSelectStmtFullSQLLogInTX(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	now := time.Now().Format("2006-01-02 15:04:05.000")
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(151300), "disk": int64(9527), "rows": int64(1024), "maxAct": int64(2024),
+		"rru": int(1111), "wru": int(22),
+	}))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData")
+	}()
+	store := testkit.CreateMockStore(t)
+	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
+
+	sql := createSelectTestSQL()
+	tk.MustExec("begin")
+	defer tk.MustExec("commit")
+	tk.MustExec(sql)
+	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
+	require.NoError(t, err)
+	require.NotNil(t, logData)
+
+	times := logData["times"].(map[string]any)
+	require.NotContains(t, times, "tx")
+	require.NotContains(t, logData, "tx")
+
+	require.Equal(t, map[string]any{
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "dml", "tp": "select", "inTX": true, "maxAct": float64(2024),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
+			"tiflash": "12µs",
+		},
+		"mem": float64(151300), "disk": float64(9527), "rows": float64(1024),
+		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
+		"sql":    sql,
+	}, logData)
+}
+
+func TestUpdateStmtFullSQLLog(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	now := time.Now().Format("2006-01-02 15:04:05.000")
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(45832), "disk": int64(9527),
+		"rru": int(1111), "wru": int(22),
+	}))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData")
+	}()
+	store := testkit.CreateMockStore(t)
+	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
+
+	sql := createUpdateTestSQL()
 	tk.MustExec(sql)
 	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
 	require.NoError(t, err)
 	require.NotNil(t, logData)
 
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "",
-		"conn": "1", "tp": "select",
-		"at":   now,
-		"ru":   map[string]any{"rru": float64(1111), "wru": float64(22)},
-		"time": map[string]any{"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "cop": "128ms", "copTK": "0s", "copTF": "0s", "ready": "2.315821ms", "send": "1ms"},
-		"mem":  float64(151300), "disk": float64(9527), "keys": float64(100), "affected": float64(1111), "rows": float64(1024),
-		"digest": "422a8fb24253641cc985c5125d28b382eb4fe90c7ca01050e1e5dd0b39b2c673",
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq", "across": "",
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "dml", "tp": "update", "inTX": false, "maxAct": float64(1),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
+			"tiflash": "12µs",
+			"tx":      map[string]any{"prewrite": "1.032s", "commit": "100ms"},
+		},
+		"tx":  map[string]any{"affected": float64(1), "keys": float64(1), "size": float64(44)},
+		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem": float64(45832), "disk": float64(9527),
+		"rows":   float64(0),
+		"digest": "5e4bdd67e44582ea529c3e9b28973aa072ad15377afcf552dea969e320ae5940",
 		"sql":    sql,
+	}, logData)
+}
+
+func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	now := time.Now().Format("2006-01-02 15:04:05.000")
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(45832), "disk": int64(9527),
+		"rru": int(1111), "wru": int(22),
+	}))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData")
+	}()
+	store := testkit.CreateMockStore(t)
+	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
+
+	sql := createUpdateTestSQL()
+	tk.MustExec("begin")
+	defer tk.MustExec("commit")
+	tk.MustExec(sql)
+	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
+	require.NoError(t, err)
+	require.NotNil(t, logData)
+
+	require.Equal(t, map[string]any{
+		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq", "across": "",
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "dml", "tp": "update", "inTX": true, "maxAct": float64(1),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
+			"tiflash": "12µs",
+		},
+		"tx":  map[string]any{"affected": float64(1), "keys": float64(0), "size": float64(0)},
+		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem": float64(45832), "disk": float64(9527),
+		"rows":   float64(0),
+		"digest": "5e4bdd67e44582ea529c3e9b28973aa072ad15377afcf552dea969e320ae5940",
+		"sql":    sql,
+	}, logData)
+}
+
+func TestCommitStmtFullSQLLogInTx(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	now := time.Now().Format("2006-01-02 15:04:05.000")
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
+		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
+		"startedAt": now, "mem": int64(15300), "disk": int64(25300),
+		"rru": int(1111), "wru": int(22),
+	}))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/interceptor/MockTraceLogData")
+	}()
+	store := testkit.CreateMockStore(t)
+	tk := initDbAndData(t, store)
+	sessVars := tk.Session().GetSessionVars()
+
+	sql := createUpdateTestSQL()
+	tk.MustExec("begin")
+	tk.MustExec(sql)
+	tk.MustExec("commit")
+	logData, err := interceptor.GetFullQueryTraceLog(tk.Session())
+	require.NoError(t, err)
+	require.NotNil(t, logData)
+
+	require.Equal(t, map[string]any{
+		"db": "global_ec3", "dbs": "", "usr": "root", "tenant": "", "across": "",
+		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
+		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
+		"cat":  "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
+		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
+		"times": map[string]any{
+			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
+			"tikv":    map[string]any{"cop": "128ms", "process": "98ms", "process2": "0s"},
+			"tiflash": "12µs",
+			"tx":      map[string]any{"prewrite": "1.032s", "commit": "100ms"},
+		},
+		"tx":  map[string]any{"affected": float64(0), "keys": float64(2), "size": float64(122)},
+		"ru":  map[string]any{"rru": float64(1111), "wru": float64(22)},
+		"mem": float64(15300), "disk": float64(25300),
+		"rows":   float64(0),
+		"digest": "9505cacb7c710ed17125fcc6cb3669e8ddca6c8cd8af6a31f6b3cd64604c3098",
+		"sql":    "commit",
 	}, logData)
 }
 
@@ -82,8 +280,8 @@ func initDbAndData(t *testing.T, store kv.Storage) *testkit.TestKit {
 		"	`tenant` varchar(50) NOT NULL COMMENT '租户编码',",
 		"	`org_id` bigint(20) NOT NULL COMMENT '组织id',",
 		"	`id` bigint(20) NOT NULL COMMENT 'id',",
-		"	`construction_quantity_id` bigint(20) NOT NULL COMMENT '施工完成id',",
-		"	`construction_quantity_contract_bill_id` bigint(20) NOT NULL COMMENT '施工完成-原合同清单id',",
+		"	`construction_quantity_id` bigint(20) NULL COMMENT '施工完成id',",
+		"	`construction_quantity_contract_bill_id` bigint(20) NULL COMMENT '施工完成-原合同清单id',",
 		"	`project_bill_quantity_detail_id` bigint(20) DEFAULT NULL COMMENT '原清单id',",
 		"	`unit_work_id` bigint(20) DEFAULT NULL COMMENT 'wbs字典id',",
 		"	`project_unit_work_id` bigint(20) DEFAULT NULL COMMENT '单位工程id',",
@@ -97,17 +295,17 @@ func initDbAndData(t *testing.T, store kv.Storage) *testkit.TestKit {
 		"	`total_quantity` decimal(28,5) DEFAULT NULL COMMENT '开累-形象量',",
 		"	`current_bill_quantity` decimal(28,5) DEFAULT NULL COMMENT '本期数量',",
 		"	`total_bill_quantity` decimal(28,5) DEFAULT NULL COMMENT '开累数量',",
-		"	`order_no` bigint(20) NOT NULL COMMENT '排序',",
-		"	`parent_id` bigint(20) NOT NULL COMMENT '父id',",
-		"	`level` bigint(20) NOT NULL COMMENT '级别',",
-		"	`full_id` varchar(255) NOT NULL COMMENT 'fullId',",
+		"	`order_no` bigint(20) NULL COMMENT '排序',",
+		"	`parent_id` bigint(20) NULL COMMENT '父id',",
+		"	`level` bigint(20) NULL COMMENT '级别',",
+		"	`full_id` varchar(255) NULL COMMENT 'fullId',",
 		"	`is_leaf` tinyint(1) DEFAULT NULL COMMENT '是否末级',",
-		"	`is_removed` tinyint(1) NOT NULL DEFAULT '0' COMMENT '删除标记',",
-		"	`creator` bigint(20) NOT NULL COMMENT '记录创建人',",
-		"	`created_at` datetime NOT NULL COMMENT '记录创建时间',",
-		"	`reviser` bigint(20) NOT NULL COMMENT '记录修改人',",
-		"	`updated_at` datetime NOT NULL COMMENT '记录修改时间',",
-		"	`version` bigint(20) NOT NULL COMMENT '记录版本号',",
+		"	`is_removed` tinyint(1) NULL DEFAULT '0' COMMENT '删除标记',",
+		"	`creator` bigint(20) NULL COMMENT '记录创建人',",
+		"	`created_at` datetime NULL COMMENT '记录创建时间',",
+		"	`reviser` bigint(20) NULL COMMENT '记录修改人',",
+		"	`updated_at` datetime NULL COMMENT '记录修改时间',",
+		"	`version` bigint(20) NULL COMMENT '记录版本号',",
 		"	`value_type` varchar(50) DEFAULT NULL COMMENT '开项类型：entryWork || part',",
 		"	`entry_work_id` bigint(20) DEFAULT NULL COMMENT '分部分项id',",
 		"	`entry_work_name` varchar(255) DEFAULT NULL COMMENT '分部分项name',",
@@ -115,13 +313,24 @@ func initDbAndData(t *testing.T, store kv.Storage) *testkit.TestKit {
 		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='施工完成量-原合同清单-形象进度/部位'",
 	}, "\n")
 	tk.MustExec(createSQL)
+	tk.MustExec("/*& tenant:'gslq' */ insert into project_construction_quantity_contract_bill_part (tenant, org_id, id) values ('cscrc', 1, 1), ('gslq', 2, 2)")
 	return tk
 }
 
-func createTestSQL() string {
+func createUpdateTestSQL() string {
+	return strings.Join([]string{
+		"/* from:'qa-cloud-service', addr:'10.180.108.236' */",
+		"/*& tenant:'gslq' */",
+		"update project_construction_quantity_contract_bill_part",
+		"set is_removed = true",
+	}, "\n")
+}
+
+func createSelectTestSQL() string {
 	return strings.Join([]string{
 		"/* from:'ec-analysis-service', addr:'10.180.108.236' */",
 		"/*& tenant:'cscrc' */",
+		"/*& across:global_sq,global_qa */",
 		"WITH p_part AS (",
 		"  SELECT",
 		"    id,",
