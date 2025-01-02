@@ -270,32 +270,31 @@ func GetMCTechConfig() *MCTech {
 			panic(err)
 		}
 
-		values := make(map[string]bool)
+		values := make(map[string]any)
 		err = json.Unmarshal([]byte(val.(string)), &values)
 		if err != nil {
 			panic(err)
 		}
-		if v, ok := values["Sequence.Mock"]; ok {
-			opts.Sequence.Mock = v
-		}
-		if v, ok := values["DbChecker.Compatible"]; ok {
-			opts.DbChecker.Compatible = v
-		}
 
-		if v, ok := values["Encryption.Mock"]; ok {
-			opts.Encryption.Mock = v
-		}
-		if v, ok := values["Tenant.Enabled"]; ok {
-			opts.Tenant.Enabled = v
-		}
-		if v, ok := values["Tenant.ForbiddenPrepare"]; ok {
-			opts.Tenant.ForbiddenPrepare = v
-		}
-		if v, ok := values["DbChecker.Enabled"]; ok {
-			opts.DbChecker.Enabled = v
-		}
-		if v, ok := values["DDL.Version.Enabled"]; ok {
-			opts.DDL.Version.Enabled = v
+		for k, v := range values {
+			switch k {
+			case "Sequence.Mock":
+				opts.Sequence.Mock = v.(bool)
+			case "DbChecker.Compatible":
+				opts.DbChecker.Compatible = v.(bool)
+			case "Encryption.Mock":
+				opts.Encryption.Mock = v.(bool)
+			case "Tenant.Enabled":
+				opts.Tenant.Enabled = v.(bool)
+			case "Tenant.ForbiddenPrepare":
+				opts.Tenant.ForbiddenPrepare = v.(bool)
+			case "DbChecker.Enabled":
+				opts.DbChecker.Enabled = v.(bool)
+			case "DDL.Version.Enabled":
+				opts.DDL.Version.Enabled = v.(bool)
+			case "Metrics.LargeQuery.Filename":
+				opts.Metrics.LargeQuery.Filename = v.(string)
+			}
 		}
 		failpoint.Return(&opts)
 	})
