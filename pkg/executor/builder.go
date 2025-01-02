@@ -192,6 +192,10 @@ func (b *executorBuilder) build(p base.Plan) exec.Executor {
 		return b.buildTrace(v)
 	case *plannercore.Explain:
 		return b.buildExplain(v)
+	// add by zhangbing
+	case *plannercore.MCTech:
+		return b.buildMCTech(v)
+	// add end
 	case *plannercore.PointGetPlan:
 		return b.buildPointGet(v)
 	case *plannercore.BatchPointGetPlan:

@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "core",
     srcs = [
+        "a_mctech.go",
         "access_object.go",
         "collect_column_stats_usage.go",
         "common_plans.go",
@@ -105,6 +106,7 @@ go_library(
         "//pkg/kv",
         "//pkg/lock",
         "//pkg/lock/context",
+        "//pkg/mctech",
         "//pkg/meta/autoid",
         "//pkg/meta/model",
         "//pkg/metrics",
