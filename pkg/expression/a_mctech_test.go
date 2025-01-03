@@ -3,9 +3,14 @@
 package expression
 
 import (
+	"fmt"
+	"path/filepath"
 	"testing"
+	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/types"
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/mock"
@@ -78,6 +83,36 @@ func TestMCTechDecrypt(t *testing.T) {
 	fc := funcs[ast.MCTechDecrypt]
 	f, err := fc.getFunction(mock.NewContext(),
 		datumsToConstants(types.MakeDatums("{crypto}a4UzL7Cnyyc+D/sK6U7GJA==")))
+	require.NoError(t, err)
+	resetStmtContext(ctx)
+	_, err = evalBuiltinFunc(f, chunk.Row{})
+	require.NoError(t, err)
+}
+
+func TestGetFullSqlWithNotConfig(t *testing.T) {
+	ctx := createContext(t)
+	fc := funcs[ast.MCGetFullSql]
+	f, err := fc.getFunction(mock.NewContext(),
+		datumsToConstants(types.MakeDatums("tidb06", "5MRDLP6DN2B", "2023-10-10 19:55:40")))
+	require.NoError(t, err)
+	resetStmtContext(ctx)
+	_, err = evalBuiltinFunc(f, chunk.Row{})
+	require.ErrorContains(t, err, "未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
+}
+
+func TestGetFullSql(t *testing.T) {
+	fullPath, err := filepath.Abs("../mctech/udf/data")
+	require.NoError(t, err)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		fmt.Sprintf("return(`{\"Metrics.SqlTrace.FullSqlDir\": \"%s\"}`)", fullPath),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+
+	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594436)), mysql.TypeDatetime, 3)
+	ctx := createContext(t)
+	fc := funcs[ast.MCGetFullSql]
+	f, err := fc.getFunction(mock.NewContext(),
+		datumsToConstants(types.MakeDatums("tidb05", "5qz4J4Ux23z", datetime)))
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, chunk.Row{})

@@ -47,6 +47,7 @@ type SQLTrace struct {
 	FileMaxDays       int    `toml:"file-max-days" json:"file-max-days"`           // 日志最长保存天数
 	FileMaxSize       int    `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
 	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
+	FullSQLDir        string `toml:"full-sql-dir" json:"full-sql-dir"`             // sql重新导入数据库后，压缩的全量sql存储位置
 }
 
 // QueryLog sql log record used
@@ -299,6 +300,8 @@ func GetMCTechConfig() *MCTech {
 				opts.DDL.Version.Enabled = v.(bool)
 			case "Metrics.LargeQuery.Filename":
 				opts.Metrics.LargeQuery.Filename = v.(string)
+			case "Metrics.SqlTrace.FullSqlDir":
+				opts.Metrics.SQLTrace.FullSQLDir = v.(string)
 			}
 		}
 		failpoint.Return(&opts)
