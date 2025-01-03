@@ -145,6 +145,10 @@ func (e *memtableRetriever) retrieve(ctx context.Context, sctx sessionctx.Contex
 			err = e.setDataForStatistics(ctx, sctx)
 		case infoschema.TableTables:
 			err = e.setDataFromTables(ctx, sctx)
+		// add by zhangbing
+		case infoschema.TableMCTechTableTTLInfo:
+			err = e.setDataFromMCTechTableTTLInfos(ctx, sctx)
+			// add end
 		case infoschema.TableReferConst:
 			err = e.setDataFromReferConst(ctx, sctx)
 		case infoschema.TableSequences:

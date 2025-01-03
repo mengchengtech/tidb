@@ -24,6 +24,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor/internal/exec"
+	"github.com/pingcap/tidb/pkg/infoschema"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/meta/model"
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -1183,4 +1184,46 @@ func GetSeriveFromSQL(sql string) string {
 	}
 	fmt.Println(matches)
 	return matches[1]
+}
+
+// --------------------------------------------------------------------------------
+
+func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(ctx context.Context, sctx sessionctx.Context) error {
+	checker := privilege.GetPrivilegeManager(sctx)
+	var rows [][]types.Datum
+	is := sctx.GetInfoSchema().(infoschema.InfoSchema)
+	schemas := is.AllSchemaNames()
+	for _, schema := range schemas {
+		tables, err := e.is.SchemaTableInfos(ctx, schema)
+		if err != nil {
+			return err
+		}
+		for _, tbl := range tables {
+			if tbl.TTLInfo == nil {
+				continue
+			}
+
+			if checker != nil && !checker.RequestVerification(sctx.GetSessionVars().ActiveRoles, schema.L, tbl.Name.L, "", mysql.AllPrivMask) {
+				continue
+			}
+
+			if !tbl.IsView() {
+				ttlInfo := tbl.TTLInfo
+				ttlUnit := ast.TimeUnitType(ttlInfo.IntervalTimeUnit).String()
+				record := types.MakeDatums(
+					schema.O,                             // TABLE_SCHEMA
+					tbl.Name.O,                           // TABLE_NAME
+					tbl.ID,                               // TIDB_TABLE_ID
+					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
+					ttlInfo.IntervalExprStr,              // TTL
+					ttlUnit,                              // TTL_UNIT
+					variable.BoolToOnOff(ttlInfo.Enable), // TTL_ENABLE
+					ttlInfo.JobInterval,                  // TTL_JOB_INTERVAL
+				)
+				rows = append(rows, record)
+			}
+		}
+	}
+	e.rows = rows
+	return nil
 }
