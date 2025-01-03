@@ -1051,6 +1051,9 @@ func removeOnUpdateNowFlag(c *table.Column) {
 
 func processDefaultValue(c *table.Column, hasDefaultValue bool, setOnUpdateNow bool) {
 	setTimestampDefaultValue(c, hasDefaultValue, setOnUpdateNow)
+	// add by zhangbing
+	setMCTechSequenceDefaultValue(c, hasDefaultValue, setOnUpdateNow)
+	// add end
 
 	setYearDefaultValue(c, hasDefaultValue)
 
