@@ -37,7 +37,7 @@ type testMCTechContext struct {
 }
 
 func (d *testMCTechContext) GetInfoForTest() map[string]any {
-	info := d.Context.GetInfoForTest()
+	info := d.Context.(mctech.ContextForTest).GetInfoForTest()
 	db := d.CurrentDB()
 	if len(db) > 0 {
 		info["db"] = db
@@ -47,6 +47,10 @@ func (d *testMCTechContext) GetInfoForTest() map[string]any {
 
 func (d *testMCTechContext) CurrentDB() string {
 	return d.currentDb
+}
+
+func (d *testMCTechContext) BaseContext() mctech.Context {
+	return d.Context
 }
 
 type testDBSelector struct {
@@ -72,9 +76,11 @@ func newTestMCTechContext(currentDb string, global bool, excludes []string) (mct
 	}
 
 	context := &testMCTechContext{
-		Context: mctech.NewBaseContext(
-			result, &testDBSelector{dbIndex: 1}),
+		Context: mctech.NewBaseContext(),
 	}
+	modifyCtx := context.Context.(mctech.ModifyContext)
+	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetDBSelector(&testDBSelector{dbIndex: 1})
 
 	context.currentDb, err = context.ToPhysicalDbName(currentDb)
 	return context, err

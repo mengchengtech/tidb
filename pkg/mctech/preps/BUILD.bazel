@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "context.go",
         "db_checker.go",
+        "db_index.go",
         "format.go",
         "mctech_handler.go",
         "replace_action.go",
@@ -21,7 +22,7 @@ go_library(
         "//pkg/parser/ast",
         "//pkg/sessionctx",
         "@com_github_patrickmn_go_cache//:go-cache",
-        "@com_github_pingcap_errors//:errors",
+        "@com_github_pkg_errors//:errors",
     ],
 )
 
@@ -29,8 +30,8 @@ go_test(
     name = "preps_test",
     timeout = "short",
     srcs = [
-        "context_test.go",
         "db_checker_test.go",
+        "db_index_test.go",
         "format_test.go",
         "main_test.go",
         "mctech_handler_test.go",
@@ -44,9 +45,9 @@ go_test(
     deps = [
         "//pkg/kv",
         "//pkg/mctech",
+        "//pkg/parser/ast",
         "//pkg/parser/auth",
         "//pkg/parser/test_driver",
-        "//pkg/session",
         "//pkg/session/types",
         "//pkg/testkit",
         "@com_github_stretchr_testify//require",
