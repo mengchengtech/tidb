@@ -1,0 +1,36 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "digestworker",
+    srcs = ["digest_manager.go"],
+    importpath = "github.com/pingcap/tidb/pkg/mctech/digestworker",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//pkg/kv",
+        "//pkg/parser/terror",
+        "//pkg/util",
+        "//pkg/util/logutil",
+        "//pkg/util/sqlexec",
+        "@com_github_ngaut_pools//:pools",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_pkg_errors//:errors",
+        "@org_uber_go_zap//:zap",
+    ],
+)
+
+go_test(
+    name = "digestworker_test",
+    timeout = "short",
+    srcs = [
+        "digest_manager_test.go",
+        "main_test.go",
+    ],
+    embed = [":digestworker"],
+    flaky = True,
+    deps = [
+        "//pkg/session",
+        "//pkg/testkit",
+        "//pkg/util/sqlexec",
+        "@com_github_stretchr_testify//require",
+    ],
+)

@@ -180,6 +180,10 @@ type Domain struct {
 	runawaySyncer            *runawaySyncer
 	resourceGroupsController *rmclient.ResourceGroupsController
 
+	// add by zhangbing
+	denyDigestManager atomic.Pointer[denyDigestManager]
+	// add end
+
 	serverID             uint64
 	serverIDSession      *concurrency.Session
 	isLostConnectionToPD atomicutil.Int32 // !0: true, 0: false.
