@@ -152,7 +152,7 @@ func closeAll(objs ...Closeable) error {
 func rebuildIndexRanges(ctx sessionctx.Context, is *plannercore.PhysicalIndexScan, idxCols []*expression.Column, colLens []int) (ranges []*ranger.Range, err error) {
 	access := make([]expression.Expression, 0, len(is.AccessCondition))
 	for _, cond := range is.AccessCondition {
-		newCond, err1 := expression.SubstituteCorCol2Constant(cond)
+		newCond, err1 := expression.SubstituteCorCol2Constant(ctx, cond)
 		if err1 != nil {
 			return nil, err1
 		}
@@ -308,7 +308,8 @@ func (e *IndexReaderExecutor) buildKVReq(r []kv.KeyRange) (*kv.Request, error) {
 		SetFromInfoSchema(e.Ctx().GetInfoSchema()).
 		SetMemTracker(e.memTracker).
 		SetClosestReplicaReadAdjuster(newClosestReadAdjuster(e.Ctx(), &builder.Request, e.netDataSize)).
-		SetConnID(e.Ctx().GetSessionVars().ConnectionID)
+		SetConnID(e.Ctx().GetSessionVars().ConnectionID).
+		SetKilled(&e.Ctx().GetSessionVars().Killed)
 	kvReq, err := builder.Build()
 	return kvReq, err
 }
@@ -340,7 +341,7 @@ func (e *IndexReaderExecutor) open(ctx context.Context, kvRanges []kv.KeyRange) 
 		if err != nil {
 			return err
 		}
-		pbConditions, err := expression.ExpressionsToPBList(e.Ctx().GetSessionVars().StmtCtx, []expression.Expression{inCondition}, e.Ctx().GetClient())
+		pbConditions, err := expression.ExpressionsToPBList(e.Ctx(), []expression.Expression{inCondition}, e.Ctx().GetClient())
 		if err != nil {
 			return err
 		}
@@ -513,6 +514,14 @@ func (e *IndexLookUpExecutor) Open(ctx context.Context) error {
 			return err
 		}
 	}
+
+	if e.memTracker != nil {
+		e.memTracker.Reset()
+	} else {
+		e.memTracker = memory.NewTracker(e.ID(), -1)
+	}
+	e.memTracker.AttachTo(e.ctx.GetSessionVars().StmtCtx.MemTracker)
+
 	err = e.buildTableKeyRanges()
 	if err != nil {
 		return err
@@ -543,7 +552,7 @@ func (e *IndexLookUpExecutor) buildTableKeyRanges() (err error) {
 			if e.index.ID == -1 {
 				kvRange, err = distsql.CommonHandleRangesToKVRanges(sc, []int64{physicalID}, ranges)
 			} else {
-				kvRange, err = distsql.IndexRangesToKVRanges(sc, physicalID, e.index.ID, ranges)
+				kvRange, err = distsql.IndexRangesToKVRangesWithInterruptSignal(sc, physicalID, e.index.ID, ranges, e.memTracker, nil)
 			}
 			if err != nil {
 				return err
@@ -556,7 +565,7 @@ func (e *IndexLookUpExecutor) buildTableKeyRanges() (err error) {
 		if e.index.ID == -1 {
 			kvRanges, err = distsql.CommonHandleRangesToKVRanges(sc, []int64{physicalID}, e.ranges)
 		} else {
-			kvRanges, err = distsql.IndexRangesToKVRanges(sc, physicalID, e.index.ID, e.ranges)
+			kvRanges, err = distsql.IndexRangesToKVRangesWithInterruptSignal(sc, physicalID, e.index.ID, e.ranges, e.memTracker, nil)
 		}
 		e.kvRanges = kvRanges.FirstPartitionRange()
 	}
@@ -569,7 +578,11 @@ func (e *IndexLookUpExecutor) open(_ context.Context) error {
 	// constructed by a "IndexLookUpJoin" and "Open" will not be called in that
 	// situation.
 	e.initRuntimeStats()
-	e.memTracker = memory.NewTracker(e.ID(), -1)
+	if e.memTracker != nil {
+		e.memTracker.Reset()
+	} else {
+		e.memTracker = memory.NewTracker(e.ID(), -1)
+	}
 	e.memTracker.AttachTo(e.Ctx().GetSessionVars().StmtCtx.MemTracker)
 
 	e.finished = make(chan struct{})
@@ -712,7 +725,8 @@ func (e *IndexLookUpExecutor) startIndexWorker(ctx context.Context, workCh chan<
 			SetFromInfoSchema(e.Ctx().GetInfoSchema()).
 			SetClosestReplicaReadAdjuster(newClosestReadAdjuster(e.Ctx(), &builder.Request, e.idxNetDataSize/float64(len(kvRanges)))).
 			SetMemTracker(tracker).
-			SetConnID(e.Ctx().GetSessionVars().ConnectionID)
+			SetConnID(e.Ctx().GetSessionVars().ConnectionID).
+			SetKilled(&e.Ctx().GetSessionVars().Killed)
 
 		results := make([]distsql.SelectResult, 0, len(kvRanges))
 		for _, kvRange := range kvRanges {
@@ -846,7 +860,6 @@ func (e *IndexLookUpExecutor) Close() error {
 	e.tblWorkerWg.Wait()
 	e.finished = nil
 	e.workerStarted = false
-	e.memTracker = nil
 	e.resultCurr = nil
 	return nil
 }

@@ -1070,13 +1070,12 @@ func TestMultiIngest(t *testing.T) {
 					return importCli
 				},
 			},
-			logger: log.L(),
 		}
-		err := local.checkMultiIngestSupport(context.Background())
+		supportMultiIngest, err := checkMultiIngestSupport(context.Background(), local.pdCtl, local.importClientFactory)
 		if err != nil {
 			require.Contains(t, err.Error(), testCase.retErr)
 		} else {
-			require.Equal(t, testCase.supportMutliIngest, local.supportMultiIngest)
+			require.Equal(t, testCase.supportMutliIngest, supportMultiIngest)
 		}
 	}
 }
@@ -2061,7 +2060,7 @@ func TestDoImport(t *testing.T) {
 				{
 					keyRange:   common.Range{Start: []byte{'a'}, End: []byte{'b'}},
 					ingestData: &Engine{},
-					retryCount: maxWriteAndIngestRetryTimes - 1,
+					retryCount: MaxWriteAndIngestRetryTimes - 1,
 					injected:   getSuccessInjectedBehaviour(),
 				},
 			},
@@ -2071,7 +2070,7 @@ func TestDoImport(t *testing.T) {
 				{
 					keyRange:   common.Range{Start: []byte{'b'}, End: []byte{'c'}},
 					ingestData: &Engine{},
-					retryCount: maxWriteAndIngestRetryTimes - 1,
+					retryCount: MaxWriteAndIngestRetryTimes - 1,
 					injected:   getSuccessInjectedBehaviour(),
 				},
 			},
@@ -2081,7 +2080,7 @@ func TestDoImport(t *testing.T) {
 				{
 					keyRange:   common.Range{Start: []byte{'c'}, End: []byte{'d'}},
 					ingestData: &Engine{},
-					retryCount: maxWriteAndIngestRetryTimes - 2,
+					retryCount: MaxWriteAndIngestRetryTimes - 2,
 					injected: []injectedBehaviour{
 						{
 							write: injectedWriteBehaviour{
@@ -2132,13 +2131,13 @@ func TestRegionJobResetRetryCounter(t *testing.T) {
 					keyRange:   common.Range{Start: []byte{'c'}, End: []byte{'c', '2'}},
 					ingestData: &Engine{},
 					injected:   getNeedRescanWhenIngestBehaviour(),
-					retryCount: maxWriteAndIngestRetryTimes,
+					retryCount: MaxWriteAndIngestRetryTimes,
 				},
 				{
 					keyRange:   common.Range{Start: []byte{'c', '2'}, End: []byte{'d'}},
 					ingestData: &Engine{},
 					injected:   getSuccessInjectedBehaviour(),
-					retryCount: maxWriteAndIngestRetryTimes,
+					retryCount: MaxWriteAndIngestRetryTimes,
 				},
 			},
 		},
