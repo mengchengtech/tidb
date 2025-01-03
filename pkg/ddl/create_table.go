@@ -139,6 +139,15 @@ func createTable(jobCtx *jobContext, job *model.Job, args *model.CreateTableArgs
 			return tbInfo, errors.Trace(err)
 		}
 
+		// add by zhangbing
+		// 新创建表，尝试生成tiflash的policy
+		// 按目前的tidb版本，新创建表的时候不会同时创建tiflash副本，TiFlashReplica属性始终是nil，但以后的版不确定会不会支持
+		// 此处添加了这段代码在目前的版里不会有什么实际影响
+		if err = updateFullTiflashTableReplacementPolicy(tbInfo, bundles); err != nil {
+			job.State = model.JobStateCancelled
+			return tbInfo, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		}
+		// add end
 		// Send the placement bundle to PD.
 		err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
 		if err != nil {

@@ -1653,6 +1653,9 @@ func doGCPlacementRules(se sessiontypes.Session, _ uint64,
 		bundles = append(bundles, placement.NewBundle(id))
 	}
 	err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
+	// add by zhangbing
+	// 因为生成到pd里的tiflash rule借用的是原来tiflash的规则，因此，在清理partition时，tiflash partition不需要额外处理，等着tiflash删除默认规则就可以了
+	// add end
 	if err != nil {
 		return
 	}

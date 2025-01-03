@@ -164,6 +164,14 @@ func (w *worker) onAddTablePartition(jobCtx *jobContext, job *model.Job) (ver in
 			return ver, errors.Trace(err)
 		}
 
+		// add by zhangbing
+		// 8.5 迁移到 alterTablePartitionBundles 方法中
+		// // 新创建分区，尝试生成tiflash的policy
+		// if err = updateNewTiflashTablePartitionsReplacementPolicy(tblInfo, tblInfo.Partition.AddingDefinitions, bundles); err != nil {
+		// 	job.State = model.JobStateCancelled
+		// 	return ver, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		// }
+		// add end
 		ids := getIDs([]*model.TableInfo{tblInfo})
 		for _, p := range tblInfo.Partition.AddingDefinitions {
 			ids = append(ids, p.ID)
@@ -307,6 +315,13 @@ func alterTablePartitionBundles(t *meta.Mutator, tblInfo *model.TableInfo, addDe
 	bundles = append(bundles, partitionBundles...)
 
 	if len(bundles) > 0 {
+		// add by zhangbing
+		// 合并/拆分分区，执行完成后会生成新的分区替代旧的分区，因此可以当作新增+删除分区处理。此处只处理新增分区的逻辑
+		// 因为生成到pd里的tiflash rule借用的是原来tiflash的规则，因此，在取消正在添加中的partition时，tiflash partition不需要额外处理，等着tiflash删除默认规则就可以了
+		if err = updateNewTiflashTablePartitionsReplacementPolicy(tblInfo, addDefs, bundles); err != nil {
+			return true, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		}
+		// add end
 		return true, infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles)
 	}
 	return false, nil
@@ -2140,6 +2155,10 @@ func (w *worker) rollbackLikeDropPartition(jobCtx *jobContext, job *model.Job) (
 	// GC will later also drop matching Placement bundles.
 	// If we delete them now, it could lead to non-compliant placement or failure during flashback
 	physicalTableIDs, pNames := removePartitionAddingDefinitionsFromTableInfo(tblInfo)
+	// add by zhangbing
+	// 回滚正在创建中的分区，对于扩展的tiflash rule 无需任何操作
+	// 因为生成到pd里的tiflash rule借用的是原来tiflash的规则，因此，在取消正在添加中的partition时，tiflash partition不需要额外处理，等着tiflash删除默认规则就可以了
+	// add end
 	// TODO: Will this drop LabelRules for existing partitions, if the new partitions have the same name?
 	err = dropLabelRules(w.ctx, job.SchemaName, tblInfo.Name.L, pNames)
 	if err != nil {
@@ -2301,6 +2320,10 @@ func (w *worker) onDropTablePartition(jobCtx *jobContext, job *model.Job) (ver i
 			bundles = append(bundles, tableBundle)
 		}
 
+		// add by zhangbing
+		// 删除已存在的分区，对于扩展的tiflash rule 无需任何操作
+		// 因为生成到pd里的tiflash rule借用的是原来tiflash的规则，因此，在删除tiflash partition时，不需要额外处理，等着tiflash删除默认规则就可以了
+		// add end
 		if err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles); err != nil {
 			job.State = model.JobStateCancelled
 			return ver, err
@@ -2698,6 +2721,14 @@ func updateTruncatePartitionLabelRules(job *model.Job, t *meta.Mutator, oldParti
 	if err != nil {
 		return errors.Wrapf(err, "failed to notify PD the placement rules")
 	}
+	// add by zhangbing
+	// 清空分区，实际操作是直接删除该分区，然后重新创建一个新的分区
+	// 新的分区的id与原来的不一样，因此当作新增分区处理
+	if err = updateNewTiflashTablePartitionsReplacementPolicy(tblInfo, newPartitions, bundles); err != nil {
+		job.State = model.JobStateCancelled
+		return errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+	}
+	// add end
 
 	tableID := fmt.Sprintf(label.TableIDFormat, label.IDPrefix, job.SchemaName, tblInfo.Name.L)
 	oldPartRules := make([]string, 0, len(oldIDs))
@@ -2973,6 +3004,9 @@ func (w *worker) onExchangeTablePartition(jobCtx *jobContext, job *model.Job) (v
 		return ver, errors.Trace(err)
 	}
 
+	// add by zhangbing
+	// partition和单一table之间转换时。对于tiflash来说，没有任何区别，所以不需要处理
+	// add end
 	if err = infosync.PutRuleBundlesWithDefaultRetry(context.TODO(), bundles); err != nil {
 		return ver, errors.Wrapf(err, "failed to notify PD the placement rules")
 	}
@@ -3305,6 +3339,19 @@ func (w *worker) onReorganizePartition(jobCtx *jobContext, job *model.Job) (ver 
 			}
 			return rollbackReorganizePartitionWithErr(jobCtx, job, err)
 		}
+
+		// add by zhangbing
+		// 8.5 迁移到 alterTablePartitionBundles 方法中
+		// // 合并/拆分分区，执行完成后会生成新的分区替代旧的分区，因此可以当作新增+删除分区处理。此处只处理新增分区的逻辑
+		// // 因为生成到pd里的tiflash rule借用的是原来tiflash的规则，因此，在取消正在添加中的partition时，tiflash partition不需要额外处理，等着tiflash删除默认规则就可以了
+		// if err = updateNewTiflashTablePartitionsReplacementPolicy(tblInfo, tblInfo.Partition.AddingDefinitions, bundles); err != nil {
+		// 	if !changesMade {
+		// 		job.State = model.JobStateCancelled
+		// 		return ver, errors.Wrapf(err, "failed to notify PD the tiflash placement rules")
+		// 	}
+		// 	return convertAddTablePartitionJob2RollbackJob(d, t, job, err, tblInfo)
+		// }
+		// add end
 		changesMade = changesMade || changed
 
 		ids := getIDs([]*model.TableInfo{tblInfo})
