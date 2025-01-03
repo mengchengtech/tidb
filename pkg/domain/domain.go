@@ -174,6 +174,9 @@ type Domain struct {
 	runawayManager           *resourcegroup.RunawayManager
 	runawaySyncer            *runawaySyncer
 	resourceGroupsController *rmclient.ResourceGroupsController
+	// add by zhangbing
+	denyDigestManager atomic.Pointer[denyDigestManager]
+	// add end
 
 	serverID             uint64
 	serverIDSession      *concurrency.Session
