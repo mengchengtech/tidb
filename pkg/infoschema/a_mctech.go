@@ -23,6 +23,8 @@ var mctechLargeQueryCols = []columnInfo{
 	{name: variable.MCLargeQueryHostStr, tp: mysql.TypeVarchar, size: 64},
 	{name: variable.MCLargeQueryDBStr, tp: mysql.TypeVarchar, size: 64},
 	{name: variable.MCLargeQueryDigestStr, tp: mysql.TypeVarchar, size: 64},
+	{name: variable.MCLargeQuerySQLLengthStr, tp: mysql.TypeLonglong, size: 20},
+	{name: variable.MCLargeQueryServiceStr, tp: mysql.TypeVarchar, size: 128},
 	{name: variable.MCLargeQuerySQLStr, tp: mysql.TypeLongBlob, size: types.UnspecifiedLength},
 	{name: variable.MCLargeQuerySuccStr, tp: mysql.TypeTiny, size: 1},
 	{name: variable.MCLargeQueryMemMax, tp: mysql.TypeLonglong, size: 20},
