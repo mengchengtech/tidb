@@ -110,6 +110,7 @@ go_test(
         "//pkg/config",
         "//pkg/executor",
         "//pkg/kv",
+        "//pkg/mctech/preps",
         "//pkg/parser",
         "//pkg/parser/auth",
         "//pkg/parser/mysql",

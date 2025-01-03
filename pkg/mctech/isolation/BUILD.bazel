@@ -27,6 +27,7 @@ go_test(
     deps = [
         ":isolation",
         "//pkg/mctech",
+        "//pkg/mctech/preps",
         "//pkg/parser",
         "//pkg/parser/format",
         "//pkg/parser/test_driver",
