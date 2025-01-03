@@ -130,6 +130,18 @@ func (b *PBPlanBuilder) pbToTableScan(e *tipb.Executor) (base.PhysicalPlan, erro
 			}
 		}
 		p.Extractor = extractor
+	// add by zhangbing
+	case infoschema.ClusterTableMCTechLargeQuery:
+		extractor := &MCTechLargeQueryExtractor{}
+		extractor.Desc = tblScan.Desc
+		if b.ranges != nil {
+			err := extractor.buildTimeRangeFromKeyRange(b.ranges)
+			if err != nil {
+				return nil, err
+			}
+		}
+		p.Extractor = extractor
+	// add end
 	case infoschema.ClusterTableStatementsSummary, infoschema.ClusterTableStatementsSummaryHistory:
 		p.Extractor = &StatementsSummaryExtractor{}
 	case infoschema.ClusterTableTiDBIndexUsage:
