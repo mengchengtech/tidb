@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "join",
     srcs = [
+        "a_mctech.go",
         "base_join_probe.go",
         "concurrent_map.go",
         "hash_join_base.go",
@@ -36,6 +37,7 @@ go_library(
         "//pkg/executor/join/joinversion",
         "//pkg/executor/unionexec",
         "//pkg/expression",
+        "//pkg/mctech",
         "//pkg/parser/mysql",
         "//pkg/parser/terror",
         "//pkg/planner/core",

@@ -34,6 +34,7 @@ import (
 	plannercore "github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/privilege"
 	"github.com/pingcap/tidb/pkg/sessionctx"
+	"github.com/pingcap/tidb/pkg/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/table"
 	"github.com/pingcap/tidb/pkg/types"
@@ -1239,3 +1240,29 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(ctx context.Context, 
 	e.rows = rows
 	return nil
 }
+
+// ----------------------------------------------------------------------------------------
+
+// GetFlatPlan 把私有方法暴露出去
+func GetFlatPlan(stmtCtx *stmtctx.StatementContext) *plannercore.FlatPhysicalPlan {
+	return getFlatPlan(stmtCtx)
+}
+
+// ----------------------------------------------------------------------------------------
+
+// Collect collect cpu time
+func (e *IndexLookUpRunTimeStats) Collect() *mctech.CPUTimeStats {
+	var cpuTime time.Duration
+	if e.FetchHandleTotal > 0 {
+		cpuTime = cpuTime + time.Duration(e.FetchHandleTotal)
+	}
+	return &mctech.CPUTimeStats{
+		Group: mctech.Root,
+		Type:  "IndexLookUp",
+		Time:  cpuTime,
+	}
+}
+
+var (
+	_ mctech.CPUTimeCollector = &IndexLookUpRunTimeStats{}
+)
