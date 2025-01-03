@@ -829,17 +829,20 @@ func getDefaultValue(ctx exprctx.BuildContext, col *table.Column, option *ast.Co
 		if vv, ok := value.(types.Time); ok {
 			return vv.String(), false, nil
 		}
+		return value, false, nil
 		// add by zhangbing
-		return value, false, nil
 	} else if tp == mysql.TypeLonglong {
-		vd, err := expression.GetBigIntValue(ctx, option.Expr, tp, fsp)
-		if err != nil {
-			return nil, true, dbterror.ErrInvalidDefaultValue.GenWithStackByArgs(col.Name.O)
-		}
-		value := vd.GetValue()
-		// add end
+		if _, ok := option.Expr.(*driver.ValueExpr); !ok {
+			// 不是值表达式的时候才特殊处理
+			vd, err := expression.GetBigIntValue(ctx, option.Expr, tp, fsp)
+			if err != nil {
+				return nil, true, dbterror.ErrInvalidDefaultValue.GenWithStackByArgs(col.Name.O)
+			}
+			value := vd.GetValue()
 
-		return value, false, nil
+			return value, false, nil
+		}
+		// add end
 	}
 
 	// evaluate the non-function-call expr to a certain value.
