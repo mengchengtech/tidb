@@ -137,6 +137,8 @@ const (
 	MCTechMetricsSQLTraceFileMaxDays = "mctech_metrics_sql_trace_file_max_days"
 	// MCTechMetricsSQLTraceCompressThreshold is one of mctech config items
 	MCTechMetricsSQLTraceCompressThreshold = "mctech_metrics_sql_trace_compress_threshold"
+	// MCTechMetricsSQLTraceFullSQLDir is one of mctech config items
+	MCTechMetricsSQLTraceFullSQLDir = "mctech_metrics_sql_trace_full_sql_dir"
 
 	// MCTechMetricsExclude is one of mctech config items
 	MCTechMetricsExclude = "mctech_metrics_exclude"
@@ -272,6 +274,15 @@ func init() {
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
 				config.GetMCTechConfig().Metrics.Exclude = config.StrToSlice(val, ",")
+				return nil
+			},
+		},
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceFullSQLDir, skipInit: true, Type: TypeStr, Value: "",
+			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
+				return config.GetMCTechConfig().Metrics.SQLTrace.FullSQLDir, nil
+			},
+			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
+				config.GetMCTechConfig().Metrics.SQLTrace.FullSQLDir = val
 				return nil
 			},
 		},

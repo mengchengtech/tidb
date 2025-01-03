@@ -5,12 +5,14 @@ go_library(
     srcs = [
         "crypto_func.go",
         "sequence_func.go",
+        "sql_trace_func.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech/udf",
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/config",
         "//pkg/mctech",
+        "//pkg/types",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@com_github_pkg_errors//:errors",
@@ -25,12 +27,15 @@ go_test(
     srcs = [
         "crypto_func_test.go",
         "sequence_func_test.go",
+        "sql_trace_func_test.go",
     ],
     embed = [":udf"],
     flaky = True,
-    shard_count = 5,
+    shard_count = 7,
     deps = [
         "//pkg/mctech/mock",
+        "//pkg/parser/mysql",
+        "//pkg/types",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",
     ],

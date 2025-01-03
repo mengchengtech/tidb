@@ -39,12 +39,14 @@ func init() {
 	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 1}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
+	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 3, 3}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 1}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
+	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 3, 3}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
 	deferredFunctions[ast.MCTechSequence] = struct{}{}
@@ -271,6 +273,86 @@ func (b *builtinMCTechEncryptSig) evalString(ctx EvalContext, row chunk.Row) (st
 	}
 
 	return cipher, false, nil
+}
+
+// --------------------------------------------------------------
+
+type mctechGetFullSQLFunctionClass struct {
+	baseFunctionClass
+}
+
+func (c *mctechGetFullSQLFunctionClass) getFunction(ctx BuildContext, args []Expression) (builtinFunc, error) {
+	if err := c.verifyArgs(args); err != nil {
+		return nil, err
+	}
+	timeArgTp := c.getArgEvalTp(args[2].GetType(ctx.GetEvalCtx()))
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, types.ETString, types.ETString, timeArgTp)
+	if err != nil {
+		return nil, err
+	}
+	bf.tp.SetFlen(mysql.MaxFieldCharLength)
+	sig := &builtinMCTechGetFullSQLSig{bf}
+	return sig, nil
+}
+
+func (c *mctechGetFullSQLFunctionClass) getArgEvalTp(fieldTp *types.FieldType) types.EvalType {
+	argTp := types.ETString
+	switch tp := fieldTp.EvalType(); tp {
+	case types.ETDuration, types.ETDatetime, types.ETTimestamp:
+		argTp = tp
+	}
+	return argTp
+}
+
+type builtinMCTechGetFullSQLSig struct {
+	baseBuiltinFunc
+}
+
+func (b *builtinMCTechGetFullSQLSig) Clone() builtinFunc {
+	newSig := &builtinMCTechGetFullSQLSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinMCTechGetFullSQLSig) evalString(ctx EvalContext, row chunk.Row) (string, bool, error) {
+	var isNull bool
+	var err error
+	var node string
+	var conn string
+	var at types.Time
+	node, isNull, err = b.args[0].EvalString(ctx, row)
+	if isNull || err != nil {
+		return "", isNull, err
+	}
+
+	conn, isNull, err = b.args[1].EvalString(ctx, row)
+	if isNull || err != nil {
+		return "", isNull, err
+	}
+
+	switch b.args[2].GetType(ctx).EvalType() {
+	case types.ETString:
+		var s string
+		s, isNull, err = b.args[2].EvalString(ctx, row)
+		if isNull || err != nil {
+			return "", isNull, err
+		}
+		at, err = types.StrToDateTime(ctx.TypeCtx(), s, b.tp.GetDecimal())
+		if err != nil {
+			return "", isNull, err
+		}
+	case types.ETDatetime, types.ETTimestamp:
+		at, isNull, err = b.args[2].EvalTime(ctx, row)
+		if isNull || err != nil {
+			return "", isNull, err
+		}
+	}
+	fullsql, err := udf.GetFullSQL(node, conn, at)
+	if err != nil {
+		return "", true, err
+	}
+
+	return fullsql, false, nil
 }
 
 // --------------------------------------------------------------
