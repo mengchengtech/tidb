@@ -1514,6 +1514,11 @@ func isInvalidDefaultValue(colDef *ast.ColumnDef) bool {
 			if !(tp.GetType() == mysql.TypeTimestamp || tp.GetType() == mysql.TypeDatetime) && isDefaultValNowSymFunc(columnOpt.Expr) {
 				return true
 			}
+			// add by zhangbing
+			if tp.GetType() != mysql.TypeLonglong && isDefaultValMCSymFunc(columnOpt.Expr) {
+				return true
+			}
+			// add end
 			break
 		}
 	}
