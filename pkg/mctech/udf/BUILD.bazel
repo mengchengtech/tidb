@@ -24,7 +24,6 @@ go_test(
     timeout = "short",
     srcs = [
         "crypto_func_test.go",
-        "main_test.go",
         "sequence_func_test.go",
     ],
     embed = [":udf"],

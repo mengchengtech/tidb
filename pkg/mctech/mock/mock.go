@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// M check if in testing mode
 func M(t require.TestingT, v any) string {
 	panic(errors.New("SHOULD NOT call out of test"))
 }

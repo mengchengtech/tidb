@@ -17,7 +17,6 @@ type strToSliceCase struct {
 	result         bool
 }
 
-// StrToSlice
 func TestStrToSlice(t *testing.T) {
 	cases := []*strToSliceCase{
 		{source: "     ", sep: ",", expect: []string{}},
@@ -35,7 +34,6 @@ func TestStrToSlice(t *testing.T) {
 	}
 }
 
-// StrToPossibleValueSlice
 func TestStrToPossibleValueSlice(t *testing.T) {
 	cases := []*strToSliceCase{
 		{source: "     ", sep: ",", expect: []string{}, result: true, possibleValues: []string{"aa", "ee"}},
@@ -53,5 +51,24 @@ func TestStrToPossibleValueSlice(t *testing.T) {
 		if ok {
 			require.ElementsMatch(t, list, c.expect, fmt.Sprintf("input: [%s]", c.source))
 		}
+	}
+}
+
+type distinctSliceCase struct {
+	s      []string
+	output []string
+}
+
+func TestDistinctSlice(t *testing.T) {
+	cases := []*distinctSliceCase{
+		{[]string{"a", "b", "c"}, []string{"a", "b", "c"}},
+		{[]string{""}, []string{}},
+		{[]string{}, []string{}},
+		{[]string{"a", "a", "dc", "aa", "dc"}, []string{"a", "dc", "aa"}},
+	}
+
+	for _, c := range cases {
+		output := DistinctSlice(c.s)
+		require.ElementsMatch(t, output, c.output, fmt.Sprintf("slice: %s", c.s))
 	}
 }

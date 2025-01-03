@@ -22,7 +22,7 @@ const (
 	MCLargeQueryTotalKeysStr = "TOTAL_KEYS"
 )
 
-// String implements the fmt.Stringer interface.
+// LargeQueryString use for Large SQL log recording.
 func (d ExecDetails) LargeQueryString() string {
 	parts := make([]string, 0, 8)
 	if d.CopTime > 0 {
