@@ -18,6 +18,7 @@ var (
 	largeQueryLogger *zap.Logger
 )
 
+// F Get full sql trace logger
 func F() *zap.Logger {
 	if fullQueryLogger != nil {
 		return fullQueryLogger
@@ -29,6 +30,7 @@ func F() *zap.Logger {
 	return fullQueryLogger
 }
 
+// L Get large query logger
 func L() *zap.Logger {
 	if largeQueryLogger != nil {
 		return largeQueryLogger
@@ -130,7 +132,7 @@ func initFullQueryLogger() {
 	}
 
 	globalConfig := config.GetGlobalConfig()
-	sqlTraceConfig := globalConfig.MCTech.Metrics.SqlTrace
+	sqlTraceConfig := globalConfig.MCTech.Metrics.SQLTrace
 	cfg := globalConfig.Log.ToLogConfig()
 	// copy the global log config to full sql log config
 	fsConfig := cfg.Config
@@ -158,7 +160,8 @@ func initFullQueryLogger() {
 	fullQueryLogger = logger
 }
 
-type LobTimeObject struct {
+// LogTimeObject time data struct whitch is used for trace log.
+type LogTimeObject struct {
 	All   time.Duration // 执行总时间
 	Parse time.Duration // 解析语法树用时，含mctech扩展
 	Plan  time.Duration // 生成执行计划用时
@@ -167,7 +170,8 @@ type LobTimeObject struct {
 	Send  time.Duration // 发送到客户端用时
 }
 
-func (lt *LobTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
+func (lt *LogTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("all", lt.All)
 	enc.AddDuration("parse", lt.Parse)
 	enc.AddDuration("plan", lt.Plan)
