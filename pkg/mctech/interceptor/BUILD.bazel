@@ -13,8 +13,10 @@ go_library(
     deps = [
         "//pkg/config",
         "//pkg/executor",
+        "//pkg/kv",
         "//pkg/mctech",
         "//pkg/parser/ast",
+        "//pkg/planner/core",
         "//pkg/planner/core/base",
         "//pkg/sessionctx",
         "//pkg/util/execdetails",
