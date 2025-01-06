@@ -93,6 +93,7 @@ go_test(
     name = "variable_test",
     timeout = "short",
     srcs = [
+        "a_mctech_atomic_test.go",
         "a_mctech_test.go",
         "main_test.go",
         "mock_globalaccessor_test.go",
