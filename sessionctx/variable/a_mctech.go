@@ -12,6 +12,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/pingcap/log"
@@ -152,6 +153,20 @@ const (
 	MCTechMetricsIgnoreByDatabases = "mctech_metrics_ignore_by_databases"
 )
 
+var varMutex sync.Mutex
+
+func atomicLoad[T any](pt *T) T {
+	varMutex.Lock()
+	defer varMutex.Unlock()
+	return *pt
+}
+
+func atomicStore[T any](pt *T, v T) {
+	varMutex.Lock()
+	defer varMutex.Unlock()
+	*pt = v
+}
+
 func init() {
 	var mctechSysVars = []*SysVar{
 		{Scope: ScopeNone, Name: MCTechSequenceMaxFetchCount, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceMaxFetchCount)},
@@ -160,10 +175,10 @@ func init() {
 		{Scope: ScopeNone, Name: MCTechDbCheckerEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerEnabled)},
 		{Scope: ScopeGlobal, Name: MCTechDbCheckerCompatible, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerCompatible),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().DbChecker.Compatible), nil
+				return BoolToOnOff(atomicLoad(&config.GetMCTechConfig().DbChecker.Compatible)), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().DbChecker.Compatible = TiDBOptOn(val)
+				atomicStore(&config.GetMCTechConfig().DbChecker.Compatible, TiDBOptOn(val))
 				return nil
 			},
 		},
@@ -181,19 +196,23 @@ func init() {
 		{Scope: ScopeGlobal, Name: MCTechMPPDefaultValue, Type: TypeEnum, Value: config.DefaultMPPValue,
 			PossibleValues: []string{"allow", "force", "disable"},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return config.GetMCTechConfig().MPP.DefaultValue, nil
+				v := atomicLoad(&config.GetMCTechConfig().MPP.DefaultValue)
+				return v, nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().MPP.DefaultValue = val
+				v := val
+				atomicStore(&config.GetMCTechConfig().MPP.DefaultValue, v)
 				return nil
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsLargeQueryEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.LargeQuery.Enabled), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.LargeQuery.Enabled)
+				return BoolToOnOff(v), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeQuery.Enabled = TiDBOptOn(val)
+				v := TiDBOptOn(val)
+				atomicStore(&config.GetMCTechConfig().Metrics.LargeQuery.Enabled, v)
 				return nil
 			},
 		},
@@ -205,111 +224,106 @@ func init() {
 				return validateEnumSet(original, ",", config.AllAllowMetricsLargeQueryTypes)
 			},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.LargeQuery.Types, ","), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.LargeQuery.Types)
+				return strings.Join(v, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.LargeQuery.Types = config.StrToSlice(val, ",")
+				v := config.StrToSlice(val, ",")
+				atomicStore(&config.GetMCTechConfig().Metrics.LargeQuery.Types, v)
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryThreshold, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsLargeQueryThreshold),
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryThreshold, Type: TypeUnsigned, Value: strconv.Itoa(config.DefaultMetricsLargeQueryThreshold),
 			MinValue: 4 * 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.LargeQuery.Threshold), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.LargeQuery.Threshold)
+				return strconv.Itoa(v), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				num, err := strconv.Atoi(val)
-				if err != nil {
-					return err
-				}
-				config.GetMCTechConfig().Metrics.LargeQuery.Threshold = num
+				v := TidbOptInt(val, 0)
+				atomicStore(&config.GetMCTechConfig().Metrics.LargeQuery.Threshold, v)
 				return nil
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsQueryLogEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsQueryLogEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.QueryLog.Enabled), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.QueryLog.Enabled)
+				return BoolToOnOff(v), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.QueryLog.Enabled = TiDBOptOn(val)
+				v := TiDBOptOn(val)
+				atomicStore(&config.GetMCTechConfig().Metrics.QueryLog.Enabled, v)
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsQueryLogMaxLength, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsQueryLogMaxLength),
+		{Scope: ScopeGlobal, Name: MCTechMetricsQueryLogMaxLength, Type: TypeUnsigned, Value: strconv.Itoa(config.DefaultMetricsQueryLogMaxLength),
 			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.QueryLog.MaxLength), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.QueryLog.MaxLength)
+				return strconv.Itoa(v), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				num, err := strconv.Atoi(val)
-				if err != nil {
-					return err
-				}
-				config.GetMCTechConfig().Metrics.QueryLog.MaxLength = num
+				v := TidbOptInt(val, 0)
+				atomicStore(&config.GetMCTechConfig().Metrics.QueryLog.MaxLength, v)
 				return nil
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechDbCheckerExcepts, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExcepts, ","),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().DbChecker.Excepts, ","), nil
+				v := atomicLoad(&config.GetMCTechConfig().DbChecker.Excepts)
+				return strings.Join(v, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				excepts := config.StrToSlice(val, ",")
-				config.GetMCTechConfig().DbChecker.Excepts = excepts
+				v := config.StrToSlice(val, ",")
+				atomicStore(&config.GetMCTechConfig().DbChecker.Excepts, v)
 				return nil
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSQLTraceEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(config.GetMCTechConfig().Metrics.SQLTrace.Enabled), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.SQLTrace.Enabled)
+				return BoolToOnOff(v), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.SQLTrace.Enabled = TiDBOptOn(val)
+				v := TiDBOptOn(val)
+				atomicStore(&config.GetMCTechConfig().Metrics.SQLTrace.Enabled, v)
 				return nil
 			},
 		},
 		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFilename, Type: TypeBool, Value: config.DefaultMetricsSQLTraceFilename},
 		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFileMaxSize, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLTraceFileMaxSize)},
 		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFileMaxDays, Type: TypeStr, Value: strconv.Itoa(config.DefaultMetricsSQLTraceFileMaxDays)},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceCompressThreshold, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLTraceCompressThreshold),
+		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceCompressThreshold, Type: TypeUnsigned, Value: strconv.Itoa(config.DefaultMetricsSQLTraceCompressThreshold),
 			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strconv.Itoa(config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold)
+				return strconv.Itoa(v), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				num, err := strconv.Atoi(val)
-				if err != nil {
-					return err
-				}
-
-				config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold = num
+				v := TidbOptInt(val, 0)
+				atomicStore(&config.GetMCTechConfig().Metrics.SQLTrace.CompressThreshold, v)
 				return nil
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsIgnoreByDatabases, Type: TypeStr, Value: strings.Join(config.DefaultMetricsIgnoreByDatabases, ","),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.Ignore.ByDatabases, ","), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.Ignore.ByDatabases)
+				return strings.Join(v, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.Ignore.ByDatabases = config.StrToSlice(val, ",")
+				v := config.StrToSlice(val, ",")
+				atomicStore(&config.GetMCTechConfig().Metrics.Ignore.ByDatabases, v)
 				return nil
 			},
 		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsIgnoreByRoles, Type: TypeStr, Value: strings.Join(config.DefaultMetricsIgnoreByRoles, ","),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return strings.Join(config.GetMCTechConfig().Metrics.Ignore.ByRoles, ","), nil
+				v := atomicLoad(&config.GetMCTechConfig().Metrics.Ignore.ByRoles)
+				return strings.Join(v, ","), nil
 			},
 			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.Ignore.ByRoles = config.StrToSlice(val, ",")
-				return nil
-			},
-		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceFullSQLDir, Type: TypeStr, Value: "",
-			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return config.GetMCTechConfig().Metrics.SQLTrace.FullSQLDir, nil
-			},
-			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				config.GetMCTechConfig().Metrics.SQLTrace.FullSQLDir = val
+				v := config.StrToSlice(val, ",")
+				atomicStore(&config.GetMCTechConfig().Metrics.Ignore.ByRoles, v)
 				return nil
 			},
 		},
