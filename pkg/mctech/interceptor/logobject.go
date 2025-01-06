@@ -1,6 +1,7 @@
 package interceptor
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
@@ -22,11 +23,10 @@ var (
 // logSQLTraceObject sql trace log object
 type logSQLTraceObject struct {
 	at       time.Time          // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
-	conn     uint64             // SQL 查询客户端连接 ID
 	db       string             // 执行sql时的当前库名称
 	dbs      string             // 执行的sql中用到的所有数据库名称列表。','分隔
 	across   string             // sql中指定的跨库查询的数据库
-	client   *clientInfo        // 执行sql的客户端信息
+	client   clientInfo         // 执行sql的客户端信息
 	inTX     bool               // 当前sql是否在事务中
 	user     string             // 执行sql时使用的账号
 	tenant   string             // 所属租户信息
@@ -55,11 +55,8 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	if len(st.tenant) > 0 {
 		enc.AddString("tenant", st.tenant)
 	}
-	enc.AddString("conn", encode(st.conn))
-	if st.client != nil {
-		if err := enc.AddObject("client", st.client); err != nil {
-			return err
-		}
+	if err := enc.AddObject("client", &st.client); err != nil {
+		return err
 	}
 	enc.AddBool("inTX", st.inTX)
 	enc.AddString("cat", st.info.category)
@@ -108,21 +105,17 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func (st *logSQLTraceObject) getClient() *clientInfo {
-	if st.client != nil {
-		return st.client
-	}
-	st.client = &clientInfo{}
-	return st.client
-}
-
 type clientInfo struct {
+	conn    uint64 // SQL 查询客户端连接 ID
+	address string // 执行当前sql的客户端地址
 	app     string // 执行当前sql的服务名称
 	product string // 执行当前sql的服务所属产品线
 	pkg     string // 执行当前sql的依赖包
 }
 
 func (t *clientInfo) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("conn", encode(t.conn))
+	enc.AddString("address", t.address)
 	if len(t.app) > 0 {
 		enc.AddString("app", t.app)
 		enc.AddString("product", t.product)
@@ -325,4 +318,11 @@ func encode(num uint64) string {
 	}
 
 	return string(bytes)
+}
+
+func formatAddress(ci *variable.ConnectionInfo) string {
+	if ci == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s", ci.ClientIP, ci.ClientPort)
 }
