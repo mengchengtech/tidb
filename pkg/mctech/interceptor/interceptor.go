@@ -285,7 +285,10 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		user: si.GetUser(),
 		at:   mctx.StartedAt(),
 		info: info,
-		conn: sessVars.ConnectionID,
+		client: clientInfo{
+			conn:    sessVars.ConnectionID,
+			address: formatAddress(sessVars.ConnectionInfo),
+		},
 		inTX: sessVars.InTxn(),
 		txID: sessVars.TxnCtx.StartTS,
 		times: logTimeObject{
@@ -392,14 +395,12 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 
 		comments := result.Comments()
 		pkg := comments.Package()
-		var client *clientInfo
+		client := &traceLog.client
 		if pkg != nil {
-			client = traceLog.getClient()
 			client.pkg = pkg.Name()
 		}
 		svc := comments.Service()
 		if svc != nil {
-			client = traceLog.getClient()
 			client.app = svc.AppName()
 			client.product = svc.ProductLine()
 		}
