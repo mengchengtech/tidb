@@ -24,13 +24,9 @@ declare interface FullTraceLog {
    */
   tenant: string
   /**
-   * SQL 查询客户端连接 ID (36进制重新编码)
-   */
-  conn: string
-  /**
    * 执行sql的客户端的信息
    */
-  client?: clientInfo
+  client: clientInfo
   /**
    * 当前sql是否在事务中
    */
@@ -111,6 +107,10 @@ declare interface FullTraceLog {
 
 declare interface clientInfo {
   /**
+   * 客户端ip地址
+   */
+  address: string
+  /**
    * 提取自 /* from:'......' *\/ 一般表示eureka里注册的服务名称。如果找不到服务名称则会用unknown({db})代替
    */
   app: string
@@ -122,6 +122,10 @@ declare interface clientInfo {
    * 提取自 /\* package:'' *\/ 表示当前sql是在某个依赖包中执行的。
    */
   pkg: string
+  /**
+   * SQL 查询客户端连接 ID (36进制重新编码)
+   */
+  conn: string
 }
 
 declare interface logWarningObjects {
