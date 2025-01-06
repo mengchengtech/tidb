@@ -8,6 +8,7 @@ import (
 
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -64,4 +65,9 @@ func GetFullQueryTraceLog(sctx sessionctx.Context) (map[string]any, error) {
 // EncodeForTest 仅用于单元测试
 func EncodeForTest(num uint64) string {
 	return encode(num)
+}
+
+// FormatAddressTest 仅用于单元测试
+func FormatAddressTest(ci *variable.ConnectionInfo) string {
+	return formatAddress(ci)
 }

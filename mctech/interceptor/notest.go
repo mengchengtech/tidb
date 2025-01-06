@@ -7,6 +7,7 @@ import (
 
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessionctx/variable"
 	"go.uber.org/zap"
 )
 
@@ -24,6 +25,12 @@ func GetFullQueryTraceLog(sctx sessionctx.Context) (map[string]any, error) {
 
 // EncodeForTest placeholder. not allow invoke
 func EncodeForTest(num uint64) string {
+	err := errors.New("[EncodeForTest] not allow invoke")
+	panic(err)
+}
+
+// FormatAddressTest placeholder. not allow invoke
+func FormatAddressTest(ci *variable.ConnectionInfo) string {
 	err := errors.New("[EncodeForTest] not allow invoke")
 	panic(err)
 }

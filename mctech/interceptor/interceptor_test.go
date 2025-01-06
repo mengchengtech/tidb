@@ -66,9 +66,12 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
-		"client": map[string]any{"app": "ec-analysis-service", "product": ""},
-		"cat":    "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
+		"client": map[string]any{
+			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
+			"address": interceptor.FormatAddressTest(sessVars.ConnectionInfo),
+			"app":     "ec-analysis-service", "product": "",
+		},
+		"cat": "dml", "tp": "select", "inTX": false, "maxAct": float64(2024),
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
 			"cop": map[string]any{"wall": "128ms", "tikv": "98ms", "tiflash": "12µs"},
@@ -119,9 +122,12 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
-		"client": map[string]any{"app": "ec-analysis-service", "product": ""},
-		"cat":    "dml", "tp": "select", "inTX": true, "maxAct": float64(2024),
+		"client": map[string]any{
+			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
+			"address": interceptor.FormatAddressTest(sessVars.ConnectionInfo),
+			"app":     "ec-analysis-service", "product": "",
+		},
+		"cat": "dml", "tp": "select", "inTX": true, "maxAct": float64(2024),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"ru":     map[string]any{"rru": float64(1111), "wru": float64(22)},
 		"times": map[string]any{
@@ -165,9 +171,12 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
-		"client": map[string]any{"app": "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala"},
-		"cat":    "dml", "tp": "update", "inTX": false, "maxAct": float64(1),
+		"client": map[string]any{
+			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
+			"address": interceptor.FormatAddressTest(sessVars.ConnectionInfo),
+			"app":     "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala",
+		},
+		"cat": "dml", "tp": "update", "inTX": false, "maxAct": float64(1),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
@@ -216,9 +225,12 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn":   interceptor.EncodeForTest(sessVars.ConnectionID),
-		"client": map[string]any{"app": "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala"},
-		"cat":    "dml", "tp": "update", "inTX": true, "maxAct": float64(1),
+		"client": map[string]any{
+			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
+			"address": interceptor.FormatAddressTest(sessVars.ConnectionInfo),
+			"app":     "qa-cloud-service", "product": "pf", "pkg": "@mctech/dp-impala",
+		},
+		"cat": "dml", "tp": "update", "inTX": true, "maxAct": float64(1),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
@@ -270,8 +282,11 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "", "usr": "root",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
-		"conn": interceptor.EncodeForTest(sessVars.ConnectionID),
-		"cat":  "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
+		"client": map[string]any{
+			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
+			"address": interceptor.FormatAddressTest(sessVars.ConnectionInfo),
+		},
+		"cat": "tx", "tp": "commit", "inTX": false, "maxAct": float64(0),
 		"maxCop": map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": float64(8)},
 		"times": map[string]any{
 			"all": "3.315821ms", "tidb": "11.201s", "parse": "176.943µs", "plan": "1.417613ms", "ready": "2.315821ms", "send": "1ms",
