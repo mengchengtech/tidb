@@ -49,6 +49,7 @@ type SQLTrace struct {
 	FileMaxSize       int    `toml:"file-max-size" json:"file-max-size"`           // 单个文件最大长度
 	CompressThreshold int    `toml:"compress-threshold" json:"compress-threshold"` // 启用sql文本压缩的阈值
 	FullSQLDir        string `toml:"full-sql-dir" json:"full-sql-dir"`             // sql重新导入数据库后，压缩的全量sql存储位置
+	Group             string `toml:"group" json:"group"`                           // 默认的sql日志所属分组,一般是按照集群分组
 }
 
 // MetricsIgnore metrics ignore config
@@ -174,6 +175,8 @@ const (
 	DefaultMetricsSQLTraceFileMaxSize = 512 // 512MB
 	// DefaultMetricsSQLTraceFullSQLDir  one of config default value
 	DefaultMetricsSQLTraceFullSQLDir = ""
+	// DefaultMetricsSQLTraceGroup one of config default value
+	DefaultMetricsSQLTraceGroup = ""
 )
 
 var (
@@ -267,6 +270,7 @@ func newMCTech() MCTech {
 				FileMaxSize:       DefaultMetricsSQLTraceFileMaxSize,
 				CompressThreshold: DefaultMetricsSQLTraceCompressThreshold,
 				FullSQLDir:        DefaultMetricsSQLTraceFullSQLDir,
+				Group:             DefaultMetricsSQLTraceGroup,
 			},
 		},
 	}
@@ -329,6 +333,8 @@ func GetMCTechConfig() *MCTech {
 				opts.Metrics.SQLTrace.Enabled = toBool(v)
 			case "Metrics.SqlTrace.CompressThreshold":
 				opts.Metrics.SQLTrace.CompressThreshold = toInt(v)
+			case "Metrics.SqlTrace.Group":
+				opts.Metrics.SQLTrace.Group = v.(string)
 			}
 		}
 		failpoint.Return(&opts)

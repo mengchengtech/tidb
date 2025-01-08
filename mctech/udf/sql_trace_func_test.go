@@ -13,7 +13,7 @@ import (
 )
 
 func TestGetFullSqlNotSetConfig(t *testing.T) {
-	_, _, err := GetFullSQL(types.MinTimestamp, 1234567890)
+	_, _, err := GetFullSQL(types.MinTimestamp, 1234567890, "")
 	require.ErrorContains(t, err, "未设置 mctech.metrics.sql-trace.full-sql-dir 配置项")
 }
 
@@ -25,14 +25,14 @@ func TestGetFullSql(t *testing.T) {
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
-	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594436)), mysql.TypeDatetime, 3)
-	sql, isNull, err := GetFullSQL(datetime, 1697003594436)
+	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594437)), mysql.TypeDatetime, 3)
+	sql, isNull, err := GetFullSQL(datetime, 1697003594435, "")
 	require.NoError(t, err)
 	require.False(t, isNull)
 	require.Equal(t, 279828, len(sql))
 }
 
-func TestGetFullSql2(t *testing.T) {
+func TestGetFullSqlWithPre(t *testing.T) {
 	fullPath, err := filepath.Abs("./data")
 	require.NoError(t, err)
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
@@ -41,7 +41,22 @@ func TestGetFullSql2(t *testing.T) {
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594437)), mysql.TypeDatetime, 3)
-	sql, isNull, err := GetFullSQL(datetime, 1697003594435)
+	sql, isNull, err := GetFullSQL(datetime, 1697003594436, "pre")
+	require.NoError(t, err)
+	require.False(t, isNull)
+	require.Equal(t, 279828, len(sql))
+}
+
+func TestGetFullSqlWithProduct(t *testing.T) {
+	fullPath, err := filepath.Abs("./data")
+	require.NoError(t, err)
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]string{"Metrics.SqlTrace.FullSqlDir": fullPath, "Metrics.SqlTrace.Group": "product"}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
+	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594437)), mysql.TypeDatetime, 3)
+	sql, isNull, err := GetFullSQL(datetime, 1697003594437, "")
 	require.NoError(t, err)
 	require.False(t, isNull)
 	require.Equal(t, 279828, len(sql))
@@ -55,8 +70,7 @@ func TestGetFullSqlNotExists(t *testing.T) {
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
-	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594436)), mysql.TypeDatetime, 3)
-	_, isNull, err := GetFullSQL(datetime, 1697003594437)
+	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594499)), mysql.TypeDatetime, 3)
+	_, _, err = GetFullSQL(datetime, 1697003594437, "product")
 	require.NoError(t, err)
-	require.True(t, isNull)
 }
