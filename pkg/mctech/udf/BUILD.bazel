@@ -33,7 +33,7 @@ go_test(
     ],
     embed = [":udf"],
     flaky = True,
-    shard_count = 10,
+    shard_count = 11,
     deps = [
         "//pkg/mctech/mock",
         "//pkg/parser/mysql",

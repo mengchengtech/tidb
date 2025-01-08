@@ -43,14 +43,14 @@ func init() {
 	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 4}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
-	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 2}}
+	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 3}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 4}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
-	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 2}}
+	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 3}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
 	deferredFunctions[ast.MCTechSequence] = struct{}{}
@@ -406,12 +406,27 @@ func (c *mctechGetFullSQLFunctionClass) getFunction(ctx BuildContext, args []Exp
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, types.ETDatetime, types.ETInt)
+
+	var (
+		argTps []types.EvalType
+		sig    builtinFunc
+	)
+
+	length := len(args)
+	switch length {
+	case 2:
+		argTps = append(argTps, types.ETDatetime, types.ETInt)
+	case 3:
+		argTps = append(argTps, types.ETDatetime, types.ETInt, types.ETString)
+	default:
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_get_full_sql")
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, argTps...)
 	if err != nil {
 		return nil, err
 	}
 	bf.tp.SetFlen(mysql.MaxFieldCharLength)
-	sig := &builtinMCTechGetFullSQLSig{bf}
+	sig = &builtinMCTechGetFullSQLSig{bf}
 	return sig, nil
 }
 
@@ -439,7 +454,18 @@ func (b *builtinMCTechGetFullSQLSig) evalString(ctx EvalContext, row chunk.Row) 
 		return "", isNull, err
 	}
 
-	fullsql, isNull, err := udf.GetFullSQL(at, txID)
+	var group = ""
+	if len(b.args) == 3 {
+		val, isNull, err := b.args[2].EvalString(ctx, row)
+		if err != nil {
+			return "", isNull, err
+		}
+		if !isNull {
+			group = val
+		}
+	}
+
+	fullsql, isNull, err := udf.GetFullSQL(at, txID, group)
 	if err != nil {
 		return "", true, err
 	}

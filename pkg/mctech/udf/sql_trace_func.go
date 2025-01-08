@@ -21,11 +21,19 @@ import (
 const dateFormat = "2006-01-02"
 
 // GetFullSQL get full sql from disk compact file
-func GetFullSQL(at types.Time, txID int64) (sql string, isNull bool, err error) {
+func GetFullSQL(at types.Time, txID int64, group string) (sql string, isNull bool, err error) {
 	config := config.GetMCTechConfig()
 	fullSQLDir := config.Metrics.SQLTrace.FullSQLDir
 	if fullSQLDir == "" {
 		return "", true, errors.New("未设置 mctech.metrics.sql-trace.full-sql-dir 配置项")
+	}
+
+	if group == "" {
+		group = config.Metrics.SQLTrace.Group
+	}
+
+	if group != "" {
+		fullSQLDir = path.Join(fullSQLDir, group)
 	}
 
 	var gotime time.Time
@@ -37,23 +45,20 @@ func GetFullSQL(at types.Time, txID int64) (sql string, isNull bool, err error) 
 	fileDir := path.Join(fullSQLDir, date, strconv.Itoa(hour))
 	fullPath := path.Join(fileDir, fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID))
 	if _, err := os.Stat(fullPath); err != nil {
-		// FiXME 兼容期过了再移除
-		fullPath = path.Join(fileDir, fmt.Sprintf("%d.gz", txID))
-		if _, err := os.Stat(fullPath); err != nil {
-			if pe, ok := err.(*os.PathError); ok {
-				if pe.Err == syscall.ENOENT {
-					return "", true, nil
-				}
+		if pe, ok := err.(*os.PathError); ok {
+			if pe.Err == syscall.ENOENT {
+				return "", true, nil
 			}
-
-			logutil.BgLogger().Error("load full sql error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
-			return "", true, errors.New("load full sql error")
 		}
+
+		logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+		return "", true, fmt.Errorf("get compress sql file error, [%s, %d, %s]", at, txID, group)
 	}
 
 	var fi *os.File
 	if fi, err = os.Open(filepath.Clean(fullPath)); err != nil {
-		return "", true, err
+		logutil.BgLogger().Error("load full sql error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+		return "", true, fmt.Errorf("load full sql error, [%s, %d, %s]", at, txID, group)
 	}
 	defer func() {
 		if err := fi.Close(); err != nil {
