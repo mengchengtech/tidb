@@ -82,48 +82,16 @@ const (
 )
 
 const (
-	// MCTechSequenceMaxFetchCount is one of mctech config items
-	MCTechSequenceMaxFetchCount = "mctech_sequence_max_fetch_count"
-	// MCTechSequenceBackend is one of mctech config items
-	MCTechSequenceBackend = "mctech_sequence_backend"
-
-	// MCTechDbCheckerEnabled is one of mctech config items
-	MCTechDbCheckerEnabled = "mctech_db_checker_enabled"
 	// MCTechDbCheckerCompatible is one of mctech config items
 	MCTechDbCheckerCompatible = "mctech_db_checker_compatible"
 	// MCTechDbCheckerExcepts is one of mctech config items
 	MCTechDbCheckerExcepts = "mctech_db_checker_excepts"
-
-	// MCTechDbCheckerMutex is one of mctech config items
-	MCTechDbCheckerMutex = "mctech_checker_mutex"
-	// MCTechDbCheckerExclude is one of mctech config items
-	MCTechDbCheckerExclude = "mctech_checker_exclude"
-	// MCTechDbCheckerAcross is one of mctech config items
-	MCTechDbCheckerAcross = "mctech_db_checker_across"
-
-	// MCTechTenantEnabled is one of mctech config items
-	MCTechTenantEnabled = "mctech_tenant_enabled"
-	// MCTechTenantForbiddenPrepare is one of mctech config items
-	MCTechTenantForbiddenPrepare = "mctech_tenant_forbidden_prepare"
-
-	// MCTechDDLVersionEnabled is one of mctech config items
-	MCTechDDLVersionEnabled = "mctech_ddl_version_enabled"
-	// MCTechDDLVersionName is one of mctech config items
-	MCTechDDLVersionName = "mctech_ddl_version_name"
-	// MCTechDDLVersionDbMatches is one of mctech config items
-	MCTechDDLVersionDbMatches = "mctech_ddl_version_db_matches"
 
 	// MCTechMPPDefaultValue is one of mctech config items
 	MCTechMPPDefaultValue = "mctech_mpp_default_value"
 
 	// MCTechMetricsLargeQueryEnabled is one of mctech config items
 	MCTechMetricsLargeQueryEnabled = "mctech_metrics_large_query_enabled"
-	// MCTechMetricsLargeQueryFilename is one of mctech config items
-	MCTechMetricsLargeQueryFilename = "mctech_metrics_large_query_file"
-	// MCTechMetricsLargeQueryFileMaxDays is one of mctech config items
-	MCTechMetricsLargeQueryFileMaxDays = "mctech_metrics_large_query_file_max_days"
-	// MCTechMetricsLargeQueryFileMaxSize is one of mctech config items
-	MCTechMetricsLargeQueryFileMaxSize = "mctech_metrics_large_query_file_max_size"
 	// MCTechMetricsLargeQueryTypes is one of mctech config items
 	MCTechMetricsLargeQueryTypes = "mctech_metrics_large_query_types"
 	// MCTechMetricsLargeQueryThreshold is one of mctech config items
@@ -136,16 +104,8 @@ const (
 
 	// MCTechMetricsSQLTraceEnabled is one of mctech config items
 	MCTechMetricsSQLTraceEnabled = "mctech_metrics_sql_trace_enabled"
-	// MCTechMetricsSQLTraceFilename is one of mctech config items
-	MCTechMetricsSQLTraceFilename = "mctech_metrics_sql_trace_file"
-	// MCTechMetricsSQLTraceFileMaxSize is one of mctech config items
-	MCTechMetricsSQLTraceFileMaxSize = "mctech_metrics_sql_trace_file_max_size"
-	// MCTechMetricsSQLTraceFileMaxDays is one of mctech config items
-	MCTechMetricsSQLTraceFileMaxDays = "mctech_metrics_sql_trace_file_max_days"
 	// MCTechMetricsSQLTraceCompressThreshold is one of mctech config items
 	MCTechMetricsSQLTraceCompressThreshold = "mctech_metrics_sql_trace_compress_threshold"
-	// MCTechMetricsSQLTraceFullSQLDir is one of mctech config items
-	MCTechMetricsSQLTraceFullSQLDir = "mctech_metrics_sql_trace_full_sql_dir"
 
 	// MCTechMetricsIgnoreByRoles is one of mctech config items
 	MCTechMetricsIgnoreByRoles = "mctech_metrics_ignore_by_roles"
@@ -169,10 +129,6 @@ func atomicStore[T any](pt *T, v T) {
 
 func init() {
 	var mctechSysVars = []*SysVar{
-		{Scope: ScopeNone, Name: MCTechSequenceMaxFetchCount, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceMaxFetchCount)},
-		{Scope: ScopeNone, Name: MCTechSequenceBackend, Type: TypeInt, Value: strconv.Itoa(config.DefaultSequenceBackend)},
-
-		{Scope: ScopeNone, Name: MCTechDbCheckerEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerEnabled)},
 		{Scope: ScopeGlobal, Name: MCTechDbCheckerCompatible, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerCompatible),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				return BoolToOnOff(atomicLoad(&config.GetMCTechConfig().DbChecker.Compatible)), nil
@@ -182,17 +138,6 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechDbCheckerMutex, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerMutex, ",")},
-		{Scope: ScopeNone, Name: MCTechDbCheckerExclude, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExclude, ",")},
-		{Scope: ScopeNone, Name: MCTechDbCheckerAcross, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerAcross, "|")},
-
-		{Scope: ScopeNone, Name: MCTechTenantEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantEnabled)},
-		{Scope: ScopeNone, Name: MCTechTenantForbiddenPrepare, Type: TypeBool, Value: BoolToOnOff(config.DefaultTenantForbiddenPrepare)},
-
-		{Scope: ScopeNone, Name: MCTechDDLVersionEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultDDLVersionEnabled)},
-		{Scope: ScopeNone, Name: MCTechDDLVersionName, Type: TypeStr, Value: config.DefaultDDLVersionColumnName},
-		{Scope: ScopeNone, Name: MCTechDDLVersionDbMatches, Type: TypeStr, Value: strings.Join(config.DefaultDDLVersionDbMatches, ",")},
-
 		{Scope: ScopeGlobal, Name: MCTechMPPDefaultValue, Type: TypeEnum, Value: config.DefaultMPPValue,
 			PossibleValues: []string{"allow", "force", "disable"},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
@@ -216,9 +161,6 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFilename, Type: TypeBool, Value: config.DefaultMetricsLargeQueryFilename},
-		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFileMaxDays, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeQueryFileMaxDays)},
-		{Scope: ScopeNone, Name: MCTechMetricsLargeQueryFileMaxSize, Type: TypeBool, Value: strconv.Itoa(config.DefaultMetricsLargeQueryFileMaxSize)},
 		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, Type: TypeStr, Value: strings.Join(config.DefaultAllowMetricsLargeQueryTypes, ","),
 			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
 				return validateEnumSet(original, ",", config.DefaultAllowMetricsLargeQueryTypes)
@@ -290,9 +232,6 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFilename, Type: TypeBool, Value: config.DefaultMetricsSQLTraceFilename},
-		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFileMaxSize, Type: TypeInt, Value: strconv.Itoa(config.DefaultMetricsSQLTraceFileMaxSize)},
-		{Scope: ScopeNone, Name: MCTechMetricsSQLTraceFileMaxDays, Type: TypeStr, Value: strconv.Itoa(config.DefaultMetricsSQLTraceFileMaxDays)},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceCompressThreshold, Type: TypeUnsigned, Value: strconv.Itoa(config.DefaultMetricsSQLTraceCompressThreshold),
 			MinValue: 1024, MaxValue: math.MaxInt64,
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
@@ -363,22 +302,8 @@ func LoadMCTechSysVars() {
 	}
 	log.Warn("LoadMctechSysVars", zap.ByteString("config", bytes))
 
-	SetSysVar(MCTechSequenceMaxFetchCount, strconv.FormatInt(option.Sequence.MaxFetchCount, 10))
-	SetSysVar(MCTechSequenceBackend, strconv.FormatInt(option.Sequence.Backend, 10))
-
-	SetSysVar(MCTechDbCheckerEnabled, BoolToOnOff(option.DbChecker.Enabled))
 	SetSysVar(MCTechDbCheckerCompatible, BoolToOnOff(option.DbChecker.Compatible))
-	SetSysVar(MCTechDbCheckerMutex, strings.Join(option.DbChecker.Mutex, ","))
-	SetSysVar(MCTechDbCheckerExclude, strings.Join(option.DbChecker.Exclude, ","))
-	SetSysVar(MCTechDbCheckerAcross, strings.Join(option.DbChecker.Across, ","))
 	SetSysVar(MCTechDbCheckerExcepts, strings.Join(option.DbChecker.Excepts, ","))
-
-	SetSysVar(MCTechTenantEnabled, BoolToOnOff(option.Tenant.Enabled))
-	SetSysVar(MCTechTenantForbiddenPrepare, BoolToOnOff(option.Tenant.ForbiddenPrepare))
-
-	SetSysVar(MCTechDDLVersionEnabled, BoolToOnOff(option.DDL.Version.Enabled))
-	SetSysVar(MCTechDDLVersionName, option.DDL.Version.Name)
-	SetSysVar(MCTechDDLVersionDbMatches, strings.Join(option.DDL.Version.DbMatches, ","))
 
 	SetSysVar(MCTechMPPDefaultValue, option.MPP.DefaultValue)
 
@@ -388,14 +313,8 @@ func LoadMCTechSysVars() {
 	SetSysVar(MCTechMetricsLargeQueryEnabled, BoolToOnOff(option.Metrics.LargeQuery.Enabled))
 	SetSysVar(MCTechMetricsLargeQueryTypes, strings.Join(option.Metrics.LargeQuery.Types, ","))
 	SetSysVar(MCTechMetricsLargeQueryThreshold, strconv.Itoa(option.Metrics.LargeQuery.Threshold))
-	SetSysVar(MCTechMetricsLargeQueryFilename, option.Metrics.LargeQuery.Filename)
-	SetSysVar(MCTechMetricsLargeQueryFileMaxDays, strconv.Itoa(option.Metrics.LargeQuery.FileMaxDays))
-	SetSysVar(MCTechMetricsLargeQueryFileMaxSize, strconv.Itoa(option.Metrics.LargeQuery.FileMaxSize))
 
 	SetSysVar(MCTechMetricsSQLTraceEnabled, BoolToOnOff(option.Metrics.SQLTrace.Enabled))
-	SetSysVar(MCTechMetricsSQLTraceFilename, option.Metrics.SQLTrace.Filename)
-	SetSysVar(MCTechMetricsSQLTraceFileMaxSize, strconv.Itoa(option.Metrics.SQLTrace.FileMaxSize))
-	SetSysVar(MCTechMetricsSQLTraceFileMaxDays, strconv.Itoa(option.Metrics.SQLTrace.FileMaxDays))
 	SetSysVar(MCTechMetricsSQLTraceCompressThreshold, strconv.Itoa(option.Metrics.SQLTrace.CompressThreshold))
 
 	SetSysVar(MCTechMetricsIgnoreByRoles, strings.Join(option.Metrics.Ignore.ByRoles, ","))

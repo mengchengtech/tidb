@@ -172,6 +172,8 @@ const (
 	DefaultMetricsSQLTraceFileMaxDays = 3
 	// DefaultMetricsSQLTraceFileMaxSize one of config default value
 	DefaultMetricsSQLTraceFileMaxSize = 512 // 512MB
+	// DefaultMetricsSQLTraceFullSQLDir  one of config default value
+	DefaultMetricsSQLTraceFullSQLDir = ""
 )
 
 var (
@@ -225,6 +227,7 @@ func init() {
 			Mutex:      []string{},
 			Exclude:    []string{},
 			Across:     []string{},
+			Excepts:    []string{},
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
@@ -263,6 +266,7 @@ func init() {
 				FileMaxDays:       DefaultMetricsSQLTraceFileMaxDays,
 				FileMaxSize:       DefaultMetricsSQLTraceFileMaxSize,
 				CompressThreshold: DefaultMetricsSQLTraceCompressThreshold,
+				FullSQLDir:        DefaultMetricsSQLTraceFullSQLDir,
 			},
 		},
 	}
@@ -366,6 +370,7 @@ func storeMCTechConfig(config *Config) {
 	opts.DbChecker.Mutex = DistinctSlice(append(opts.DbChecker.Mutex, DefaultDbCheckerMutex...))
 	opts.DbChecker.Exclude = DistinctSlice(append(opts.DbChecker.Exclude, DefaultDbCheckerExclude...))
 	opts.DbChecker.Across = DistinctSlice(append(opts.DbChecker.Across, DefaultDbCheckerAcross...))
+	opts.DbChecker.Excepts = DistinctSlice(append(opts.DbChecker.Excepts, DefaultDbCheckerExcepts...))
 
 	opts.Metrics.Ignore.ByDatabases = DistinctSlice(append(opts.Metrics.Ignore.ByDatabases, DefaultMetricsIgnoreByDatabases...))
 	opts.Metrics.Ignore.ByRoles = DistinctSlice(append(opts.Metrics.Ignore.ByRoles, DefaultMetricsIgnoreByRoles...))

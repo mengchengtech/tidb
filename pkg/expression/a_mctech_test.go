@@ -188,7 +188,7 @@ func TestGetFullSqlWithNotConfig(t *testing.T) {
 	require.NoError(t, err)
 	resetStmtContext(ctx)
 	_, err = evalBuiltinFunc(f, ctx, chunk.Row{})
-	require.ErrorContains(t, err, "未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
+	require.ErrorContains(t, err, "未设置 mctech.metrics.sql-trace.full-sql-dir 配置项")
 }
 
 func TestGetFullSqlByTime(t *testing.T) {
