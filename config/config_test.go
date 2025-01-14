@@ -903,7 +903,7 @@ spilled-file-encryption-method = "aes128-ctr"
 	conf.MCTech = MCTech{
 		Sequence:   Sequence{APIPrefix: "http://node-infra-sequence-service.mc/", Backend: 5, Mock: false, Debug: false, MaxFetchCount: 1000},
 		Encryption: Encryption{Mock: false, APIPrefix: "http://node-infra-encryption-service.mc/", AccessID: "oJEKJh1wvqncJYASxp1Iiw"},
-		DbChecker:  DbChecker{Enabled: false, Compatible: true, APIPrefix: "http://node-infra-dim-service.mc/", Mutex: []string{"asset_*", "global_*"}, Exclude: []string{"global_platform", "global_ipm", "global_dw_*", "global_dwb"}, Across: []string{"global_mtlp|global_ma"}},
+		DbChecker:  DbChecker{Enabled: false, Compatible: true, APIPrefix: "http://node-infra-dim-service.mc/", Mutex: []string{"asset_*", "global_*"}, Exclude: []string{"global_platform", "global_ipm", "global_dw_*", "global_dwb"}, Across: []string{"global_mtlp|global_ma"}, Excepts: []string{}},
 		Tenant:     Tenant{Enabled: false, ForbiddenPrepare: false},
 		DDL:        DDL{Version: VersionColumn{Enabled: false, Name: "__version", DbMatches: []string{"global_*", "asset_*", "public_*", "*_custom"}}},
 		MPP:        MPP{DefaultValue: "allow"},

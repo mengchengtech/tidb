@@ -25,7 +25,7 @@ func GetFullSQL(at types.Time, txID int64) (sql string, isNull bool, err error) 
 	config := config.GetMCTechConfig()
 	fullSQLDir := config.Metrics.SQLTrace.FullSQLDir
 	if fullSQLDir == "" {
-		return "", true, errors.New("未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
+		return "", true, errors.New("未设置 mctech.metrics.sql-trace.full-sql-dir 配置项")
 	}
 
 	var gotime time.Time

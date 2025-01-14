@@ -14,7 +14,7 @@ import (
 
 func TestGetFullSqlNotSetConfig(t *testing.T) {
 	_, _, err := GetFullSQL(types.MinTimestamp, 1234567890)
-	require.ErrorContains(t, err, "未设置 mctech_metrics_sql_trace_full_sql_dir 全局变量的值")
+	require.ErrorContains(t, err, "未设置 mctech.metrics.sql-trace.full-sql-dir 配置项")
 }
 
 func TestGetFullSql(t *testing.T) {
