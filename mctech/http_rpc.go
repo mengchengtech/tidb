@@ -33,7 +33,12 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 	}
 
 	if err != nil {
-		log.Error("rpc调用发生错误。", zap.Error(err))
+		log.Error("rpc调用发生错误。",
+			zap.String("method", request.Method),
+			zap.String("uri", request.RequestURI),
+			zap.Error(err),
+			zap.Stack("stack"),
+		)
 	}
 	return nil, errors.New("rpc调用发生错误。详情请查询tidb服务日志")
 }
