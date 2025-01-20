@@ -26,6 +26,7 @@ import (
 	"github.com/pingcap/tidb/parser/mysql"
 	plannercore "github.com/pingcap/tidb/planner/core"
 	"github.com/pingcap/tidb/sessionctx"
+	"github.com/pingcap/tidb/sessiontxn"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util"
 	"github.com/pingcap/tidb/util/chunk"
@@ -126,7 +127,7 @@ func (e *PrepareExec) Next(ctx context.Context, req *chunk.Chunk) error {
 			return err
 		}
 	}
-	stmt, p, paramCnt, err := plannercore.GeneratePlanCacheStmtWithAST(ctx, e.ctx, true, stmt0.Text(), stmt0, nil)
+	stmt, p, paramCnt, err := plannercore.GeneratePlanCacheStmtWithAST(ctx, e.ctx, true, stmt0.Text(), stmt0, sessiontxn.GetTxnManager(e.ctx).GetTxnInfoSchema())
 	if err != nil {
 		return err
 	}
@@ -221,7 +222,7 @@ func (e *DeallocateExec) Next(ctx context.Context, req *chunk.Chunk) error {
 	if e.ctx.GetSessionVars().EnablePreparedPlanCache {
 		bindSQL, _ := plannercore.GetBindSQL4PlanCache(e.ctx, preparedObj)
 		cacheKey, err := plannercore.NewPlanCacheKey(vars, preparedObj.StmtText, preparedObj.StmtDB, prepared.SchemaVersion,
-			0, bindSQL, expression.ExprPushDownBlackListReloadTimeStamp.Load())
+			0, bindSQL, expression.ExprPushDownBlackListReloadTimeStamp.Load(), preparedObj.RelateVersion)
 		if err != nil {
 			return err
 		}

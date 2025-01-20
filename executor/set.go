@@ -198,10 +198,8 @@ func (e *SetExecutor) setSysVariable(ctx context.Context, name string, v *expres
 	newSnapshotTS := getSnapshotTSByName()
 	newSnapshotIsSet := newSnapshotTS > 0 && newSnapshotTS != oldSnapshotTS
 	if newSnapshotIsSet {
-		if name == variable.TiDBTxnReadTS {
-			err = sessionctx.ValidateStaleReadTS(ctx, e.ctx, newSnapshotTS)
-		} else {
-			err = sessionctx.ValidateSnapshotReadTS(ctx, e.ctx, newSnapshotTS)
+		err = sessionctx.ValidateSnapshotReadTS(ctx, e.ctx.GetStore(), newSnapshotTS)
+		if name != variable.TiDBTxnReadTS {
 			// Also check gc safe point for snapshot read.
 			// We don't check snapshot with gc safe point for read_ts
 			// Client-go will automatically check the snapshotTS with gc safe point. It's unnecessary to check gc safe point during set executor.
@@ -301,7 +299,11 @@ func (e *SetExecutor) loadSnapshotInfoSchemaIfNeeded(name string, snapshotTS uin
 	if name != variable.TiDBSnapshot && name != variable.TiDBTxnReadTS {
 		return nil
 	}
-	vars := e.ctx.GetSessionVars()
+	return loadSnapshotInfoSchemaIfNeeded(e.ctx, snapshotTS)
+}
+
+func loadSnapshotInfoSchemaIfNeeded(sctx sessionctx.Context, snapshotTS uint64) error {
+	vars := sctx.GetSessionVars()
 	if snapshotTS == 0 {
 		vars.SnapshotInfoschema = nil
 		return nil
@@ -309,12 +311,12 @@ func (e *SetExecutor) loadSnapshotInfoSchemaIfNeeded(name string, snapshotTS uin
 	logutil.BgLogger().Info("load snapshot info schema",
 		zap.Uint64("conn", vars.ConnectionID),
 		zap.Uint64("SnapshotTS", snapshotTS))
-	dom := domain.GetDomain(e.ctx)
+	dom := domain.GetDomain(sctx)
 	snapInfo, err := dom.GetSnapshotInfoSchema(snapshotTS)
 	if err != nil {
 		return err
 	}
 
-	vars.SnapshotInfoschema = temptable.AttachLocalTemporaryTableInfoSchema(e.ctx, snapInfo)
+	vars.SnapshotInfoschema = temptable.AttachLocalTemporaryTableInfoSchema(sctx, snapInfo)
 	return nil
 }

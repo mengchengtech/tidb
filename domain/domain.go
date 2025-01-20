@@ -420,6 +420,8 @@ func (do *Domain) tryLoadSchemaDiffs(m *meta.Meta, usedVersion, newVersion int64
 		if diff == nil {
 			// Empty diff means the txn of generating schema version is committed, but the txn of `runDDLJob` is not or fail.
 			// It is safe to skip the empty diff because the infoschema is new enough and consistent.
+			logutil.BgLogger().Info("diff load InfoSchema get empty schema diff", zap.Int64("version", usedVersion))
+			do.infoCache.InsertEmptySchemaVersion(usedVersion)
 			continue
 		}
 		diffs = append(diffs, diff)
@@ -2197,6 +2199,28 @@ func (do *Domain) UpdateTableStatsLoop(ctx, initStatsCtx sessionctx.Context) err
 	do.wg.Run(func() { do.updateStatsWorker(ctx, owner) }, "updateStatsWorker")
 	do.wg.Run(func() { do.autoAnalyzeWorker(owner) }, "autoAnalyzeWorker")
 	do.wg.Run(func() { do.gcAnalyzeHistory(owner) }, "gcAnalyzeHistory")
+	do.wg.Run(func() {
+		do.handleDDLEvent()
+	}, "handleDDLEvent")
+	do.wg.Run(
+		func() {
+			// The initStatsCtx is used to store the internal session for initializing stats,
+			// so we need the gc min start ts calculation to track it as an internal session.
+			// Since the session manager may not be ready at this moment, `infosync.StoreInternalSession` can fail.
+			// we need to retry until the session manager is ready or the init stats completes.
+			for !infosync.StoreInternalSession(initStatsCtx) {
+				waitRetry := time.After(time.Second)
+				select {
+				case <-do.StatsHandle().InitStatsDone:
+					return
+				case <-waitRetry:
+				}
+			}
+			<-do.StatsHandle().InitStatsDone
+			infosync.DeleteInternalSession(initStatsCtx)
+		},
+		"RemoveInitStatsFromInternalSessions",
+	)
 	return nil
 }
 
@@ -2257,10 +2281,8 @@ func (do *Domain) loadStatsWorker() {
 		lease = 3 * time.Second
 	}
 	loadTicker := time.NewTicker(lease)
-	updStatsHealthyTicker := time.NewTicker(20 * lease)
 	defer func() {
 		loadTicker.Stop()
-		updStatsHealthyTicker.Stop()
 		logutil.BgLogger().Info("loadStatsWorker exited.")
 	}()
 	do.initStats()
@@ -2281,8 +2303,6 @@ func (do *Domain) loadStatsWorker() {
 			if err != nil {
 				logutil.BgLogger().Debug("load histograms failed", zap.Error(err))
 			}
-		case <-updStatsHealthyTicker.C:
-			statsHandle.UpdateStatsHealthyMetrics()
 		case <-do.exit:
 			return
 		}
@@ -2339,6 +2359,24 @@ func (do *Domain) updateStatsWorkerExitPreprocessing(statsHandle *handle.Handle,
 	}
 }
 
+func (do *Domain) handleDDLEvent() {
+	logutil.BgLogger().Info("handleDDLEvent started.")
+	defer util.Recover(metrics.LabelDomain, "handleDDLEvent", nil, false)
+	statsHandle := do.StatsHandle()
+	for {
+		select {
+		case <-do.exit:
+			return
+			// This channel is sent only by ddl owner.
+		case t := <-statsHandle.DDLEventCh():
+			err := statsHandle.HandleDDLEvent(t)
+			if err != nil {
+				logutil.BgLogger().Error("handle ddl event failed", zap.String("event", t.String()), zap.Error(err))
+			}
+		}
+	}
+}
+
 func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager) {
 	defer util.Recover(metrics.LabelDomain, "updateStatsWorker", nil, false)
 	logutil.BgLogger().Info("updateStatsWorker started.")
@@ -2351,7 +2389,8 @@ func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager)
 	loadFeedbackTicker := time.NewTicker(5 * lease)
 	loadLockedTablesTicker := time.NewTicker(5 * lease)
 	dumpColStatsUsageTicker := time.NewTicker(100 * lease)
-	readMemTricker := time.NewTicker(memory.ReadMemInterval)
+	updateStatsHealthyTicker := time.NewTicker(20 * lease)
+	readMemTicker := time.NewTicker(memory.ReadMemInterval)
 	statsHandle := do.StatsHandle()
 	defer func() {
 		dumpColStatsUsageTicker.Stop()
@@ -2359,7 +2398,8 @@ func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager)
 		dumpFeedbackTicker.Stop()
 		gcStatsTicker.Stop()
 		deltaUpdateTicker.Stop()
-		readMemTricker.Stop()
+		readMemTicker.Stop()
+		updateStatsHealthyTicker.Stop()
 		do.SetStatsUpdating(false)
 		logutil.BgLogger().Info("updateStatsWorker exited.")
 	}()
@@ -2370,12 +2410,6 @@ func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager)
 		case <-do.exit:
 			do.updateStatsWorkerExitPreprocessing(statsHandle, owner)
 			return
-			// This channel is sent only by ddl owner.
-		case t := <-statsHandle.DDLEventCh():
-			err := statsHandle.HandleDDLEvent(t)
-			if err != nil {
-				logutil.BgLogger().Error("handle ddl event failed", zap.String("event", t.String()), zap.Error(err))
-			}
 		case <-deltaUpdateTicker.C:
 			err := statsHandle.DumpStatsDeltaToKV(handle.DumpDelta)
 			if err != nil {
@@ -2414,9 +2448,10 @@ func (do *Domain) updateStatsWorker(ctx sessionctx.Context, owner owner.Manager)
 			if err != nil {
 				logutil.BgLogger().Debug("dump column stats usage failed", zap.Error(err))
 			}
-
-		case <-readMemTricker.C:
+		case <-readMemTicker.C:
 			memory.ForceReadMemStats()
+		case <-updateStatsHealthyTicker.C:
+			statsHandle.UpdateStatsHealthyMetrics()
 		}
 	}
 }

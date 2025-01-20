@@ -29,8 +29,10 @@ import (
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/pingcap/tidb/util/chunk"
+	"github.com/pingcap/tidb/util/cmp"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/slices"
+	"golang.org/x/sync/errgroup"
 )
 
 func TestGetDDLJobs(t *testing.T) {
@@ -111,8 +113,8 @@ func TestGetDDLJobsIsSort(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, currJobs, 15)
 
-	isSort := slices.IsSortedFunc(currJobs, func(i, j *model.Job) bool {
-		return i.ID <= j.ID
+	isSort := slices.IsSortedFunc(currJobs, func(i, j *model.Job) int {
+		return cmp.Compare(i.ID, j.ID)
 	})
 	require.True(t, isSort)
 
@@ -152,6 +154,57 @@ func enQueueDDLJobs(t *testing.T, sess session.Session, txn kv.Transaction, jobT
 	}
 }
 
+func TestCreateViewConcurrently(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+
+	tk.MustExec("create table t (a int);")
+	tk.MustExec("create view v as select * from t;")
+	tk.MustExec("set global tidb_enable_metadata_lock = 1;")
+	var (
+		counterErr error
+		counter    int
+	)
+	ddl.OnCreateViewForTest = func(job *model.Job) {
+		counter++
+		if counter > 1 {
+			counterErr = fmt.Errorf("create view job should not run concurrently")
+			return
+		}
+	}
+	require.NoError(t, failpoint.Enable("github.com/pingcap/tidb/ddl/onDDLCreateView", "return"))
+	defer func() {
+		require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/ddl/onDDLCreateView"))
+	}()
+
+	ddl.AfterDelivery2WorkerForTest = func(job *model.Job) {
+		if job.Type == model.ActionCreateView {
+			counter--
+		}
+	}
+	require.NoError(t, failpoint.Enable("github.com/pingcap/tidb/ddl/afterDelivery2Worker", "return"))
+	defer func() {
+		require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/ddl/afterDelivery2Worker"))
+	}()
+
+	var eg errgroup.Group
+	for i := 0; i < 5; i++ {
+		eg.Go(func() error {
+			newTk := testkit.NewTestKit(t, store)
+			_, err := newTk.Exec("use test")
+			if err != nil {
+				return err
+			}
+			_, err = newTk.Exec("create or replace view v as select * from t;")
+			return err
+		})
+	}
+	err := eg.Wait()
+	require.NoError(t, err)
+	require.NoError(t, counterErr)
+}
+
 func TestCreateDropCreateTable(t *testing.T) {
 	store, dom := testkit.CreateMockStoreAndDomain(t)
 	tk := testkit.NewTestKit(t, store)
@@ -169,7 +222,7 @@ func TestCreateDropCreateTable(t *testing.T) {
 	originHook := dom.DDL().GetHook()
 	onJobUpdated := func(job *model.Job) {
 		if job.Type == model.ActionDropTable && job.SchemaState == model.StateWriteOnly && !createTable {
-			fpErr = failpoint.Enable("github.com/pingcap/tidb/pkg/ddl/mockOwnerCheckAllVersionSlow", fmt.Sprintf("return(%d)", job.ID))
+			fpErr = failpoint.Enable("github.com/pingcap/tidb/ddl/mockOwnerCheckAllVersionSlow", fmt.Sprintf("return(%d)", job.ID))
 			wg.Add(1)
 			go func() {
 				_, createErr = tk1.Exec("create table t (b int);")
@@ -187,7 +240,7 @@ func TestCreateDropCreateTable(t *testing.T) {
 	wg.Wait()
 	require.NoError(t, createErr)
 	require.NoError(t, fpErr)
-	require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/pkg/ddl/mockOwnerCheckAllVersionSlow"))
+	require.NoError(t, failpoint.Disable("github.com/pingcap/tidb/ddl/mockOwnerCheckAllVersionSlow"))
 
 	rs := tk.MustQuery("admin show ddl jobs 3;").Rows()
 	create1JobID := rs[0][0].(string)
@@ -213,4 +266,16 @@ func TestCreateDropCreateTable(t *testing.T) {
 	create1TS, dropTS, create0TS := finishTSs[0], finishTSs[1], finishTSs[2]
 	require.Less(t, create0TS, dropTS, "first create should finish before drop")
 	require.Less(t, dropTS, create1TS, "second create should finish after drop")
+}
+
+func TestFix56930(t *testing.T) {
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	tk.MustExec("use test")
+	tk.MustExec("drop table if exists t; create table posts (id int auto_increment primary key, title varchar(500) character set utf8, subtitle varchar(500) character set utf8, unique key(title, subtitle));")
+	tk.MustGetErrMsg("alter table posts convert to character set utf8mb4;", "[ddl:1071]Specified key was too long (4000 bytes); max key length is 3072 bytes")
+	tk.MustExec("drop table if exists t; create table t(a varchar(1000) character set utf8, primary key(a));")
+	tk.MustGetErrMsg("alter table t convert to character set utf8mb4;", "[ddl:1071]Specified key was too long (4000 bytes); max key length is 3072 bytes")
+	tk.MustExec("drop table if exists t; create table t(a varchar(1000) character set utf8, key(a));")
+	tk.MustGetErrMsg("alter table t convert to character set utf8mb4;", "[ddl:1071]Specified key was too long (4000 bytes); max key length is 3072 bytes")
 }

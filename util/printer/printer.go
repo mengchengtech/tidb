@@ -18,9 +18,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	_ "runtime" // import link package
+	"runtime"
 	"strconv"
-	_ "unsafe" // required by go:linkname
 
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/parser/mysql"
@@ -30,6 +29,12 @@ import (
 	"github.com/pingcap/tidb/util/versioninfo"
 	"go.uber.org/zap"
 )
+
+var buildVersion string
+
+func init() {
+	buildVersion = runtime.Version()
+}
 
 // PrintTiDBInfo prints the TiDB version information.
 func PrintTiDBInfo() {
@@ -183,6 +188,3 @@ func GetPrintResult(cols []string, datas [][]string) (string, bool) {
 	value = append(value, getPrintDivLine(maxColLen)...)
 	return string(value), true
 }
-
-//go:linkname buildVersion runtime.buildVersion
-var buildVersion string
