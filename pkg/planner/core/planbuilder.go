@@ -494,8 +494,8 @@ type cteInfo struct {
 	isInline bool
 	// forceInlineByHintOrVar will be true when CTE is hint by merge() or session variable "tidb_opt_force_inline_cte=true"
 	forceInlineByHintOrVar bool
-	// If CTE contain aggregation or window function in query (Indirect references to other cte containing agg or window in the query are also counted.)
-	containAggOrWindow bool
+	// If CTE contain aggregation, window function, order by, distinct and limit in query (Indirect references to other cte containing those operator in the query are also counted.)
+	containRecursiveForbiddenOperator bool
 	// Compute in preprocess phase. Record how many consumers the current CTE has
 	consumerCount int
 }
@@ -2493,7 +2493,7 @@ func getModifiedIndexesInfoForAnalyze(sctx sessionctx.Context, tblInfo *model.Ta
 }
 
 // filterSkipColumnTypes filters out columns whose types are in the skipTypes list.
-func (b *PlanBuilder) filterSkipColumnTypes(origin []*model.ColumnInfo, tbl *ast.TableName, mustAnalyzedCols *calcOnceMap) (result []*model.ColumnInfo) {
+func (b *PlanBuilder) filterSkipColumnTypes(origin []*model.ColumnInfo, tbl *ast.TableName, mustAnalyzedCols *calcOnceMap) (result []*model.ColumnInfo, skipCol []*model.ColumnInfo) {
 	// If the session is in restricted SQL mode, it uses @@global.tidb_analyze_skip_column_types to get the skipTypes list.
 	skipTypes := b.ctx.GetSessionVars().AnalyzeSkipColumnTypes
 	if b.ctx.GetSessionVars().InRestrictedSQL {
@@ -2519,6 +2519,7 @@ func (b *PlanBuilder) filterSkipColumnTypes(origin []*model.ColumnInfo, tbl *ast
 		// into TiDB to build the index statistics.
 		_, keep := mustAnalyze[colInfo.ID]
 		if skip && !keep {
+			skipCol = append(skipCol, colInfo)
 			continue
 		}
 		result = append(result, colInfo)
@@ -2590,16 +2591,18 @@ func (b *PlanBuilder) buildAnalyzeFullSamplingTask(
 		if colsInfo, ok := colsInfoMap[physicalID]; ok {
 			execColsInfo = colsInfo
 		}
-		execColsInfo = b.filterSkipColumnTypes(execColsInfo, tbl, &mustAnalyzedCols)
+		var skipColsInfo []*model.ColumnInfo
+		execColsInfo, skipColsInfo = b.filterSkipColumnTypes(execColsInfo, tbl, &mustAnalyzedCols)
 		allColumns := len(tbl.TableInfo.Columns) == len(execColsInfo)
 		indexes, independentIndexes := getModifiedIndexesInfoForAnalyze(b.ctx, tbl.TableInfo, allColumns, execColsInfo)
 		handleCols := BuildHandleColsForAnalyze(b.ctx, tbl.TableInfo, allColumns, execColsInfo)
 		newTask := AnalyzeColumnsTask{
-			HandleCols:  handleCols,
-			ColsInfo:    execColsInfo,
-			AnalyzeInfo: info,
-			TblInfo:     tbl.TableInfo,
-			Indexes:     indexes,
+			HandleCols:   handleCols,
+			ColsInfo:     execColsInfo,
+			AnalyzeInfo:  info,
+			TblInfo:      tbl.TableInfo,
+			Indexes:      indexes,
+			SkipColsInfo: skipColsInfo,
 		}
 		if newTask.HandleCols == nil {
 			extraCol := model.NewExtraHandleColInfo()
@@ -3697,7 +3700,7 @@ func (b *PlanBuilder) buildSimple(ctx context.Context, node ast.StmtNode) (Plan,
 			if err != nil {
 				return nil, err
 			}
-			if err := sessionctx.ValidateStaleReadTS(ctx, b.ctx, startTS); err != nil {
+			if err := sessionctx.ValidateSnapshotReadTS(ctx, b.ctx.GetStore(), startTS); err != nil {
 				return nil, err
 			}
 			p.StaleTxnStartTS = startTS
@@ -3711,7 +3714,7 @@ func (b *PlanBuilder) buildSimple(ctx context.Context, node ast.StmtNode) (Plan,
 			if err != nil {
 				return nil, err
 			}
-			if err := sessionctx.ValidateStaleReadTS(ctx, b.ctx, startTS); err != nil {
+			if err := sessionctx.ValidateSnapshotReadTS(ctx, b.ctx.GetStore(), startTS); err != nil {
 				return nil, err
 			}
 			p.StaleTxnStartTS = startTS

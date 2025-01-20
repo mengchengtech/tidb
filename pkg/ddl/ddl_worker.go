@@ -397,7 +397,7 @@ func (d *ddl) addBatchDDLJobs2Table(tasks []*limitJobTask) error {
 		setJobStateToQueueing(job)
 
 		if d.stateSyncer.IsUpgradingState() && !hasSysDB(job) {
-			if err = pauseRunningJob(sess.NewSession(se), job, model.AdminCommandBySystem); err != nil {
+			if err = pauseRunningJob(job, model.AdminCommandBySystem); err != nil {
 				logutil.BgLogger().Warn("pause user DDL by system failed", zap.String("category", "ddl-upgrading"), zap.Stringer("job", job), zap.Error(err))
 				task.cacheErr = err
 				continue
@@ -1444,7 +1444,9 @@ func updateSchemaVersion(d *ddlCtx, t *meta.Meta, job *model.Job, multiInfos ...
 		diff.AffectedOpts = []*model.AffectedOption{{
 			TableID: ptTableID,
 		}}
-		if job.SchemaState != model.StatePublic {
+		// when job state transit from rolling-back to rollback-done, the schema state
+		// is also public, diff.TableID should be the old non-partitioned table ID too.
+		if job.State == model.JobStateRollbackDone || job.SchemaState != model.StatePublic {
 			// No change, just to refresh the non-partitioned table
 			// with its new ExchangePartitionInfo.
 			diff.TableID = job.TableID

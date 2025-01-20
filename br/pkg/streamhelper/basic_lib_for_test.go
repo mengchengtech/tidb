@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pingcap/errors"
 	backup "github.com/pingcap/kvproto/pkg/brpb"
 	"github.com/pingcap/kvproto/pkg/errorpb"
 	"github.com/pingcap/kvproto/pkg/kvrpcpb"
@@ -98,12 +99,14 @@ type fakeCluster struct {
 	idAlloced uint64
 	stores    map[uint64]*fakeStore
 	regions   []*region
+	maxTs     uint64
 	testCtx   *testing.T
 
-	onGetClient        func(uint64) error
-	onClearCache       func(uint64) error
-	serviceGCSafePoint uint64
-	currentTS          uint64
+	onGetClient               func(uint64) error
+	onClearCache              func(uint64) error
+	serviceGCSafePoint        uint64
+	serviceGCSafePointDeleted bool
+	currentTS                 uint64
 }
 
 func (r *region) splitAt(newID uint64, k string) *region {
@@ -264,15 +267,18 @@ func (f *fakeStore) GetLastFlushTSOfRegion(ctx context.Context, in *logbackup.Ge
 func (f *fakeCluster) BlockGCUntil(ctx context.Context, at uint64) (uint64, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if at == 0 {
-		f.serviceGCSafePoint = at
-		return at, nil
-	}
 	if f.serviceGCSafePoint > at {
 		return f.serviceGCSafePoint, nil
 	}
 	f.serviceGCSafePoint = at
 	return at, nil
+}
+
+func (f *fakeCluster) UnblockGC(ctx context.Context) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.serviceGCSafePointDeleted = true
+	return nil
 }
 
 func (f *fakeCluster) FetchCurrentTS(ctx context.Context) (uint64, error) {
@@ -766,17 +772,31 @@ func (t *testEnv) putTask() {
 }
 
 func (t *testEnv) ScanLocksInOneRegion(bo *tikv.Backoffer, key []byte, maxVersion uint64, limit uint32) ([]*txnlock.Lock, *tikv.KeyLocation, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.maxTs != maxVersion {
+		return nil, nil, errors.Errorf("unexpect max version in scan lock, expected %d, actual %d", t.maxTs, maxVersion)
+	}
 	for _, r := range t.regions {
 		if len(r.locks) != 0 {
-			return r.locks, &tikv.KeyLocation{
+			locks := make([]*txnlock.Lock, 0, len(r.locks))
+			for _, l := range r.locks {
+				// skip the lock larger than maxVersion
+				if l.TxnID < maxVersion {
+					locks = append(locks, l)
+				}
+			}
+			return locks, &tikv.KeyLocation{
 				Region: tikv.NewRegionVerID(r.id, 0, 0),
 			}, nil
 		}
 	}
-	return nil, nil, nil
+	return nil, &tikv.KeyLocation{}, nil
 }
 
 func (t *testEnv) ResolveLocksInOneRegion(bo *tikv.Backoffer, locks []*txnlock.Lock, loc *tikv.KeyLocation) (*tikv.KeyLocation, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	for _, r := range t.regions {
 		if loc != nil && loc.Region.GetID() == r.id {
 			// reset locks
@@ -784,7 +804,7 @@ func (t *testEnv) ResolveLocksInOneRegion(bo *tikv.Backoffer, locks []*txnlock.L
 			return t.resolveLocks(locks, loc)
 		}
 	}
-	return nil, nil
+	return loc, nil
 }
 
 func (t *testEnv) Identifier() string {
@@ -846,6 +866,16 @@ func (p *mockPDClient) GetStore(_ context.Context, storeID uint64) (*metapb.Stor
 	return &metapb.Store{
 		Id:      storeID,
 		Address: fmt.Sprintf("127.0.0.%d", storeID),
+	}, nil
+}
+
+func (p *mockPDClient) GetAllStores(ctx context.Context, opts ...pd.GetStoreOption) ([]*metapb.Store, error) {
+	// only used for GetRegionCache once in resolve lock
+	return []*metapb.Store{
+		{
+			Id:      1,
+			Address: "127.0.0.1",
+		},
 	}, nil
 }
 

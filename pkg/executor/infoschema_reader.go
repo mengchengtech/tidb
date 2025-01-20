@@ -716,7 +716,7 @@ func (e *hugeMemTableRetriever) dataForColumnsInTable(ctx context.Context, sctx 
 			// Build plan is not thread safe, there will be concurrency on sessionctx.
 			if err := runWithSystemSession(internalCtx, sctx, func(s sessionctx.Context) error {
 				is := sessiontxn.GetTxnManager(s).GetTxnInfoSchema()
-				planBuilder, _ := plannercore.NewPlanBuilder().Init(s, is, &hint.BlockHintProcessor{})
+				planBuilder, _ := plannercore.NewPlanBuilder(plannercore.PlanBuilderOptNoExecution{}).Init(s, is, &hint.BlockHintProcessor{})
 				var err error
 				viewLogicalPlan, err = planBuilder.BuildDataSourceFromView(ctx, schema.Name, tbl, nil, nil)
 				return errors.Trace(err)
@@ -2512,7 +2512,7 @@ func (e *tidbTrxTableRetriever) retrieve(ctx context.Context, sctx sessionctx.Co
 		for _, info := range infoList {
 			// If you have the PROCESS privilege, you can see all running transactions.
 			// Otherwise, you can see only your own transactions.
-			if !hasProcessPriv && loginUser != nil && info.Username != loginUser.Username {
+			if !hasProcessPriv && loginUser != nil && info.ProcessInfo.Username != loginUser.Username {
 				continue
 			}
 			e.txnInfo = append(e.txnInfo, info)
@@ -2948,7 +2948,7 @@ type hugeMemTableRetriever struct {
 
 // retrieve implements the infoschemaRetriever interface
 func (e *hugeMemTableRetriever) retrieve(ctx context.Context, sctx sessionctx.Context) ([][]types.Datum, error) {
-	if e.retrieved {
+	if e.extractor.SkipRequest || e.retrieved {
 		return nil, nil
 	}
 
@@ -3091,9 +3091,10 @@ func (e *TiFlashSystemTableRetriever) dataForTiFlashSystemTables(ctx context.Con
 	if !ok {
 		return nil, errors.New("Get tiflash system tables can only run with tikv compatible storage")
 	}
-	// send request to tiflash, timeout is 1s
+	// send request to tiflash, use 5 minutes as per-request timeout
 	instanceID := e.instanceIds[e.instanceIdx]
-	resp, err := tikvStore.GetTiKVClient().SendRequest(ctx, instanceID, &request, time.Second)
+	timeout := time.Duration(5*60) * time.Second
+	resp, err := tikvStore.GetTiKVClient().SendRequest(ctx, instanceID, &request, timeout)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

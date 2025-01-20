@@ -23,11 +23,13 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/infoschema"
 	"github.com/pingcap/tidb/pkg/metrics"
 	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/sessionctx/stmtctx"
+	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/statistics"
 	"github.com/pingcap/tidb/pkg/statistics/handle/storage"
 	utilstats "github.com/pingcap/tidb/pkg/statistics/handle/util"
@@ -40,7 +42,7 @@ import (
 )
 
 // RetryCount is the max retry count for a sync load task.
-const RetryCount = 3
+const RetryCount = 2
 
 var globalStatsSyncLoadSingleFlight singleflight.Group
 
@@ -97,9 +99,13 @@ func (h *Handle) SendLoadRequests(sc *stmtctx.StatementContext, neededHistItems 
 			}
 			select {
 			case h.StatsLoad.NeededItemsCh <- task:
-				result, ok := <-task.ResultCh
-				intest.Assert(ok, "task.ResultCh cannot be closed")
-				return result, nil
+				select {
+				case <-timer.C:
+					return nil, errors.New("sync load took too long to return")
+				case result, ok := <-task.ResultCh:
+					intest.Assert(ok, "task.ResultCh cannot be closed")
+					return result, nil
+				}
 			case <-timer.C:
 				return nil, errors.New("sync load stats channel is full and timeout sending task to channel")
 			}
@@ -173,7 +179,7 @@ func (h *Handle) removeHistLoadedColumns(neededItems []model.TableItemID) []mode
 			continue
 		}
 		colHist, ok := tbl.Columns[item.ID]
-		if ok && colHist.IsStatsInitialized() && !colHist.IsFullLoad() {
+		if (ok && colHist.IsStatsInitialized() && !colHist.IsFullLoad()) || !ok {
 			remainedItems = append(remainedItems, item)
 		}
 	}
@@ -280,6 +286,13 @@ func (h *Handle) handleOneItemTask(task *NeededItemTask) (err error) {
 			h.SPool().Put(se)
 		}
 	}()
+	var skipTypes map[string]struct{}
+	val, err := sctx.GetSessionVars().GlobalVarsAccessor.GetGlobalSysVar(variable.TiDBAnalyzeSkipColumnTypes)
+	if err != nil {
+		logutil.BgLogger().Warn("failed to get global variable", zap.Error(err))
+	} else {
+		skipTypes = variable.ParseAnalyzeSkipColumnTypes(val)
+	}
 
 	item := task.TableItemID
 	tbl, ok := h.Get(item.TableID)
@@ -296,10 +309,18 @@ func (h *Handle) handleOneItemTask(task *NeededItemTask) (err error) {
 	} else {
 		col, ok := tbl.Columns[item.ID]
 		if !ok || col.IsFullLoad() {
-			return nil
+			wrapper.col = nil
+		} else {
+			wrapper.col = col
 		}
-		wrapper.col = col
+		if skipTypes != nil && wrapper.col != nil && wrapper.col.Info != nil {
+			_, skip := skipTypes[types.TypeToStr(wrapper.col.Info.FieldType.GetType(), wrapper.col.Info.FieldType.GetCharset())]
+			if skip {
+				return nil
+			}
+		}
 	}
+	failpoint.Inject("handleOneItemTaskPanic", nil)
 	t := time.Now()
 	needUpdate := false
 	wrapper, err = h.readStatsForOneItem(sctx, item, wrapper)
@@ -323,7 +344,7 @@ func (h *Handle) handleOneItemTask(task *NeededItemTask) (err error) {
 }
 
 // readStatsForOneItem reads hist for one column/index, TODO load data via kv-get asynchronously
-func (*Handle) readStatsForOneItem(sctx sessionctx.Context, item model.TableItemID, w *statsWrapper) (*statsWrapper, error) {
+func (h *Handle) readStatsForOneItem(sctx sessionctx.Context, item model.TableItemID, w *statsWrapper) (*statsWrapper, error) {
 	failpoint.Inject("mockReadStatsForOnePanic", nil)
 	failpoint.Inject("mockReadStatsForOneFail", func(val failpoint.Value) {
 		if val.(bool) {
@@ -345,9 +366,41 @@ func (*Handle) readStatsForOneItem(sctx sessionctx.Context, item model.TableItem
 			return nil, errors.Trace(err)
 		}
 	} else {
-		hg, err = storage.HistogramFromStorage(sctx, item.TableID, item.ID, &c.Info.FieldType, c.Histogram.NDV, int(isIndexFlag), c.LastUpdateVersion, c.NullCount, c.TotColSize, c.Correlation)
-		if err != nil {
-			return nil, errors.Trace(err)
+		if c == nil {
+			is := sctx.GetDomainInfoSchema().(infoschema.InfoSchema)
+			tbl, ok := h.TableInfoByID(is, item.TableID)
+			if !ok {
+				return nil, errors.New("no table")
+			}
+			var colInfo *model.ColumnInfo
+			for _, col := range tbl.Meta().Columns {
+				if col.ID == item.ID {
+					colInfo = col
+					break
+				}
+			}
+			if colInfo == nil {
+				return nil, errors.New("no column")
+			}
+			hg, _, _, _, err = storage.HistMetaFromStorageWithHighPriority(sctx, &item, colInfo)
+			if err != nil {
+				return nil, err
+			}
+			if hg != nil {
+				hg, err = storage.HistogramFromStorage(sctx, item.TableID, item.ID, &colInfo.FieldType, hg.NDV, int(isIndexFlag), hg.LastUpdateVersion, hg.NullCount, hg.TotColSize, hg.Correlation)
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+			}
+			c = &statistics.Column{
+				Info:     colInfo,
+				IsHandle: tbl.Meta().PKIsHandle && mysql.HasPriKeyFlag(colInfo.GetFlag()),
+			}
+		} else {
+			hg, err = storage.HistogramFromStorage(sctx, item.TableID, item.ID, &c.Info.FieldType, c.Histogram.NDV, int(isIndexFlag), c.LastUpdateVersion, c.NullCount, c.TotColSize, c.Correlation)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
 		}
 	}
 	var cms *statistics.CMSketch
@@ -493,12 +546,8 @@ func (h *Handle) updateCachedItem(item model.TableItemID, colHist *statistics.Co
 		return true
 	}
 	if !item.IsIndex && colHist != nil {
-		c, ok := tbl.Columns[item.ID]
-		if !ok || c.IsFullLoad() {
-			return true
-		}
 		tbl = tbl.Copy()
-		tbl.Columns[c.ID] = colHist
+		tbl.Columns[item.ID] = colHist
 	} else if item.IsIndex && idxHist != nil {
 		index, ok := tbl.Indices[item.ID]
 		if !ok || index.IsFullLoad() {
