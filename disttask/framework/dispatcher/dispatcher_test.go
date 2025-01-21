@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb/domain/infosync"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/testkit"
+	"github.com/pingcap/tidb/util/cmp"
 	"github.com/pingcap/tidb/util/logutil"
 	"github.com/stretchr/testify/require"
 	"github.com/tikv/client-go/v2/util"
@@ -99,8 +100,8 @@ func TestGetInstance(t *testing.T) {
 	serverNodes, err = dispatcher.GenerateSchedulerNodes(ctx)
 	require.NoError(t, err)
 	// add by zhangbing 解决go map 遍历乱序问题
-	slices.SortFunc(serverNodes, func(a, b *infosync.ServerInfo) bool {
-		return a.ID < b.ID
+	slices.SortFunc(serverNodes, func(a, b *infosync.ServerInfo) int {
+		return cmp.Compare(a.ID, b.ID)
 	})
 	// add end
 	instanceID, err = dispatcher.GetEligibleInstance(serverNodes, 0)

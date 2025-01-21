@@ -16,7 +16,6 @@ package executor
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -160,13 +159,11 @@ func updateRecord(
 			// modify by zhangbing
 			var v types.Datum
 			var err error
-			switch col.GetType() {
-			case mysql.TypeTimestamp:
-				v, err = expression.GetTimeValue(sctx, strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
-			case mysql.TypeLonglong:
+			if col.GetType() == mysql.TypeLonglong {
 				v, err = expression.GetBigIntValue(sctx, strings.ToUpper(ast.MCTechSequence), col.GetType(), col.GetDecimal())
-			default:
-				panic(fmt.Errorf("[ON UPDATE]: not support type %d", col.GetType()))
+			} else {
+				// mysql.TypeTimestamp, mysql.TypeDatetime
+				v, err = expression.GetTimeValue(sctx, strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
 			}
 			if err == nil {
 				// modify end

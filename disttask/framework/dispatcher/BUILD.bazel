@@ -45,6 +45,7 @@ go_test(
         "//kv",
         "//testkit",
         "//testkit/testsetup",
+        "//util/cmp",
         "//util/logutil",
         "@com_github_ngaut_pools//:pools",
         "@com_github_pingcap_errors//:errors",
