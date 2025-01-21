@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -308,6 +309,14 @@ func TestGetBackendWorkerConcurrency(t *testing.T) {
 }
 
 func TestSupportedSuffixForServerDisk(t *testing.T) {
+	// add by zhangbing
+	// 从 v8.x复制来
+	username, ex := user.Current()
+	require.NoError(t, ex)
+	if username.Name == "root" {
+		t.Skip("it cannot run as root")
+	}
+	// add end
 	tempDir := t.TempDir()
 	ctx := context.Background()
 

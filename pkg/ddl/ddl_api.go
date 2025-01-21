@@ -5336,7 +5336,12 @@ func SetDefaultValue(ctx sessionctx.Context, col *table.Column, option *ast.Colu
 		if err != nil {
 			return hasDefaultValue, errors.Trace(err)
 		}
+		// add by zhangbing
+		// 根据 v8.1.2 的同样代码复制来
+	} else {
+		hasDefaultValue = true
 	}
+	// add end
 	err = setDefaultValueWithBinaryPadding(col, value)
 	if err != nil {
 		return hasDefaultValue, errors.Trace(err)
