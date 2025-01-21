@@ -170,6 +170,180 @@ func (e *ExecuteExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 	return mctech.GetInterceptor().AfterParseSQL(e.Ctx(), stmt)
 }
 
+// ------------------------------------ ExecStmt 扩展 --------------------------------------------
+
+// SaveLargeQuery is used to print the large query in the log files.
+func (a *ExecStmt) SaveLargeQuery(mctx mctech.Context, sqlType string, succ bool) {
+	sessVars := a.Ctx.GetSessionVars()
+	cfg := config.GetMCTechConfig()
+	threshold := cfg.Metrics.LargeQuery.Threshold
+	enable := cfg.Metrics.LargeQuery.Enabled
+
+	if !enable || len(a.StmtNode.OriginalText()) < threshold {
+		// 不记录
+		return
+	}
+
+	sql := a.GetTextToLog(true)
+	comments := mctx.PrepareResult().Comments()
+	resultRows := GetResultRowsCount(sessVars.StmtCtx, a.Plan)
+	largeItems := CreateLargeQueryItems(a.GoCtx, sql, sqlType, succ, resultRows, sessVars, comments)
+	largeQuery, err := sessVars.LargeQueryFormat(largeItems)
+	if err != nil {
+		logutil.BgLogger().Error("record large query error", zap.Error(err), zap.Stack("stack"))
+		return
+	}
+
+	// 只在没有发生错误的时候才记录大SQL日志
+	mctech.L().Warn(largeQuery)
+}
+
+// --------------------------------------------------------------------------------
+
+// CreateLargeQueryItems create large query items
+func CreateLargeQueryItems(ctx context.Context, sql string, sqlType string, succ bool, resultRows int64,
+	sessVars *variable.SessionVars, comments mctech.Comments) *variable.MCLargeQueryItems {
+	stmtCtx := sessVars.StmtCtx
+	_, digest := stmtCtx.SQLDigest()
+	execDetail := stmtCtx.GetExecDetails()
+	memMax := stmtCtx.MemTracker.MaxConsumed()
+	diskMax := stmtCtx.DiskTracker.MaxConsumed()
+	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
+
+	var stmtDetail *execdetails.StmtExecDetails
+	stmtDetailRaw := ctx.Value(execdetails.StmtExecDetailKey)
+	if stmtDetailRaw != nil {
+		stmtDetail = stmtDetailRaw.(*execdetails.StmtExecDetails)
+	}
+	var (
+		appName     string
+		productLine string
+		pkgName     string
+	)
+
+	pkg := comments.Package()
+	if pkg != nil {
+		pkgName = pkg.Name()
+	}
+	svc := comments.Service()
+	if svc != nil {
+		appName = svc.AppName()
+		productLine = svc.ProductLine()
+	}
+	return &variable.MCLargeQueryItems{
+		SQL:               sql,
+		SQLType:           sqlType,
+		AppName:           appName,
+		ProductLine:       productLine,
+		Package:           pkgName,
+		Digest:            digest.String(),
+		TimeTotal:         costTime,
+		TimeParse:         sessVars.DurationParse,
+		TimeCompile:       sessVars.DurationCompile,
+		TimeOptimize:      sessVars.DurationOptimization,
+		RewriteInfo:       sessVars.RewritePhaseInfo,
+		ExecDetail:        execDetail,
+		MemMax:            memMax,
+		DiskMax:           diskMax,
+		Succ:              succ,
+		Plan:              getPlanTree(sessVars.StmtCtx),
+		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
+		ResultRows:        resultRows,
+	}
+}
+
+// ------------------------------------ memtableRetriever 扩展 --------------------------------------------
+
+func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(ctx context.Context, sctx sessionctx.Context) error {
+	checker := privilege.GetPrivilegeManager(sctx)
+	var rows [][]types.Datum
+	is := sctx.GetInfoSchema().(infoschema.InfoSchema)
+	schemas := is.AllSchemaNames()
+	for _, schema := range schemas {
+		tables, err := e.is.SchemaTableInfos(ctx, schema)
+		if err != nil {
+			return err
+		}
+		for _, tbl := range tables {
+			if tbl.TTLInfo == nil {
+				continue
+			}
+
+			if checker != nil && !checker.RequestVerification(sctx.GetSessionVars().ActiveRoles, schema.L, tbl.Name.L, "", mysql.AllPrivMask) {
+				continue
+			}
+
+			if !tbl.IsView() {
+				ttlInfo := tbl.TTLInfo
+				ttlUnit := ast.TimeUnitType(ttlInfo.IntervalTimeUnit).String()
+				var colExpr string
+				var columnType string
+				for _, c := range tbl.Columns {
+					if c.Name.L == ttlInfo.ColumnName.L {
+						colExpr = c.GeneratedExprString
+						columnType = c.FieldType.InfoSchemaStr()
+					}
+				}
+				record := types.MakeDatums(
+					schema.O,                             // TABLE_SCHEMA
+					tbl.Name.O,                           // TABLE_NAME
+					tbl.ID,                               // TIDB_TABLE_ID
+					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
+					columnType,                           // TTL_COLUMN_TYPE
+					colExpr,                              // TTL_COLUMN_GENERATED_EXPR
+					ttlInfo.IntervalExprStr,              // TTL
+					ttlUnit,                              // TTL_UNIT
+					variable.BoolToOnOff(ttlInfo.Enable), // TTL_ENABLE
+					ttlInfo.JobInterval,                  // TTL_JOB_INTERVAL
+				)
+				rows = append(rows, record)
+			}
+		}
+	}
+	e.rows = rows
+	return nil
+}
+
+// ----------------------------------------------------------------------------------------
+
+// GetFlatPlan 把私有方法暴露出去
+func GetFlatPlan(stmtCtx *stmtctx.StatementContext) *plannercore.FlatPhysicalPlan {
+	return getFlatPlan(stmtCtx)
+}
+
+// ----------------------------------------------------------------------------------------
+
+// Collect collect cpu time
+func (e *IndexLookUpRunTimeStats) Collect() *mctech.CPUTimeStats {
+	var cpuTime time.Duration
+	if e.FetchHandleTotal > 0 {
+		cpuTime = cpuTime + time.Duration(e.FetchHandleTotal)
+	}
+	return &mctech.CPUTimeStats{
+		Group: mctech.Root,
+		Type:  "IndexLookUp",
+		Time:  cpuTime,
+	}
+}
+
+// CollectWarnings for mctech full trace log
+func CollectWarnings(stmtCtx *stmtctx.StatementContext) []variable.JSONSQLWarnForSlowLog {
+	failpoint.Inject("CreateeWarnings", func() {
+		stmtCtx.AppendWarning(errors.New("this is for test warning"))
+	})
+	warnings := stmtCtx.GetWarnings()
+	res := make([]variable.JSONSQLWarnForSlowLog, len(warnings))
+	for i := range warnings {
+		res[i].Level = warnings[i].Level
+		res[i].Message = extractMsgFromSQLWarn(&warnings[i])
+	}
+	return res
+}
+
+var (
+	_ mctech.CPUTimeCollector = &IndexLookUpRunTimeStats{}
+)
+
 // ---------------------------------------------- large sql query -----------------------------------------------
 
 // ParseLargeQueryBatchSize is the batch size of large-query lines for a worker to parse, exported for testing.
@@ -224,7 +398,7 @@ func (e *mctechLargeQueryRetriever) initialize(ctx context.Context, sctx session
 			}
 			continue
 		}
-		factory, err := getLargeQueryColumnValueFactoryByName(sctx, col.Name.O, idx)
+		factory, err := getLargeQueryColumnValueFactoryByName(col.Name.O, idx)
 		if err != nil {
 			return err
 		}
@@ -740,7 +914,7 @@ func (e *mctechLargeQueryRetriever) setColumnValue(sctx sessionctx.Context, row 
 				sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 				return false
 			}
-			timeValue := types.NewTime(types.FromGoTime(t), mysql.TypeTimestamp, types.MaxFsp)
+			timeValue := types.NewTime(types.FromGoTime(t.In(tz)), mysql.TypeTimestamp, types.MaxFsp)
 			return checker.isTimeValid(timeValue)
 		}
 		return true
@@ -772,17 +946,6 @@ func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessio
 			e.stats.initialize = time.Since(startTime)
 			e.stats.totalFileNum = totalFileNum
 		}()
-	}
-	if e.extractor == nil || !e.extractor.Enable {
-		totalFileNum = 1
-		file, err := os.Open(filepath.Clean(logFilePath))
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, nil
-			}
-			return nil, err
-		}
-		return []logFile{{file: file}}, nil
 	}
 	var logFiles []logFile
 	logDir := filepath.Dir(logFilePath)
@@ -827,36 +990,41 @@ func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessio
 		if err != nil {
 			return handleErr(err)
 		}
-		start := types.NewTime(types.FromGoTime(fileStartTime), mysql.TypeDatetime, types.MaxFsp)
-		notInAllTimeRanges := true
-		for _, tr := range e.checker.timeRanges {
-			if start.Compare(tr.endTime) <= 0 {
-				notInAllTimeRanges = false
-				break
+		tz := sctx.GetSessionVars().Location()
+		start := types.NewTime(types.FromGoTime(fileStartTime.In(tz)), mysql.TypeDatetime, types.MaxFsp)
+		if e.checker.enableTimeCheck {
+			notInAllTimeRanges := true
+			for _, tr := range e.checker.timeRanges {
+				if start.Compare(tr.endTime) <= 0 {
+					notInAllTimeRanges = false
+					break
+				}
 			}
-		}
-		if notInAllTimeRanges {
-			return nil
+			if notInAllTimeRanges {
+				return nil
+			}
 		}
 
 		// If we want to get the end time from a compressed file,
-		// we need uncompress the whole file which is very large and consume a lot of memeory.
+		// we need uncompress the whole file which is very large and consume a lot of memory.
 		if !compressed {
 			// Get the file end time.
 			fileEndTime, err := e.getFileEndTime(ctx, file)
 			if err != nil {
 				return handleErr(err)
 			}
-			end := types.NewTime(types.FromGoTime(fileEndTime), mysql.TypeDatetime, types.MaxFsp)
-			inTimeRanges := false
-			for _, tr := range e.checker.timeRanges {
-				if !(start.Compare(tr.endTime) > 0 || end.Compare(tr.startTime) < 0) {
-					inTimeRanges = true
-					break
+			if e.checker.enableTimeCheck {
+				end := types.NewTime(types.FromGoTime(fileEndTime.In(tz)), mysql.TypeDatetime, types.MaxFsp)
+				inTimeRanges := false
+				for _, tr := range e.checker.timeRanges {
+					if !(start.Compare(tr.endTime) > 0 || end.Compare(tr.startTime) < 0) {
+						inTimeRanges = true
+						break
+					}
 				}
-			}
-			if !inTimeRanges {
-				return nil
+				if !inTimeRanges {
+					return nil
+				}
 			}
 		}
 		_, err = file.Seek(0, io.SeekStart)
@@ -865,7 +1033,7 @@ func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessio
 		}
 		logFiles = append(logFiles, logFile{
 			file:       file,
-			start:      fileStartTime,
+			start:      start,
 			compressed: compressed,
 		})
 		skip = true
@@ -884,13 +1052,13 @@ func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessio
 	// Assume no time range overlap in log files and remove unnecessary log files for compressed files.
 	var ret []logFile
 	for i, file := range logFiles {
-		if i == len(logFiles)-1 || !file.compressed {
+		if i == len(logFiles)-1 || !file.compressed || !e.checker.enableTimeCheck {
 			ret = append(ret, file)
 			continue
 		}
-		start := types.NewTime(types.FromGoTime(logFiles[i].start), mysql.TypeDatetime, types.MaxFsp)
+		start := logFiles[i].start
 		// use next file.start as endTime
-		end := types.NewTime(types.FromGoTime(logFiles[i+1].start), mysql.TypeDatetime, types.MaxFsp)
+		end := logFiles[i+1].start
 		inTimeRanges := false
 		for _, tr := range e.checker.timeRanges {
 			if !(start.Compare(tr.endTime) > 0 || end.Compare(tr.startTime) < 0) {
@@ -1063,9 +1231,9 @@ func uncompress(ctx context.Context, line string) (string, error) {
 	return string(raw), nil
 }
 
-type mctechLargeQueryColumnValueFactory func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error)
+type mctechLargeQueryColumnValueFactory func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error)
 
-func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string, columnIdx int) (mctechLargeQueryColumnValueFactory, error) {
+func getLargeQueryColumnValueFactoryByName(colName string, columnIdx int) (mctechLargeQueryColumnValueFactory, error) {
 	switch colName {
 	case variable.MCLargeQueryTimeStr:
 		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (bool, error) {
@@ -1141,173 +1309,3 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 	}
 	return nil, nil
 }
-
-// SaveLargeQuery is used to print the large query in the log files.
-func (a *ExecStmt) SaveLargeQuery(mctx mctech.Context, sqlType string, succ bool) {
-	sessVars := a.Ctx.GetSessionVars()
-	cfg := config.GetMCTechConfig()
-	threshold := cfg.Metrics.LargeQuery.Threshold
-	enable := cfg.Metrics.LargeQuery.Enabled
-
-	if !enable || len(a.StmtNode.OriginalText()) < threshold {
-		// 不记录
-		return
-	}
-
-	sql := a.GetTextToLog(true)
-	comments := mctx.PrepareResult().Comments()
-	resultRows := GetResultRowsCount(sessVars.StmtCtx, a.Plan)
-	largeItems := CreateLargeQueryItems(a.GoCtx, sql, sqlType, succ, resultRows, sessVars, comments)
-	largeQuery, err := sessVars.LargeQueryFormat(largeItems)
-	if err != nil {
-		logutil.BgLogger().Error("record large query error", zap.Error(err), zap.Stack("stack"))
-		return
-	}
-
-	// 只在没有发生错误的时候才记录大SQL日志
-	mctech.L().Warn(largeQuery)
-}
-
-// CreateLargeQueryItems create large query items
-func CreateLargeQueryItems(ctx context.Context, sql string, sqlType string, succ bool, resultRows int64,
-	sessVars *variable.SessionVars, comments mctech.Comments) *variable.MCLargeQueryItems {
-	stmtCtx := sessVars.StmtCtx
-	_, digest := stmtCtx.SQLDigest()
-	execDetail := stmtCtx.GetExecDetails()
-	memMax := stmtCtx.MemTracker.MaxConsumed()
-	diskMax := stmtCtx.DiskTracker.MaxConsumed()
-	costTime := time.Since(sessVars.StartTime) + sessVars.DurationParse
-
-	var stmtDetail *execdetails.StmtExecDetails
-	stmtDetailRaw := ctx.Value(execdetails.StmtExecDetailKey)
-	if stmtDetailRaw != nil {
-		stmtDetail = stmtDetailRaw.(*execdetails.StmtExecDetails)
-	}
-	var (
-		appName     string
-		productLine string
-		pkgName     string
-	)
-
-	pkg := comments.Package()
-	if pkg != nil {
-		pkgName = pkg.Name()
-	}
-	svc := comments.Service()
-	if svc != nil {
-		appName = svc.AppName()
-		productLine = svc.ProductLine()
-	}
-	return &variable.MCLargeQueryItems{
-		SQL:               sql,
-		SQLType:           sqlType,
-		AppName:           appName,
-		ProductLine:       productLine,
-		Package:           pkgName,
-		Digest:            digest.String(),
-		TimeTotal:         costTime,
-		TimeParse:         sessVars.DurationParse,
-		TimeCompile:       sessVars.DurationCompile,
-		TimeOptimize:      sessVars.DurationOptimization,
-		RewriteInfo:       sessVars.RewritePhaseInfo,
-		ExecDetail:        execDetail,
-		MemMax:            memMax,
-		DiskMax:           diskMax,
-		Succ:              succ,
-		Plan:              getPlanTree(sessVars.StmtCtx),
-		WriteSQLRespTotal: stmtDetail.WriteSQLRespDuration,
-		ResultRows:        resultRows,
-	}
-}
-
-// --------------------------------------------------------------------------------
-
-func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(ctx context.Context, sctx sessionctx.Context) error {
-	checker := privilege.GetPrivilegeManager(sctx)
-	var rows [][]types.Datum
-	is := sctx.GetInfoSchema().(infoschema.InfoSchema)
-	schemas := is.AllSchemaNames()
-	for _, schema := range schemas {
-		tables, err := e.is.SchemaTableInfos(ctx, schema)
-		if err != nil {
-			return err
-		}
-		for _, tbl := range tables {
-			if tbl.TTLInfo == nil {
-				continue
-			}
-
-			if checker != nil && !checker.RequestVerification(sctx.GetSessionVars().ActiveRoles, schema.L, tbl.Name.L, "", mysql.AllPrivMask) {
-				continue
-			}
-
-			if !tbl.IsView() {
-				ttlInfo := tbl.TTLInfo
-				ttlUnit := ast.TimeUnitType(ttlInfo.IntervalTimeUnit).String()
-				var colExpr string
-				var columnType string
-				for _, c := range tbl.Columns {
-					if c.Name.L == ttlInfo.ColumnName.L {
-						colExpr = c.GeneratedExprString
-						columnType = c.FieldType.InfoSchemaStr()
-					}
-				}
-				record := types.MakeDatums(
-					schema.O,                             // TABLE_SCHEMA
-					tbl.Name.O,                           // TABLE_NAME
-					tbl.ID,                               // TIDB_TABLE_ID
-					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
-					columnType,                           // TTL_COLUMN_TYPE
-					colExpr,                              // TTL_COLUMN_GENERATED_EXPR
-					ttlInfo.IntervalExprStr,              // TTL
-					ttlUnit,                              // TTL_UNIT
-					variable.BoolToOnOff(ttlInfo.Enable), // TTL_ENABLE
-					ttlInfo.JobInterval,                  // TTL_JOB_INTERVAL
-				)
-				rows = append(rows, record)
-			}
-		}
-	}
-	e.rows = rows
-	return nil
-}
-
-// ----------------------------------------------------------------------------------------
-
-// GetFlatPlan 把私有方法暴露出去
-func GetFlatPlan(stmtCtx *stmtctx.StatementContext) *plannercore.FlatPhysicalPlan {
-	return getFlatPlan(stmtCtx)
-}
-
-// ----------------------------------------------------------------------------------------
-
-// Collect collect cpu time
-func (e *IndexLookUpRunTimeStats) Collect() *mctech.CPUTimeStats {
-	var cpuTime time.Duration
-	if e.FetchHandleTotal > 0 {
-		cpuTime = cpuTime + time.Duration(e.FetchHandleTotal)
-	}
-	return &mctech.CPUTimeStats{
-		Group: mctech.Root,
-		Type:  "IndexLookUp",
-		Time:  cpuTime,
-	}
-}
-
-// CollectWarnings for mctech full trace log
-func CollectWarnings(stmtCtx *stmtctx.StatementContext) []variable.JSONSQLWarnForSlowLog {
-	failpoint.Inject("CreateeWarnings", func() {
-		stmtCtx.AppendWarning(errors.New("this is for test warning"))
-	})
-	warnings := stmtCtx.GetWarnings()
-	res := make([]variable.JSONSQLWarnForSlowLog, len(warnings))
-	for i := range warnings {
-		res[i].Level = warnings[i].Level
-		res[i].Message = extractMsgFromSQLWarn(&warnings[i])
-	}
-	return res
-}
-
-var (
-	_ mctech.CPUTimeCollector = &IndexLookUpRunTimeStats{}
-)
