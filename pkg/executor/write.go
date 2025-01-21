@@ -16,7 +16,6 @@ package executor
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/pingcap/errors"
@@ -191,13 +190,11 @@ func updateRecord(
 		if mysql.HasOnUpdateNowFlag(col.GetFlag()) && onUpdateNeedModify[i] {
 			// modify by zhangbing
 			// newData[i], err = expression.GetTimeValue(sctx.GetExprCtx(), strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
-			switch col.GetType() {
-			case mysql.TypeTimestamp:
-				newData[i], err = expression.GetTimeValue(sctx.GetExprCtx(), strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
-			case mysql.TypeLonglong:
+			if col.GetType() == mysql.TypeLonglong {
 				newData[i], err = expression.GetBigIntValue(sctx.GetExprCtx(), strings.ToUpper(ast.MCTechSequence), col.GetType(), col.GetDecimal())
-			default:
-				panic(fmt.Errorf("[ON UPDATE]: not support type %d", col.GetType()))
+			} else {
+				// mysql.TypeTimestamp, mysql.TypeDatetime
+				newData[i], err = expression.GetTimeValue(sctx.GetExprCtx(), strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
 			}
 			// modify end
 			modified[i] = true
