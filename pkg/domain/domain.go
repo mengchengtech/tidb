@@ -295,6 +295,16 @@ func (do *Domain) loadInfoSchema(startTS uint64) (infoschema.InfoSchema, bool, i
 		// We can fall back to full load, don't need to return the error.
 		logutil.BgLogger().Error("failed to load schema diff", zap.Error(err))
 	}
+
+	// add failpoint to simulate long-running schema loading scenario
+	failpoint.Inject("mock-load-schema-long-time", func(val failpoint.Value) {
+		if val.(bool) {
+			// not ideal to use sleep, but not sure if there is a better way
+			logutil.BgLogger().Error("sleep before doing a full load")
+			time.Sleep(15 * time.Second)
+		}
+	})
+
 	// full load.
 	schemas, err := do.fetchAllSchemasWithTables(m)
 	if err != nil {
@@ -1332,6 +1342,11 @@ func (do *Domain) Init(
 	return nil
 }
 
+// IsLeaseExpired returns whether lease has expired
+func (do *Domain) IsLeaseExpired() bool {
+	return do.SchemaValidator.IsLeaseExpired()
+}
+
 // InitInfo4Test init infosync for distributed execution test.
 func (do *Domain) InitInfo4Test() {
 	infosync.MockGlobalServerInfoManagerEntry.Add(do.ddl.GetID(), do.ServerID)
@@ -2357,10 +2372,8 @@ func (do *Domain) loadStatsWorker() {
 		lease = 3 * time.Second
 	}
 	loadTicker := time.NewTicker(lease)
-	updStatsHealthyTicker := time.NewTicker(20 * lease)
 	defer func() {
 		loadTicker.Stop()
-		updStatsHealthyTicker.Stop()
 		logutil.BgLogger().Info("loadStatsWorker exited.")
 	}()
 	do.initStats()
@@ -2377,8 +2390,6 @@ func (do *Domain) loadStatsWorker() {
 			if err != nil {
 				logutil.BgLogger().Debug("load histograms failed", zap.Error(err))
 			}
-		case <-updStatsHealthyTicker.C:
-			statsHandle.UpdateStatsHealthyMetrics()
 		case <-do.exit:
 			return
 		}
@@ -2452,13 +2463,15 @@ func (do *Domain) updateStatsWorker(_ sessionctx.Context, owner owner.Manager) {
 	deltaUpdateTicker := time.NewTicker(20*lease + randDuration)
 	gcStatsTicker := time.NewTicker(100 * lease)
 	dumpColStatsUsageTicker := time.NewTicker(100 * lease)
-	readMemTricker := time.NewTicker(memory.ReadMemInterval)
+	updateStatsHealthyTicker := time.NewTicker(20 * lease)
+	readMemTicker := time.NewTicker(memory.ReadMemInterval)
 	statsHandle := do.StatsHandle()
 	defer func() {
 		dumpColStatsUsageTicker.Stop()
 		gcStatsTicker.Stop()
 		deltaUpdateTicker.Stop()
-		readMemTricker.Stop()
+		readMemTicker.Stop()
+		updateStatsHealthyTicker.Stop()
 		do.SetStatsUpdating(false)
 		logutil.BgLogger().Info("updateStatsWorker exited.")
 	}()
@@ -2488,9 +2501,10 @@ func (do *Domain) updateStatsWorker(_ sessionctx.Context, owner owner.Manager) {
 			if err != nil {
 				logutil.BgLogger().Debug("dump column stats usage failed", zap.Error(err))
 			}
-
-		case <-readMemTricker.C:
+		case <-readMemTicker.C:
 			memory.ForceReadMemStats()
+		case <-updateStatsHealthyTicker.C:
+			statsHandle.UpdateStatsHealthyMetrics()
 		}
 	}
 }

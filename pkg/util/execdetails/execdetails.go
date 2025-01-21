@@ -1306,6 +1306,7 @@ func NewRuntimeStatsColl(reuse *RuntimeStatsColl) *RuntimeStatsColl {
 // RegisterStats register execStat for a executor.
 func (e *RuntimeStatsColl) RegisterStats(planID int, info RuntimeStats) {
 	e.mu.Lock()
+	defer e.mu.Unlock()
 	stats, ok := e.rootStats[planID]
 	if !ok {
 		stats = NewRootRuntimeStats()
@@ -1323,7 +1324,6 @@ func (e *RuntimeStatsColl) RegisterStats(planID int, info RuntimeStats) {
 	if !found {
 		stats.groupRss = append(stats.groupRss, info.Clone())
 	}
-	e.mu.Unlock()
 }
 
 // GetBasicRuntimeStats gets basicRuntimeStats for a executor.

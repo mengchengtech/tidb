@@ -30,6 +30,7 @@ import (
 	"github.com/pingcap/tidb/br/pkg/utils"
 	"github.com/pingcap/tidb/br/pkg/version"
 	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/infoschema"
 	"github.com/pingcap/tidb/pkg/parser/model"
 	"github.com/pingcap/tidb/pkg/util"
 	"github.com/pingcap/tidb/pkg/util/mathutil"
@@ -886,6 +887,11 @@ func runRestore(c context.Context, g glue.Glue, cmdName string, cfg *RestoreConf
 		if cfg.WithSysTable {
 			client.InitFullClusterRestore(cfg.ExplicitFilter)
 		}
+	} else if client.IsFull() && checkpointFirstRun && cfg.CheckRequirements {
+		if err := checkTableExistence(ctx, mgr, tables, g); err != nil {
+			schedulersRemovable = true
+			return errors.Trace(err)
+		}
 	}
 
 	if client.IsFullClusterRestore() && client.HasBackedUpSysDB() {
@@ -1175,6 +1181,24 @@ func runRestore(c context.Context, g glue.Glue, cmdName string, cfg *RestoreConf
 
 	// Set task summary to success status.
 	summary.SetSuccessStatus(true)
+	return nil
+}
+
+func checkTableExistence(ctx context.Context, mgr *conn.Mgr, tables []*metautil.Table, g glue.Glue) error {
+	message := "table already exists: "
+	allUnique := true
+	for _, table := range tables {
+		_, err := mgr.GetDomain().InfoSchema().TableByName(table.DB.Name, table.Info.Name)
+		if err == nil {
+			message += fmt.Sprintf("%s.%s ", table.DB.Name, table.Info.Name)
+			allUnique = false
+		} else if !infoschema.ErrTableNotExists.Equal(err) {
+			return errors.Trace(err)
+		}
+	}
+	if !allUnique {
+		return errors.Errorf("Target tables already exist: %s", message)
+	}
 	return nil
 }
 

@@ -445,6 +445,8 @@ func (er *expressionRewriter) buildSubquery(ctx context.Context, planCtx *exprRe
 		b.outerSchemas = append(b.outerSchemas, outerSchema)
 		b.outerNames = append(b.outerNames, er.names)
 		b.outerBlockExpand = append(b.outerBlockExpand, b.currentBlockExpand)
+		// set it to nil, otherwise, inner qb will use outer expand meta to rewrite expressions.
+		b.currentBlockExpand = nil
 		defer func() {
 			b.outerSchemas = b.outerSchemas[0 : len(b.outerSchemas)-1]
 			b.outerNames = b.outerNames[0 : len(b.outerNames)-1]
@@ -1483,7 +1485,7 @@ func (er *expressionRewriter) Leave(originInNode ast.Node) (retNode ast.Node, ok
 			return retNode, false
 		}
 
-		castFunction, err := expression.BuildCastFunctionWithCheck(er.sctx, arg, v.Tp)
+		castFunction, err := expression.BuildCastFunctionWithCheck(er.sctx, arg, v.Tp, v.ExplicitCharSet)
 		if err != nil {
 			er.err = err
 			return retNode, false
