@@ -216,6 +216,9 @@ func (cfg *RestoreCommonConfig) ParseFromFlags(flags *pflag.FlagSet) error {
 type RestoreConfig struct {
 	Config
 	RestoreCommonConfig
+	// add by zhangbing
+	MCtech MCTechRestoreConfig `json:"mctech"  toml:"mctech"`
+	// add end
 
 	NoSchema           bool          `json:"no-schema" toml:"no-schema"`
 	LoadStats          bool          `json:"load-stats" toml:"load-stats"`
@@ -244,13 +247,6 @@ type RestoreConfig struct {
 	checkpointLogRestoreTaskName      string `json:"-" toml:"-"`
 	checkpointTaskInfoClusterID       uint64 `json:"-" toml:"-"`
 	WaitTiflashReady                  bool   `json:"wait-tiflash-ready" toml:"wait-tiflash-ready"`
-	// add by zhangbing
-	SkipTiFlashRestore bool   `json:"skip-tiflash-restore" toml:"skip-tiflash-restore"`
-	ForceReplicaCount  uint16 `json:"force-replica-count" toml:"force-replica-count"`
-	IgnorePlacement    bool   `json:"ignore-placement" toml:"ignore-placement"`
-	RestoreTableSuffix string `json:"restore-table-suffix" toml:"restore-table-suffix"`
-	RestoreDBSuffix    string `json:"restore-db-suffix" toml:"restore-db-suffix"`
-	// add end
 
 	// for ebs-based restore
 	FullBackupType      FullBackupType        `json:"full-backup-type" toml:"full-backup-type"`
@@ -282,11 +278,7 @@ func DefineRestoreFlags(flags *pflag.FlagSet) {
 	flags.Bool(FlagWaitTiFlashReady, false, "whether wait tiflash replica ready if tiflash exists")
 
 	// add by zhangbing
-	flags.Bool(FlagSkipTiFlashRestore, false, "whether skip tiflash replica restore if tiflash exists")
-	flags.Uint16(FlagForceReplicaCount, 0, "set tiflash replica restore count if tiflash exists. default 0, use restore meta information")
-	flags.Bool(FlagIgnorePlacement, false, "whether ignore db and table placements")
-	flags.String(FlagRestoreTableSuffix, "", "restore table name suffix. default \"\"")
-	flags.String(FlagRestoreDBSuffix, "", "restore db name suffix. default \"\"")
+	defineMCTechRestoreFlags(flags)
 	// addend
 	DefineRestoreCommonFlags(flags)
 }
@@ -403,29 +395,29 @@ func (cfg *RestoreConfig) ParseFromFlags(flags *pflag.FlagSet) error {
 		return errors.Annotatef(err, "failed to get flag %s", FlagWaitTiFlashReady)
 	}
 	// add by zhangbing
-	cfg.SkipTiFlashRestore, err = flags.GetBool(FlagSkipTiFlashRestore)
+	cfg.MCtech.SkipTiFlashRestore, err = flags.GetBool(flagSkipTiFlashRestore)
 	if err != nil {
-		return errors.Annotatef(err, "failed to get flag %s", FlagForceReplicaCount)
+		return errors.Annotatef(err, "failed to get flag %s", flagSkipTiFlashRestore)
 	}
 
-	cfg.ForceReplicaCount, err = flags.GetUint16(FlagForceReplicaCount)
+	cfg.MCtech.ForceReplicaCount, err = flags.GetUint16(flagForceReplicaCount)
 	if err != nil {
-		return errors.Annotatef(err, "failed to get flag %s", FlagForceReplicaCount)
+		return errors.Annotatef(err, "failed to get flag %s", flagForceReplicaCount)
 	}
 
-	cfg.IgnorePlacement, err = flags.GetBool(FlagIgnorePlacement)
+	cfg.MCtech.IgnorePlacement, err = flags.GetBool(flagIgnorePlacement)
 	if err != nil {
-		return errors.Annotatef(err, "failed to get flag %s", FlagIgnorePlacement)
+		return errors.Annotatef(err, "failed to get flag %s", flagIgnorePlacement)
 	}
 
-	cfg.RestoreTableSuffix, err = flags.GetString(FlagRestoreTableSuffix)
+	cfg.MCtech.RestoreTableSuffix, err = flags.GetString(flagRestoreTableSuffix)
 	if err != nil {
-		return errors.Annotatef(err, "failed to get flag %s", FlagRestoreTableSuffix)
+		return errors.Annotatef(err, "failed to get flag %s", flagRestoreTableSuffix)
 	}
 
-	cfg.RestoreDBSuffix, err = flags.GetString(FlagRestoreDBSuffix)
+	cfg.MCtech.RestoreDBSuffix, err = flags.GetString(flagRestoreDBSuffix)
 	if err != nil {
-		return errors.Annotatef(err, "failed to get flag %s", FlagRestoreDBSuffix)
+		return errors.Annotatef(err, "failed to get flag %s", flagRestoreDBSuffix)
 	}
 	// add end
 	if flags.Lookup(flagFullBackupType) != nil {
@@ -1245,11 +1237,11 @@ func filterRestoreFiles(
 		}
 		// add by zhangbing
 		var newDBName string
-		if len(cfg.RestoreDBSuffix) > 0 {
-			newDBName = db.Info.Name.O + cfg.RestoreDBSuffix
+		if len(cfg.MCtech.RestoreDBSuffix) > 0 {
+			newDBName = db.Info.Name.O + cfg.MCtech.RestoreDBSuffix
 			db.Info.Name = model.NewCIStr(newDBName)
 		}
-		if cfg.IgnorePlacement {
+		if cfg.MCtech.IgnorePlacement {
 			db.Info.PlacementPolicyRef = nil
 		}
 		// add end
@@ -1263,22 +1255,22 @@ func filterRestoreFiles(
 				table.DB.Name = db.Info.Name
 			}
 
-			if len(cfg.RestoreTableSuffix) > 0 {
-				newTBName := table.Info.Name.O + cfg.RestoreTableSuffix
+			if len(cfg.MCtech.RestoreTableSuffix) > 0 {
+				newTBName := table.Info.Name.O + cfg.MCtech.RestoreTableSuffix
 				table.Info.Name = model.NewCIStr(newTBName)
 			}
-			if cfg.IgnorePlacement {
+			if cfg.MCtech.IgnorePlacement {
 				table.Info.PlacementPolicyRef = nil
 			}
 
 			if table.Info.TiFlashReplica != nil {
-				if cfg.SkipTiFlashRestore {
+				if cfg.MCtech.SkipTiFlashRestore {
 					// skip tiflash restore
 					table.TiFlashReplicas = 0
 					table.Info.TiFlashReplica = nil
-				} else if cfg.ForceReplicaCount > 0 {
-					table.TiFlashReplicas = int(cfg.ForceReplicaCount)
-					table.Info.TiFlashReplica.Count = uint64(cfg.ForceReplicaCount)
+				} else if cfg.MCtech.ForceReplicaCount > 0 {
+					table.TiFlashReplicas = int(cfg.MCtech.ForceReplicaCount)
+					table.Info.TiFlashReplica.Count = uint64(cfg.MCtech.ForceReplicaCount)
 				}
 			}
 			// add end
