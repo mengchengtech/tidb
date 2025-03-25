@@ -219,7 +219,9 @@ var loadDataCases = []*tenantMCTechTestCase{
 
 var batchCases = []*tenantMCTechTestCase{
 	{false, nil, "pf", "batch on id limit 200 dry run delete from global_dw.f_pp_quarter_plan_amount", "BATCH ON `id` LIMIT 200 DRY RUN DELETE FROM `mock_global_dw_1`.`f_pp_quarter_plan_amount` WHERE (`mock_global_dw_1`.`f_pp_quarter_plan_amount`.`tenant`='gslq4dev')", ""},
+	{false, nil, "pf", "batch on global_dw.t1.id limit 200 update global_dw.f_pp_quarter_plan_amount t1 join global_dw.f_pp_quarter_plan_amount t2 on t1.code = t2.code set t1.full_name = t2.full_name", "BATCH ON `mock_global_dw_1`.`t1`.`id` LIMIT 200 UPDATE `mock_global_dw_1`.`f_pp_quarter_plan_amount` AS `t1` JOIN `mock_global_dw_1`.`f_pp_quarter_plan_amount` AS `t2` ON ((`t2`.`tenant`='gslq4dev') AND (`t1`.`code`=`t2`.`code`)) SET `t1`.`full_name`=`t2`.`full_name` WHERE (`t1`.`tenant`='gslq4dev')", ""},
 	{true, nil, "pf", "batch on id limit 200 dry run delete from global_dw.f_pp_quarter_plan_amount", "BATCH ON `id` LIMIT 200 DRY RUN DELETE FROM `mock_global_dw_1`.`f_pp_quarter_plan_amount`", ""},
+	{true, nil, "pf", "batch on global_dw.t1.id limit 200 update global_dw.f_pp_quarter_plan_amount t1 join global_dw.f_pp_quarter_plan_amount t2 on t1.code = t2.code set t1.full_name = t2.full_name", "BATCH ON `mock_global_dw_1`.`t1`.`id` LIMIT 200 UPDATE `mock_global_dw_1`.`f_pp_quarter_plan_amount` AS `t1` JOIN `mock_global_dw_1`.`f_pp_quarter_plan_amount` AS `t2` ON (`t1`.`code`=`t2`.`code`) SET `t1`.`full_name`=`t2`.`full_name`", ""},
 }
 
 var nopCases = []*tenantMCTechTestCase{
