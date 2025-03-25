@@ -117,7 +117,7 @@ func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (e
 			*ast.DeleteStmt, *ast.InsertStmt, *ast.UpdateStmt,
 			*ast.PrepareStmt, *ast.ExecuteStmt,
 			*ast.NonTransactionalDMLStmt, // Batch
-			*ast.LoadDataStmt:
+			*ast.LoadDataStmt, *ast.ImportIntoStmt:
 			shouldLog = true
 		}
 
@@ -450,6 +450,12 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		info = sqlUpdateInfo
 	case *ast.LoadDataStmt:
 		info = sqlLoadInfo
+	case *ast.ImportIntoStmt:
+		if s.Select != nil {
+			info = sqlImportSelectInfo
+		} else {
+			info = sqlImportFileInfo
+		}
 	case *ast.TruncateTableStmt:
 		info = sqlTruncateInfo
 	case *ast.SetStmt:

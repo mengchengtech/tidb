@@ -306,6 +306,9 @@ var (
 	sqlBatchDeleteInfo = &sqlStmtInfo{"batch", "delete", true}
 	sqlBatchUpdateInfo = &sqlStmtInfo{"batch", "update", true}
 	sqlBatchInsertInfo = &sqlStmtInfo{"batch", "insert", true}
+	// IMPORT ...
+	sqlImportFileInfo   = &sqlStmtInfo{"import", "file", true}
+	sqlImportSelectInfo = &sqlStmtInfo{"import", "select", true}
 )
 
 const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"

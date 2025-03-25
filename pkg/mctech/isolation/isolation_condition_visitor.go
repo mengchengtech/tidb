@@ -186,6 +186,8 @@ func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildr
 		switch node := n.(type) {
 		case *ast.LoadDataStmt:
 			v.enterLoadDataStatement(node)
+		case *ast.ImportIntoStmt:
+			v.enterImportStatement(node)
 		case
 			*ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt,
 			*ast.SetOprSelectList, *ast.SetOprStmt: // InsertStmt不支持With
@@ -220,6 +222,8 @@ func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 			v.leaveWithScope(node)
 		case *ast.InsertStmt: // include replace / insert .... duplicate
 			v.leaveInsertStatement(node)
+		case *ast.ImportIntoStmt:
+			v.leaveImportIntoStatement(node)
 		case *ast.LoadDataStmt:
 			v.leaveLoadDataStatement(node)
 		case *ast.SelectStmt:
@@ -271,6 +275,20 @@ func (v *isolationConditionVisitor) shouldProcess(tableName *ast.TableName) bool
 
 	// 只处理global_xxxx的表
 	return sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName)
+}
+
+func (v *isolationConditionVisitor) enterImportStatement(node *ast.ImportIntoStmt) {
+	skip := v.shouldProcess(node.Table)
+	if skip {
+		return
+	}
+
+	modified := v.processImportColumns(node)
+	v.columnModifiedScope.Push(modified)
+}
+
+func (v *isolationConditionVisitor) leaveImportIntoStatement(_ *ast.ImportIntoStmt) {
+	v.columnModifiedScope.Pop()
 }
 
 func (v *isolationConditionVisitor) enterLoadDataStatement(node *ast.LoadDataStmt) {
@@ -542,6 +560,45 @@ func (v *isolationConditionVisitor) processLoadColumns(node *ast.LoadDataStmt) b
 		},
 		Expr: v.createTenantExpr(),
 	})
+	return true
+}
+
+/**
+ * 处理import的列，添加tenant字段
+ */
+func (v *isolationConditionVisitor) processImportColumns(node *ast.ImportIntoStmt) bool {
+	columnExists := false
+	for _, i := range node.ColumnsAndUserVars {
+		colName := i.ColumnName
+		if colName == nil {
+			continue
+		}
+		columnExists = true
+		if colName.Name.L == tenantFieldName {
+			// 已存在tenant列，忽略
+			return false
+		}
+	}
+
+	if !columnExists {
+		panic(fmt.Errorf("import语句缺少列定义，无法处理租户信息"))
+	}
+
+	// 补充 tenant 列
+	if node.Path != "" {
+		// 从文件中导入
+		node.ColumnAssignments = append(node.ColumnAssignments, &ast.Assignment{
+			Column: &ast.ColumnName{
+				Name: model.NewCIStr(tenantFieldName),
+			},
+			Expr: v.createTenantExpr(),
+		})
+	} else {
+		// 追加tenant列
+		node.ColumnsAndUserVars = append(node.ColumnsAndUserVars, &ast.ColumnNameOrUserVar{
+			ColumnName: &ast.ColumnName{Name: model.NewCIStr(tenantFieldName)},
+		})
+	}
 	return true
 }
 
