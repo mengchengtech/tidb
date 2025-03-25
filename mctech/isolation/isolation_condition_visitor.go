@@ -64,8 +64,8 @@ func (v *databaseNameVisitor) DBNames() map[string]bool {
 func (v *databaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	var err error
 	switch node := n.(type) {
-	case *ast.ColumnNameExpr:
-		err = v.enterColumnNameExpr(node)
+	case *ast.ColumnName:
+		err = v.enterColumnName(node)
 	}
 	if err != nil {
 		panic(err)
@@ -86,8 +86,8 @@ func (v *databaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	return n, true
 }
 
-func (v *databaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) error {
-	dbName := node.Name.Schema.L
+func (v *databaseNameVisitor) enterColumnName(node *ast.ColumnName) error {
+	dbName := node.Schema.L
 	if dbName == "" {
 		return nil
 	}
@@ -96,7 +96,7 @@ func (v *databaseNameVisitor) enterColumnNameExpr(node *ast.ColumnNameExpr) erro
 	physicalDbName, err := v.context.ToPhysicalDbName(dbName)
 	if err == nil {
 		if physicalDbName != dbName {
-			node.Name.Schema = model.NewCIStr(physicalDbName)
+			node.Schema = model.NewCIStr(physicalDbName)
 		}
 	}
 	return err
