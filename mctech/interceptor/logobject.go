@@ -295,7 +295,7 @@ var (
 	sqlInsertInfo     = &sqlStmtInfo{"dml", "insert", true}
 	sqlSelectInfo     = &sqlStmtInfo{"dml", "select", false}
 	sqlLoadInfo       = &sqlStmtInfo{"batch", "load", true}
-	sqlTruncateInfo   = &sqlStmtInfo{"batch", "truncate", true}
+	sqlTruncateInfo   = &sqlStmtInfo{"ddl", "truncate", true}
 	sqlSetInfo        = &sqlStmtInfo{"misc", "set", false}
 	sqlLockInfo       = &sqlStmtInfo{"misc", "lock", false}
 	sqlUnlockInfo     = &sqlStmtInfo{"misc", "unlock", false}
