@@ -21,9 +21,12 @@ var mppOptionMap = map[string][]*varValue{
 	"force": {
 		{variable.TiDBIsolationReadEngines, "tidb,tiflash"},
 		{variable.TiDBEnforceMPPExecution, variable.BoolToOnOff(true)},
+		{variable.TiDBAllowMPPExecution, variable.BoolToOnOff(true)},
 	},
 	"disable": {
 		{variable.TiDBIsolationReadEngines, "tidb,tikv"},
+		{variable.TiDBEnforceMPPExecution, variable.BoolToOnOff(false)},
+		{variable.TiDBAllowMPPExecution, variable.BoolToOnOff(false)},
 	},
 	// 新建连接默认值，不用设置
 	"allow": {},
