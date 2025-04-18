@@ -41,18 +41,33 @@ func GetFullSQL(at types.Time, txID int64, group string) (sql string, isNull boo
 		return "", true, err
 	}
 	date := gotime.Format(dateFormat)
-	hour := gotime.Hour()
-	fileDir := path.Join(fullSQLDir, date, strconv.Itoa(hour))
+	hour := strconv.Itoa(gotime.Hour())
+	minute := strconv.Itoa(gotime.Minute())
+	fileDir := path.Join(fullSQLDir, date, hour, minute)
 	fullPath := path.Join(fileDir, fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID))
+	// 先使用带分钟的路径查询文件
 	if _, err := os.Stat(fullPath); err != nil {
 		if pe, ok := err.(*os.PathError); ok {
+			// 不存在时再使用不含分钟的路径查询文件
 			if pe.Err == syscall.ENOENT {
-				return "", true, nil
+				// TODO: 等存留的旧的SQL日志文件自然过期后就可以不用尝试下面的方式
+				fileDir = path.Join(fullSQLDir, date, hour)
+				fullPath = path.Join(fileDir, fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID))
+				if _, err = os.Stat(fullPath); err != nil {
+					if pe, ok = err.(*os.PathError); ok {
+						if pe.Err == syscall.ENOENT {
+							return "", true, nil
+						}
+					}
+				}
+				err = nil
 			}
 		}
 
-		logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
-		return "", true, fmt.Errorf("get compress sql file error, [%s, %d, %s]", at, txID, group)
+		if err != nil {
+			logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+			return "", true, fmt.Errorf("get compress sql file error, [%s, %d, %s]", at, txID, group)
+		}
 	}
 
 	var fi *os.File
