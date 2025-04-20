@@ -20,12 +20,12 @@ func (d *testMCTechContext) BaseContext() mctech.Context {
 	return d.Context
 }
 
-type testDBSelector struct {
-	dbIndex mctech.DbIndex
+type testDWSelector struct {
+	dwIndex mctech.DWIndex
 }
 
-func (s *testDBSelector) GetDbIndex() (mctech.DbIndex, error) {
-	return s.dbIndex, nil
+func (s *testDWSelector) GetDWIndex() (mctech.DWIndex, error) {
+	return s.dwIndex, nil
 }
 
 type miscMCTechTestCase struct {
@@ -114,6 +114,6 @@ func newTestMCTechContext() (mctech.Context, error) {
 	}
 	modifyCtx := context.Context.(mctech.ModifyContext)
 	modifyCtx.SetPrepareResult(result)
-	modifyCtx.SetDBSelector(&testDBSelector{dbIndex: 1})
+	modifyCtx.SetDWSelector(&testDWSelector{dwIndex: 1})
 	return context, err
 }

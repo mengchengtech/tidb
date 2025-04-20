@@ -53,7 +53,7 @@ func TestBuildMCTechTenantEnabled(t *testing.T) {
 		mock.M(t, map[string]any{"Tenant.Enabled": true}),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mock.M(t, map[string]any{"DbIndex.CurrentDB": map[string]any{"current": 1}}),
+		mock.M(t, map[string]any{"DWIndex.Current": map[string]any{"current": 1}}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
@@ -90,7 +90,7 @@ func TestBuildMCTechTenantDisabled(t *testing.T) {
 		mock.M(t, map[string]any{"Tenant.Enabled": false}),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mock.M(t, map[string]any{"DbIndex.CurrentDB": map[string]any{"current": 2}}),
+		mock.M(t, map[string]any{"DWIndex.Current": map[string]any{"current": 2}}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
