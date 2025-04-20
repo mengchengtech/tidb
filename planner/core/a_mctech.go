@@ -131,7 +131,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		tenant     *string
 		tenantFrom *string
 		params     = map[string]any{}
-		db         = e.SCtx().GetSessionVars().CurrentDB
+		db         = e.ctx.GetSessionVars().CurrentDB
 		index      *int
 		restoreSQL = sb.String()
 	)
@@ -154,7 +154,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 				}
 			}
 		}
-		if r, err := mctx.GetDbIndex(); err == nil {
+		if r, err := mctx.GetDWIndex(); err == nil {
 			index = toPtr(int(r))
 		}
 	}

@@ -14,7 +14,7 @@ import (
 type testContextCase struct {
 	tenant   string
 	response map[string]any
-	expect   mctech.DbIndex
+	expect   mctech.DWIndex
 	params   map[string]any
 	failure  string
 }
@@ -27,15 +27,15 @@ func (c *testContextCase) Source(i int) any {
 	return fmt.Sprintf("(%d) %s", i, c.response)
 }
 
-func TestDbSelectorGetDbIndex(t *testing.T) {
+func TestDWSelectorGetDWIndex(t *testing.T) {
 	cases := []*testContextCase{
-		{"gslq", map[string]any{"DbIndex.CurrentDB": map[string]any{"current": ""}}, 1, map[string]any{"background": true}, "cannot unmarshal"},
-		{"gslq", map[string]any{"DbIndex.DBByRequest": map[string]any{"db": ""}}, 1, map[string]any{"requestId": "12345678"}, "cannot unmarshal"},
-		{"gslq", map[string]any{"DbIndex.CurrentDB": map[string]any{"current": 2}}, 2, map[string]any{}, ""},
-		{"gslq", map[string]any{"DbIndex.CurrentDB": map[string]any{"current": 2}}, 2, map[string]any{}, ""}, // 测试缓存中获取
-		{"gslq", map[string]any{"DbIndex.CurrentDB": map[string]any{"current": 2}}, 1, map[string]any{"background": true}, ""},
-		{"gslq", map[string]any{"DbIndex.DBByRequest": map[string]any{"db": 1}}, 1, map[string]any{"requestId": "12345678"}, ""},
-		{"gslq", map[string]any{"DbIndex.DBByRequest": map[string]any{"db": 1}}, 1, map[string]any{"requestId": "12345678"}, ""}, // 测试重复执行缓存
+		{"gslq", map[string]any{"DWIndex.Current": map[string]any{"current": ""}}, 1, map[string]any{"background": true}, "cannot unmarshal"},
+		{"gslq", map[string]any{"DWIndex.ByRequest": map[string]any{"db": ""}}, 1, map[string]any{"requestId": "12345678"}, "cannot unmarshal"},
+		{"gslq", map[string]any{"DWIndex.Current": map[string]any{"current": 2}}, 2, map[string]any{}, ""},
+		{"gslq", map[string]any{"DWIndex.Current": map[string]any{"current": 2}}, 2, map[string]any{}, ""}, // 测试缓存中获取
+		{"gslq", map[string]any{"DWIndex.Current": map[string]any{"current": 2}}, 1, map[string]any{"background": true}, ""},
+		{"gslq", map[string]any{"DWIndex.ByRequest": map[string]any{"db": 1}}, 1, map[string]any{"requestId": "12345678"}, ""},
+		{"gslq", map[string]any{"DWIndex.ByRequest": map[string]any{"db": 1}}, 1, map[string]any{"requestId": "12345678"}, ""}, // 测试重复执行缓存
 	}
 
 	doRunTest(t, contextRunTestCase, cases)
@@ -55,8 +55,8 @@ func contextRunTestCase(t *testing.T, i int, c *testContextCase) error {
 	if err != nil {
 		return err
 	}
-	selector := preps.NewDBSelectorForTest(result)
-	index, err := selector.GetDbIndex()
+	selector := preps.NewDWSelectorForTest(result)
+	index, err := selector.GetDWIndex()
 	if err != nil {
 		return err
 	}
