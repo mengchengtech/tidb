@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/pingcap/tidb/mctech/digestworker",
     visibility = ["//visibility:public"],
     deps = [
+        "//config",
         "//kv",
         "//parser/terror",
         "//util",
@@ -28,9 +29,11 @@ go_test(
     embed = [":digestworker"],
     flaky = True,
     deps = [
+        "//mctech/mock",
         "//session",
         "//testkit",
         "//util/sqlexec",
+        "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",
     ],
 )

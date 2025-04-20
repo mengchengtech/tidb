@@ -4,13 +4,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech/digestworker"
+	"github.com/pingcap/tidb/mctech/mock"
 	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReloadDenyDigests(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"SQLChecker.Enabled": true}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	}()
 	store := testkit.CreateMockStore(t)
 	dom, _ := session.GetDomain(store)
 	m := digestworker.NewDigestManager(nil)
