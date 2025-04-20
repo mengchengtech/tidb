@@ -4,7 +4,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -51,22 +50,22 @@ type columnDef struct {
 	size    int
 }
 
-var (
-	longSize, _     = mysql.GetDefaultFieldLengthAndDecimal(mysql.TypeLong)
-	longlongSize, _ = mysql.GetDefaultFieldLengthAndDecimal(mysql.TypeLonglong)
-)
+func getDefaultFieldLength(tp byte) int {
+	flen, _ := mysql.GetDefaultFieldLengthAndDecimal(tp)
+	return flen
+}
 
 var columnDefs = []*columnDef{
-	{"global", mysql.TypeLonglong, longlongSize},
-	{"excludes", mysql.TypeVarchar, 128},
+	{"global", mysql.TypeTiny, 1},
+	{"excludes", mysql.TypeVarchar, 1024},
 	{"includes", mysql.TypeVarchar, 1024},
-	{"comments", mysql.TypeVarchar, 512},
+	{"comments", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
 	{"db", mysql.TypeVarchar, 50},
-	{"dw_index", mysql.TypeLong, longSize},
-	{"params", mysql.TypeVarchar, 512},
-	{"prepared_sql", mysql.TypeString, mysql.MaxBlobWidth},
+	{"dw_index", mysql.TypeTiny, getDefaultFieldLength(mysql.TypeTiny)},
+	{"params", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+	{"prepared_sql", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
 }
 
 // prepareSchema prepares mctech's result schema.
@@ -130,70 +129,80 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	}
 
 	var (
-		global     = false
-		excludes   = []string{}
-		includes   = []string{}
+		global     *bool
+		excludes   []string
+		includes   []string
 		comments   = map[string]any{}
-		tenant     string
-		tenantFrom = "none"
+		tenant     *string
+		tenantFrom *string
 		params     = map[string]any{}
 		db         = e.SCtx().GetSessionVars().CurrentDB
-		index      = mctech.DbIndexNone
+		index      *int
 		restoreSQL = sb.String()
 	)
 
 	if mctx != nil {
 		result := mctx.PrepareResult()
 		if result != nil {
-			global = result.TenantOmit()
+			global = toPtr(result.TenantOmit())
 			params = result.Params()
 			excludes = result.Global().Excludes()
 			includes = result.Global().Includes()
 			comments = result.Comments().ToMap()
-			tenant = result.Tenant().Code()
-			if tenant != "" {
+			tenantCode := result.Tenant().Code()
+			if tenantCode != "" {
+				tenant = toPtr(tenantCode)
 				if result.Tenant().FromRole() {
-					tenantFrom = "role"
+					tenantFrom = toPtr("role")
 				} else {
-					tenantFrom = "hint"
+					tenantFrom = toPtr("hint")
 				}
 			}
 		}
-		index, err = mctx.GetDbIndex()
-		if err != nil {
-			index = mctech.DbIndexNone
+		if r, err := mctx.GetDbIndex(); err == nil {
+			index = toPtr(int(r))
 		}
 	}
 
-	joComments, err := json.Marshal(comments)
-	if err != nil {
-		return err
-	}
-
-	joParams, err := json.Marshal(params)
-	if err != nil {
-		return err
-	}
-
 	var row = []*types.Datum{
-		createDatum(global),
+		createDatumByPrimitivePt(global),
 		createDatum(strings.Join(excludes, ",")),
 		createDatum(strings.Join(includes, ",")),
-		createDatum(joComments),
-		createDatum(tenant),
-		createDatum(tenantFrom),
+		createDatum(types.CreateBinaryJSON(comments)),
+		createDatumByPrimitivePt(tenant),
+		createDatumByPrimitivePt(tenantFrom),
 		createDatum(db),
-		createDatum(int(index)),
-		createDatum(joParams),
+		createDatumByPrimitivePt(index),
+		createDatum(types.CreateBinaryJSON(params)),
 		createDatum(restoreSQL),
 	}
 	e.Rows = append(e.Rows, row)
 	return nil
 }
 
+func toPtr[T any](v T) *T {
+	return &v
+}
+
+// 通过pr指针类型构造Datum
+func createDatumByPrimitivePt[T any](value *T) *types.Datum {
+	d := &types.Datum{}
+	if value == nil {
+		d.SetNull()
+	} else {
+		d.SetValueWithDefaultCollation(*value)
+	}
+	return d
+}
+
+// createDatum 通过任意tidb支持的类型构造Datum
 func createDatum(value any) *types.Datum {
 	d := &types.Datum{}
-	d.SetValueWithDefaultCollation(value)
+	if value == nil {
+		d.SetNull()
+	} else {
+		d.SetValueWithDefaultCollation(value)
+	}
 	return d
 }
 
