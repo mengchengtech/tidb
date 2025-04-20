@@ -124,6 +124,7 @@ type isolationConditionVisitor struct {
 	usingParam bool
 	tenant     ast.ValueExpr
 	excludes   []ast.ExprNode
+	includes   []ast.ExprNode
 
 	withClauseScope     *nodeScope[*cteScopeItem]
 	columnModifiedScope *nodeScope[bool]
@@ -143,6 +144,19 @@ func newDatabaseNameVisitor(mctx mctech.Context) *databaseNameVisitor {
 	}
 }
 
+func toExprList(values []string, charset, collation string) []ast.ExprNode {
+	var exprList []ast.ExprNode
+	length := len(values)
+	if length > 0 {
+		exprList = make([]ast.ExprNode, length)
+		for i, str := range values {
+			// global相关的，只能生成常量
+			exprList[i] = ast.NewValueExpr(str, charset, collation)
+		}
+	}
+	return exprList
+}
+
 func newIsolationConditionVisitor(
 	mctx mctech.Context,
 	charset string, collation string) *isolationConditionVisitor {
@@ -154,15 +168,8 @@ func newIsolationConditionVisitor(
 	}
 	result := mctx.PrepareResult()
 	if result.TenantOmit() {
-		length := len(result.Excludes())
-		if length > 0 {
-			exprList := make([]ast.ExprNode, length)
-			for i, str := range result.Excludes() {
-				// global相关的，只能生成常量
-				exprList[i] = ast.NewValueExpr(str, charset, collation)
-			}
-			visitor.excludes = exprList
-		}
+		visitor.excludes = toExprList(result.Global().Excludes(), charset, collation)
+		visitor.includes = toExprList(result.Global().Includes(), charset, collation)
 	} else if !visitor.usingParam {
 		// 非参数化租户过滤条件，且tenant不为空时
 		tenant := result.Tenant().Code()
@@ -175,7 +182,7 @@ func newIsolationConditionVisitor(
 }
 
 func (v *isolationConditionVisitor) enabled() bool {
-	return v.usingParam || v.tenant != nil || len(v.excludes) > 0
+	return v.usingParam || v.tenant != nil || len(v.excludes) > 0 || len(v.includes) > 0
 }
 
 // Enter implements interface Visitor
@@ -502,11 +509,32 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 	var condition ast.ExprNode
 	rt := sd.PrepareResult()
 	if rt.TenantOmit() {
+		var exclude ast.ExprNode
+		var include ast.ExprNode
 		if len(v.excludes) > 0 {
-			condition = &ast.PatternInExpr{
+			exclude = &ast.PatternInExpr{
 				Expr: tenantField,
 				Not:  true,
 				List: v.excludes,
+			}
+		}
+
+		if len(v.includes) > 0 {
+			include = &ast.PatternInExpr{
+				Expr: tenantField,
+				List: v.includes,
+			}
+		}
+
+		if exclude == nil {
+			condition = include
+		} else if include == nil {
+			condition = exclude
+		} else {
+			condition = &ast.BinaryOperationExpr{
+				L:  exclude,
+				R:  include,
+				Op: opcode.LogicAnd,
 			}
 		}
 	} else {
@@ -520,7 +548,7 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 }
 
 /**
- * 处理import的列，添加tenant字段
+ * 处理load的列，添加tenant字段
  */
 func (v *isolationConditionVisitor) processLoadColumns(node *ast.LoadDataStmt) bool {
 	columns := node.Columns

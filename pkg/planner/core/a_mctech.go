@@ -59,6 +59,7 @@ var (
 var columnDefs = []*columnDef{
 	{"global", mysql.TypeLonglong, longlongSize},
 	{"excludes", mysql.TypeVarchar, 128},
+	{"includes", mysql.TypeVarchar, 1024},
 	{"comments", mysql.TypeVarchar, 512},
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
@@ -126,7 +127,8 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var (
 		global     = false
 		excludes   = []string{}
-		comments   = "{}"
+		includes   = []string{}
+		comments   = map[string]any{}
 		tenant     string
 		tenantFrom = "none"
 		params     = map[string]any{}
@@ -140,8 +142,9 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		if result != nil {
 			global = result.TenantOmit()
 			params = result.Params()
-			excludes = result.Excludes()
-			comments = result.Comments().String()
+			excludes = result.Global().Excludes()
+			includes = result.Global().Includes()
+			comments = result.Comments().ToMap()
 			tenant = result.Tenant().Code()
 			if tenant != "" {
 				if result.Tenant().FromRole() {
@@ -157,7 +160,12 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		}
 	}
 
-	js, err := json.Marshal(params)
+	joComments, err := json.Marshal(comments)
+	if err != nil {
+		return err
+	}
+
+	joParams, err := json.Marshal(params)
 	if err != nil {
 		return err
 	}
@@ -165,12 +173,13 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var row = []*types.Datum{
 		createDatum(global),
 		createDatum(strings.Join(excludes, ",")),
-		createDatum(comments),
+		createDatum(strings.Join(includes, ",")),
+		createDatum(joComments),
 		createDatum(tenant),
 		createDatum(tenantFrom),
 		createDatum(db),
 		createDatum(int(index)),
-		createDatum(js),
+		createDatum(joParams),
 		createDatum(restoreSQL),
 	}
 	e.Rows = append(e.Rows, row)

@@ -33,13 +33,17 @@ func (c *preprocessorTestCase) Roles() []string {
 }
 
 func TestProcessor(t *testing.T) {
-	// {service: "", prefix:"", tenant:"", tenantFromRole: true, params:{tenant:{code:"",fromRole:true}, mpp: "", global:{set:true, excludes: [""]}, comments:{}}}
+	// {service: "", prefix:"", tenant:"", tenantFromRole: true, params:{tenant:{code:"",fromRole:true}, mpp: "", global:{set:true, excludes: [""], "includes": [""]}, comments:{}}}
 	// TODO: 完成单元测试
 	cases := []*preprocessorTestCase{
 		// global
 		{"select * from company", nil, map[string]any{"global": "true"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true}, "comments": map[string]any{}}, "", ""},
 		{"select * from company", nil, map[string]any{"global": "!ys2"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "comments": map[string]any{}}, "", ""},
-		{"select * from company", nil, map[string]any{"global": "!ys2,!ys3"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "comments": map[string]any{}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "-ys2"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "comments": map[string]any{}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "+ys2"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "includes": []string{"ys2"}}, "comments": map[string]any{}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "!ys2,-ys3"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "comments": map[string]any{}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "+ys2,+ys3"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "includes": []string{"ys2", "ys3"}}, "comments": map[string]any{}}, "", ""},
+		{"select * from company", nil, map[string]any{"global": "!ys2,-ys3 , +ys22 , +ys33"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}, "includes": []string{"ys22", "ys33"}}, "comments": map[string]any{}}, "", ""},
 		// tenant hint
 		{"select * from company", nil, map[string]any{"tenant": "gdcd"}, nil, nil, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "comments": map[string]any{}}, "", ""},
 		{"select * from company", nil, map[string]any{"tenant": "gdcd", "global": "true"}, nil, nil, nil, "", "存在tenant信息时，global不允许设置为true"},
