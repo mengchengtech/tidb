@@ -14,6 +14,10 @@ import (
 )
 
 func TestCheckSQLDigest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]any{"SQLChecker.Enabled": true}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/digestworker/GetDenyDigestInfo", mock.M(t, "digest-2"))
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/digestworker/GetDenyDigestInfo")
 

@@ -29,7 +29,13 @@ type MCTech struct {
 	Tenant     Tenant        `toml:"tenant" json:"tenant"`
 	DDL        DDL           `toml:"ddl" json:"ddl"`
 	MPP        MPP           `toml:"mpp" json:"mpp"`
+	SQLChecker SQLChecker    `toml:"sql-checker" json:"sql-checker"`
 	Metrics    MctechMetrics `toml:"metrics" json:"metrics"`
+}
+
+// SQLChecker switches to Enabled/Disabled fobidden sql query by digest
+type SQLChecker struct {
+	Enabled bool `toml:"enabled" json:"enabled"`
 }
 
 // MctechMetrics metrics record used
@@ -273,6 +279,9 @@ func init() {
 				Group:             DefaultMetricsSQLTraceGroup,
 			},
 		},
+		SQLChecker: SQLChecker{
+			Enabled: false,
+		},
 	}
 }
 
@@ -335,6 +344,8 @@ func GetMCTechConfig() *MCTech {
 				opts.Metrics.SQLTrace.CompressThreshold = toInt(v)
 			case "Metrics.SqlTrace.Group":
 				opts.Metrics.SQLTrace.Group = v.(string)
+			case "SQLChecker.Enabled":
+				opts.SQLChecker.Enabled = toBool(v)
 			}
 		}
 		failpoint.Return(&opts)
