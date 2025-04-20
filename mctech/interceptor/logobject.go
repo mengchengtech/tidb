@@ -294,7 +294,7 @@ var (
 	sqlUpdateInfo     = &sqlStmtInfo{"dml", "update", true}
 	sqlInsertInfo     = &sqlStmtInfo{"dml", "insert", true}
 	sqlSelectInfo     = &sqlStmtInfo{"dml", "select", false}
-	sqlLoadInfo       = &sqlStmtInfo{"batch", "load", true}
+	sqlLoadInfo       = &sqlStmtInfo{"load", "file", true}
 	sqlTruncateInfo   = &sqlStmtInfo{"ddl", "truncate", true}
 	sqlSetInfo        = &sqlStmtInfo{"misc", "set", false}
 	sqlLockInfo       = &sqlStmtInfo{"misc", "lock", false}
@@ -302,6 +302,10 @@ var (
 	// sqlUseInfo        = &sqlStmtInfo{"misc", "use", false}
 	sqlCallInfo = &sqlStmtInfo{"misc", "call", false}
 	sqlDoInfo   = &sqlStmtInfo{"misc", "do", false}
+	// BATCH ...
+	sqlBatchDeleteInfo = &sqlStmtInfo{"batch", "delete", true}
+	sqlBatchUpdateInfo = &sqlStmtInfo{"batch", "update", true}
+	sqlBatchInsertInfo = &sqlStmtInfo{"batch", "insert", true}
 )
 
 const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"

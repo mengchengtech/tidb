@@ -220,6 +220,8 @@ func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 			v.leaveWithScope(node)
 		case *ast.InsertStmt: // include replace / insert .... duplicate
 			v.leaveInsertStatement(node)
+		case *ast.LoadDataStmt:
+			v.leaveLoadDataStatement(node)
 		case *ast.SelectStmt:
 			v.leaveSelectStatement(node)
 			v.leaveWithScope(node)
@@ -259,8 +261,7 @@ func (v *isolationConditionVisitor) leaveWithScope(node ast.Node) {
 	v.withClauseScope.Pop()
 }
 
-func (v *isolationConditionVisitor) enterLoadDataStatement(node *ast.LoadDataStmt) {
-	tableName := node.Table
+func (v *isolationConditionVisitor) shouldProcess(tableName *ast.TableName) bool {
 	dbName := tableName.Schema.L
 
 	sd := v.context
@@ -269,30 +270,28 @@ func (v *isolationConditionVisitor) enterLoadDataStatement(node *ast.LoadDataStm
 	}
 
 	// 只处理global_xxxx的表
-	if sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName) {
+	return sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName)
+}
+
+func (v *isolationConditionVisitor) enterLoadDataStatement(node *ast.LoadDataStmt) {
+	skip := v.shouldProcess(node.Table)
+	if skip {
 		return
 	}
 
-	node.ColumnAssignments = append(node.ColumnAssignments, &ast.Assignment{
-		Column: &ast.ColumnName{
-			Name: model.NewCIStr(tenantFieldName),
-		},
-		Expr: v.createTenantExpr(),
-	})
+	modified := v.processLoadColumns(node)
+	v.columnModifiedScope.Push(modified)
+}
+
+func (v *isolationConditionVisitor) leaveLoadDataStatement(_ *ast.LoadDataStmt) {
+	v.columnModifiedScope.Pop()
 }
 
 func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	source := node.Table.TableRefs.Left.(*ast.TableSource)
 	tableName := source.Source.(*ast.TableName)
-	dbName := tableName.Schema.L
-
-	sd := v.context
-	if dbName == "" {
-		dbName = sd.CurrentDB()
-	}
-
-	// 只处理global_xxxx的表
-	if sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName) {
+	skip := v.shouldProcess(tableName)
+	if skip {
 		return
 	}
 
@@ -532,6 +531,32 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 }
 
 /**
+ * 处理load的列，添加tenant字段
+ */
+func (v *isolationConditionVisitor) processLoadColumns(node *ast.LoadDataStmt) bool {
+	columns := node.Columns
+	if len(columns) == 0 {
+		panic(fmt.Errorf("load语句缺少列定义，无法处理租户信息"))
+	}
+
+	for _, i := range node.Columns {
+		if i.Name.L == tenantFieldName {
+			// 已存在tenant列，忽略
+			return false
+		}
+	}
+
+	// 不存在 tenant 列
+	node.ColumnAssignments = append(node.ColumnAssignments, &ast.Assignment{
+		Column: &ast.ColumnName{
+			Name: model.NewCIStr(tenantFieldName),
+		},
+		Expr: v.createTenantExpr(),
+	})
+	return true
+}
+
+/**
  * 处理insert/upsert的列，添加tenant字段
  */
 func (v *isolationConditionVisitor) processInsertColumns(node *ast.InsertStmt) bool {
@@ -540,26 +565,23 @@ func (v *isolationConditionVisitor) processInsertColumns(node *ast.InsertStmt) b
 		panic(fmt.Errorf("insert/upsert语句缺少列定义，无法处理租户信息"))
 	}
 
-	var modified = true
 	for _, c := range columns {
 		if c.Name.L == tenantFieldName {
-			modified = false
-			break
+			// 已存在tenant列，忽略
+			return false
 		}
 	}
 
-	if modified {
-		node.Columns = append(node.Columns, &ast.ColumnName{
-			Name: model.NewCIStr(tenantFieldName),
-		})
+	node.Columns = append(node.Columns, &ast.ColumnName{
+		Name: model.NewCIStr(tenantFieldName),
+	})
 
-		operands := node.Lists
-		length := len(operands)
-		for i := 0; i < length; i++ {
-			operands[i] = append(operands[i], v.createTenantExpr())
-		}
+	operands := node.Lists
+	length := len(operands)
+	for i := 0; i < length; i++ {
+		operands[i] = append(operands[i], v.createTenantExpr())
 	}
-	return modified
+	return true
 }
 
 func (v *isolationConditionVisitor) createTenantExpr() (expr ast.ValueExpr) {

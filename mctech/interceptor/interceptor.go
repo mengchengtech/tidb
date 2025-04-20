@@ -116,7 +116,8 @@ func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (e
 		case *ast.SelectStmt, *ast.SetOprStmt,
 			*ast.DeleteStmt, *ast.InsertStmt, *ast.UpdateStmt,
 			*ast.PrepareStmt, *ast.ExecuteStmt,
-			*ast.NonTransactionalDMLStmt:
+			*ast.NonTransactionalDMLStmt, // Batch
+			*ast.LoadDataStmt:
 			shouldLog = true
 		}
 
@@ -430,14 +431,14 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		info = sqlRollbackInfo
 	case *ast.CommitStmt:
 		info = sqlCommitInfo
-	case *ast.NonTransactionalDMLStmt:
+	case *ast.NonTransactionalDMLStmt: // BATCH ...
 		switch s.DMLStmt.(type) {
 		case *ast.DeleteStmt:
-			info = sqlDeleteInfo
+			info = sqlBatchDeleteInfo
 		case *ast.UpdateStmt:
-			info = sqlUpdateInfo
+			info = sqlBatchUpdateInfo
 		case *ast.InsertStmt:
-			info = sqlInsertInfo
+			info = sqlBatchInsertInfo
 		}
 	case *ast.SelectStmt, *ast.SetOprStmt: // select
 		info = sqlSelectInfo
