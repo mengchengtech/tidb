@@ -11,12 +11,12 @@ type DenyDigestInfo = denyDigestInfo
 
 // DenyDigests returns the deny digests
 func (m *DigestManager) DenyDigests() map[string]*DenyDigestInfo {
-	return m.denyDigests
+	return m.getDenyDigests()
 }
 
 // DenyDigests returns the deny digests
 func (m *DigestManager) SetDenyDigests(denyDigests map[string]*DenyDigestInfo) {
-	m.denyDigests = denyDigests
+	m.setDenyDigests(denyDigests)
 }
 
 // RescheduleJobs is an exported version of rescheduleJobs for test
