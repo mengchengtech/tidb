@@ -59,6 +59,7 @@ var (
 var columnDefs = []*columnDef{
 	{"global", mysql.TypeLonglong, longlongSize},
 	{"excludes", mysql.TypeVarchar, 128},
+	{"includes", mysql.TypeVarchar, 128},
 	{"comments", mysql.TypeVarchar, 512},
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
@@ -126,6 +127,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var (
 		global     = false
 		excludes   = []string{}
+		includes   = []string{}
 		comments   = "{}"
 		tenant     string
 		tenantFrom = "none"
@@ -140,7 +142,8 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		if result != nil {
 			global = result.TenantOmit()
 			params = result.Params()
-			excludes = result.Excludes()
+			excludes = result.Global().Excludes()
+			includes = result.Global().Includes()
 			comments = result.Comments().String()
 			tenant = result.Tenant().Code()
 			if tenant != "" {
@@ -165,6 +168,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	var row = []*types.Datum{
 		createDatum(global),
 		createDatum(strings.Join(excludes, ",")),
+		createDatum(strings.Join(includes, ",")),
 		createDatum(comments),
 		createDatum(tenant),
 		createDatum(tenantFrom),
