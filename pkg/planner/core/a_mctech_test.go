@@ -50,21 +50,25 @@ func initSession(tk *testkit.TestKit, user string, roles ...string) {
 
 func TestBuildMCTechTenantEnabled(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
-		mock.M(t, map[string]bool{"Tenant.Enabled": true}),
+		mock.M(t, map[string]any{"Tenant.Enabled": true}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
+		mock.M(t, map[string]any{"DbIndex.CurrentDB": map[string]any{"current": 1}}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp")
 
 	sql := "mctech SELECT * FROM t1"
 	cases := []testBuildMCTechCase{
-		{"demo-service", "", []string{"gslq"}, []string{"ys", "ys2"}, false, false, "", "", false, "", "1|ys,ys2|gslq|{\"service\":\"demo-service\"}||none|%s|18446744073709551615|{\"mpp\":\"allow\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf0", "", []string{"gslq", "mctech"}, []string{"ys2"}, false, false, "disable", "", false, "", "1|ys2|gslq,mctech|{\"service\":\"demo-service.pf0\"}||none|%s|18446744073709551615|{\"mpp\":\"disable\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf1", "@mctech/dp-impala", []string{"gslq", "mctech"}, nil, false, false, "force", "", false, "", "1||gslq,mctech|{\"pkg\":\"@mctech/dp-impala\",\"service\":\"demo-service.pf1\"}||none|%s|18446744073709551615|{\"mpp\":\"force\"} SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf2", "@mctech/dp-impala", nil, nil, false, false, "allow", "", true, "gslq", "0|||{\"pkg\":\"@mctech/dp-impala\",\"service\":\"demo-service.pf2\"}|gslq|hint|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"gslq\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf3", "@mctech/dp-impala", nil, nil, false, false, "", "code_sxlq", true, "", "0|||{\"pkg\":\"@mctech/dp-impala\",\"service\":\"demo-service.pf3\"}|sxlq|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"sxlq\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "", "0|||{\"pkg\":\"@mctech/dp-impala\",\"service\":\"demo-service.pf4\"}|mctest|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "mctest", "0|||{\"pkg\":\"@mctech/dp-impala\",\"service\":\"demo-service.pf4\"}|mctest|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service", "", []string{"gslq"}, []string{"ys", "ys2"}, false, false, "", "", false, "", "1|ys,ys2|gslq|{\"service\": \"demo-service\"}|<nil>|<nil>|%s|1|{\"mpp\": \"allow\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf0", "", []string{"gslq", "mctech"}, []string{"ys2"}, false, false, "disable", "", false, "", "1|ys2|gslq,mctech|{\"service\": \"demo-service.pf0\"}|<nil>|<nil>|%s|1|{\"mpp\": \"disable\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf1", "@mctech/dp-impala", []string{"gslq", "mctech"}, nil, false, false, "force", "", false, "", "1||gslq,mctech|{\"pkg\": \"@mctech/dp-impala\", \"service\": \"demo-service.pf1\"}|<nil>|<nil>|%s|1|{\"mpp\": \"force\"} SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf2", "@mctech/dp-impala", nil, nil, false, false, "allow", "", true, "gslq", "0|||{\"pkg\": \"@mctech/dp-impala\", \"service\": \"demo-service.pf2\"}|gslq|hint|%s|1|{\"impersonate\": \"tenant_only\", \"mpp\": \"allow\", \"tenant\": \"gslq\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf3", "@mctech/dp-impala", nil, nil, false, false, "", "code_sxlq", true, "", "0|||{\"pkg\": \"@mctech/dp-impala\", \"service\": \"demo-service.pf3\"}|sxlq|role|%s|1|{\"impersonate\": \"tenant_only\", \"mpp\": \"allow\", \"tenant\": \"sxlq\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "", "0|||{\"pkg\": \"@mctech/dp-impala\", \"service\": \"demo-service.pf4\"}|mctest|role|%s|1|{\"impersonate\": \"tenant_only\", \"mpp\": \"allow\", \"tenant\": \"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "mctest", "0|||{\"pkg\": \"@mctech/dp-impala\", \"service\": \"demo-service.pf4\"}|mctest|role|%s|1|{\"impersonate\": \"tenant_only\", \"mpp\": \"allow\", \"tenant\": \"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
 		// tenant_omit
-		{"demo-service.pf5", "", nil, []string{"ys", "ys2"}, false, true, "", "", false, "mctest", "1|||{\"service\":\"demo-service.pf5\"}||none|%s|18446744073709551615|{\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf5", "", nil, []string{"ys", "ys2"}, false, true, "", "", false, "mctest", "1|||{\"service\": \"demo-service.pf5\"}|<nil>|<nil>|%s|1|{\"mpp\": \"allow\", \"tenant\": \"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
 	}
 
 	dbs := []string{"global_pf", "public_data"}
@@ -93,15 +97,15 @@ func TestBuildMCTechTenantDisabled(t *testing.T) {
 
 	sql := "mctech SELECT * FROM t1"
 	cases := []testBuildMCTechCase{
-		{"demo-service", "", []string{"gslq"}, []string{"ys2"}, false, false, "", "", false, "", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf0", "", []string{"gslq", "mctech"}, []string{"ys2"}, false, false, "disable", "", false, "", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf1", "@mctech/dp-impala", []string{"gslq", "mctech"}, nil, false, false, "force", "", false, "", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf2", "@mctech/dp-impala", nil, nil, false, false, "allow", "", true, "gslq", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf3", "@mctech/dp-impala", nil, nil, false, false, "", "code_sxlq", true, "", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "mctest", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service", "", []string{"gslq"}, []string{"ys2"}, false, false, "", "", false, "", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf0", "", []string{"gslq", "mctech"}, []string{"ys2"}, false, false, "disable", "", false, "", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf1", "@mctech/dp-impala", []string{"gslq", "mctech"}, nil, false, false, "force", "", false, "", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf2", "@mctech/dp-impala", nil, nil, false, false, "allow", "", true, "gslq", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf3", "@mctech/dp-impala", nil, nil, false, false, "", "code_sxlq", true, "", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", nil, nil, true, false, "allow", "code_mctest", true, "mctest", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
 		// tenant_omit
-		{"demo-service.pf5", "", nil, []string{"ys", "ys2"}, false, true, "", "", false, "mctest", "0|||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf5", "", nil, []string{"ys", "ys2"}, false, true, "", "", false, "mctest", "<nil>|||{}|<nil>|<nil>|%s|<nil>|{}|SELECT * FROM `%s`.`t1`%s"},
 	}
 
 	dbs := []string{"global_pf", "public_data"}
