@@ -59,12 +59,12 @@ func (f *globalValueFormatter) Format(name string, value string) (any, error) {
 	return f.format(name, value)
 }
 
-func (f *globalValueFormatter) format(name string, value string) (*mctech.GlobalValueInfo, error) {
-	gv := new(mctech.GlobalValueInfo)
+func (f *globalValueFormatter) format(name string, value string) (mctech.GlobalValueInfo, error) {
+	var gv mctech.GlobalValueInfo
 	global, err := f.boolFormatter.Format(name, value)
 
 	if err == nil {
-		gv.Global = global.(bool)
+		gv = mctech.NewGlobalValue(global.(bool), nil, nil)
 	} else {
 		if value == "" {
 			return nil, err
@@ -73,17 +73,25 @@ func (f *globalValueFormatter) format(name string, value string) (*mctech.Global
 		tokens := tokenSplitterPattern.Split(value, -1)
 
 		// 当作要包含或排除的模式处理
-		gv.Global = true
+		var (
+			global   = true
+			excludes []string
+			includes []string
+		)
 		for _, token := range tokens {
 			if token == "" {
 				continue
 			}
 
-			if !strings.HasPrefix(token, "!") {
+			if strings.HasPrefix(token, "!") || strings.HasPrefix(token, "-") {
+				excludes = append(excludes, token[1:])
+			} else if strings.HasPrefix(token, "+") {
+				includes = append(includes, token[1:])
+			} else {
 				return nil, err
 			}
 
-			gv.Excludes = append(gv.Excludes, token[1:])
+			gv = mctech.NewGlobalValue(global, excludes, includes)
 		}
 	}
 

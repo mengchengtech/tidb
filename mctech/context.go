@@ -139,19 +139,50 @@ const (
 )
 
 // GlobalValueInfo from global params
-type GlobalValueInfo struct {
-	Global   bool
-	Excludes []string
+type GlobalValueInfo interface {
+	// Global global
+	Global() bool
+	// Excludes excludes
+	Excludes() []string
+	// Includes includes
+	Includes() []string
 }
 
-func (g *GlobalValueInfo) String() string {
-	return fmt.Sprintf("{%t,%s}", g.Global, g.Excludes)
+// NewGlobalValue create GlobalValueInfo instance
+func NewGlobalValue(global bool, excludes, includes []string) GlobalValueInfo {
+	return &globalValueInfo{
+		global:   global,
+		excludes: excludes,
+		includes: includes,
+	}
+}
+
+type globalValueInfo struct {
+	global   bool
+	excludes []string
+	includes []string
+}
+
+func (g *globalValueInfo) Global() bool {
+	return g.global
+}
+
+func (g *globalValueInfo) Excludes() []string {
+	return g.excludes
+}
+
+func (g *globalValueInfo) Includes() []string {
+	return g.includes
+}
+
+func (g *globalValueInfo) String() string {
+	return fmt.Sprintf("{%t,%v,%v}", g.global, g.excludes, g.includes)
 }
 
 // FlagRoles custom roles
 type FlagRoles interface {
-	TenantOmit() bool // 是否忽略租户隔离，用于一些需要同步数据的特殊场景
-	TenantOnly() bool // 是否包含tenant_only 角色
+	TenantOmit() bool // 是否包含tenant_omit角色。跳过租户隔离，用于一些需要同步数据的特殊场景
+	TenantOnly() bool // 是否包含tenant_only 角色。限制必须存在租户隔离
 	AcrossDB() bool   // 是否包含 across_db 角色。保留字段，暂时没有使用
 }
 
@@ -217,12 +248,12 @@ type PrepareResult interface {
 	Tenant() TenantInfo
 	// Roles current user has some roles
 	Roles() FlagRoles
-	// Global global
+	// TenantOmit tenant omit include global & omit
 	TenantOmit() bool
 	// Comments custom comment
 	Comments() Comments
-	// Excludes excludes
-	Excludes() []string
+	// Global global
+	Global() GlobalValueInfo
 	// Params params
 	Params() map[string]any
 	// DbPrefix 自定义hint，数据库前缀。'dev', 'test'
@@ -232,12 +263,12 @@ type PrepareResult interface {
 
 type prepareResult struct {
 	// Deprecated: 已废弃
-	dbPrefix   string           // 自定义hint，数据库前缀。'dev', 'test'
-	params     map[string]any   // 自定义hint的一般参数
-	globalInfo *GlobalValueInfo // global hint 解析后的值
-	tenant     TenantInfo       // 当前sql执行时的租户信息
-	roles      FlagRoles        // 当前执行账号的特殊角色信息
-	comments   Comments         // 从特殊注释中提取的一些信息
+	dbPrefix   string          // 自定义hint，数据库前缀。'dev', 'test'
+	params     map[string]any  // 自定义hint的一般参数
+	globalInfo GlobalValueInfo // global hint 解析后的值
+	tenant     TenantInfo      // 当前sql执行时的租户信息
+	roles      FlagRoles       // 当前执行账号的特殊角色信息
+	comments   Comments        // 从特殊注释中提取的一些信息
 }
 
 // NewPrepareResult create PrepareResult
@@ -261,16 +292,16 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 		}
 	}
 
-	var globalInfo *GlobalValueInfo
+	var globalInfo GlobalValueInfo
 	v, ok := params[ParamGlobal]
 	if !ok {
-		globalInfo = &GlobalValueInfo{}
+		globalInfo = NewGlobalValue(false, nil, nil)
 	} else {
 		delete(params, ParamGlobal)
-		globalInfo = v.(*GlobalValueInfo)
+		globalInfo = v.(GlobalValueInfo)
 	}
 
-	if tenantCode != "" && globalInfo.Global {
+	if tenantCode != "" && globalInfo.Global() {
 		return nil, errors.New("存在tenant信息时，global不允许设置为true")
 	}
 
@@ -330,7 +361,7 @@ func (r *prepareResult) Roles() FlagRoles {
 
 // TenantOmit tenant omit
 func (r *prepareResult) TenantOmit() bool {
-	return r.globalInfo.Global || r.roles.TenantOmit()
+	return r.globalInfo.Global() || r.roles.TenantOmit()
 }
 
 // Comments custom comment
@@ -338,9 +369,9 @@ func (r *prepareResult) Comments() Comments {
 	return r.comments
 }
 
-// Excludes excludes
-func (r *prepareResult) Excludes() []string {
-	return r.globalInfo.Excludes
+// Global global
+func (r *prepareResult) Global() GlobalValueInfo {
+	return r.globalInfo
 }
 
 // Params params

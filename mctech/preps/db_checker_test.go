@@ -61,7 +61,7 @@ func (c *testDatabaseCheckerCase) Source(i int) any {
 
 func newTestMCTechContext(roles mctech.FlagRoles, comments mctech.Comments, across string) (mctech.Context, error) {
 	result, err := mctech.NewPrepareResult("gslq", roles, comments, map[string]any{
-		"global": &mctech.GlobalValueInfo{},
+		"global": mctech.NewGlobalValue(false, nil, nil),
 		"across": across,
 	})
 	context := mctech.NewBaseContext(false)

@@ -24,25 +24,21 @@ func (c *converterTestCase) Source(i int) any {
 	return fmt.Sprintf("(%d) %s -> %s", i, c.name, c.value)
 }
 
-func createGlobalInfo(global bool, excludes []string) *mctech.GlobalValueInfo {
-	return &mctech.GlobalValueInfo{
-		Global:   global,
-		Excludes: excludes,
-	}
-}
-
 func TestValueConverter(t *testing.T) {
 	cases := []*converterTestCase{
 		{"global", "", "", "global的值错误。可选值为'true', 'false', '1', '0'"},
-		{"global", "1", createGlobalInfo(true, nil), ""},
-		{"global", "0", createGlobalInfo(false, nil), ""},
-		{"GLOBAL", "false", createGlobalInfo(false, nil), ""},
-		{"GLOBAL", "true", createGlobalInfo(true, nil), ""},
-		{"GLObal", "TRUE", createGlobalInfo(true, nil), ""},
-		{"GLOBAL", "FALSE", createGlobalInfo(false, nil), ""},
-		{"GLOBAL", "false", createGlobalInfo(false, nil), ""},
-		{"global", "!ys", createGlobalInfo(true, []string{"ys"}), ""},
-		{"global", "!ys, !mctech", createGlobalInfo(true, []string{"ys", "mctech"}), ""},
+		{"global", "1", mctech.NewGlobalValue(true, nil, nil), ""},
+		{"global", "0", mctech.NewGlobalValue(false, nil, nil), ""},
+		{"GLOBAL", "false", mctech.NewGlobalValue(false, nil, nil), ""},
+		{"GLOBAL", "true", mctech.NewGlobalValue(true, nil, nil), ""},
+		{"GLObal", "TRUE", mctech.NewGlobalValue(true, nil, nil), ""},
+		{"GLOBAL", "FALSE", mctech.NewGlobalValue(false, nil, nil), ""},
+		{"GLOBAL", "false", mctech.NewGlobalValue(false, nil, nil), ""},
+		{"global", "!ys", mctech.NewGlobalValue(true, []string{"ys"}, nil), ""},
+		{"global", "!ys, !mctech", mctech.NewGlobalValue(true, []string{"ys", "mctech"}, nil), ""},
+		{"global", "!ys,-mctech", mctech.NewGlobalValue(true, []string{"ys", "mctech"}, nil), ""},
+		{"global", "!ys,-mctech,+gslq", mctech.NewGlobalValue(true, []string{"ys", "mctech"}, []string{"gslq"}), ""},
+		{"global", "+gslq,+mctech", mctech.NewGlobalValue(true, nil, []string{"gslq", "mctech"}), ""},
 		{"dbPrefix", "abc", "", "dbPrefix的值错误。可选值为'true', 'false', '1', '0'"},
 	}
 
