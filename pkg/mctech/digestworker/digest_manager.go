@@ -7,6 +7,7 @@ import (
 
 	"github.com/ngaut/pools"
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/parser/terror"
 	"github.com/pingcap/tidb/pkg/util"
@@ -53,8 +54,56 @@ type sessionPool interface {
 	Put(pools.Resource)
 }
 
+type digestScheduler interface {
+	Get(digest string) *denyDigestInfo
+	Start()
+	Stop()
+	WaitStopped(ctx context.Context, timeout time.Duration) error
+
+	getDenyDigests() map[string]*denyDigestInfo
+	setDenyDigests(digests map[string]*denyDigestInfo)
+	reloadDenyDigests(se sqlexec.SQLExecutor) error
+	updateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error
+}
+
 // DigestManager Digest Manager
 type DigestManager struct {
+	digestScheduler
+}
+
+type nopDigestScheduler struct {
+}
+
+// Get get denyDigestInfo
+func (m *nopDigestScheduler) Get(digest string) *denyDigestInfo {
+	return nil
+}
+
+func (m *nopDigestScheduler) Start() {}
+
+func (m *nopDigestScheduler) Stop() {}
+
+func (m *nopDigestScheduler) WaitStopped(ctx context.Context, timeout time.Duration) error {
+	return nil
+}
+
+func (m *nopDigestScheduler) setDenyDigests(digests map[string]*denyDigestInfo) {
+	panic(errors.New("[setDenyDigests] not supported"))
+}
+
+func (m *nopDigestScheduler) getDenyDigests() map[string]*denyDigestInfo {
+	panic(errors.New("[getDenyDigests] not supported"))
+}
+
+func (m *nopDigestScheduler) reloadDenyDigests(se sqlexec.SQLExecutor) error {
+	return errors.New("[reloadDenyDigests] not supported")
+}
+
+func (m *nopDigestScheduler) updateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
+	return errors.New("[updateHeartBeat] not supported")
+}
+
+type defaultDigestScheduler struct {
 	sync.Mutex
 	ctx    context.Context
 	cancel func()
@@ -69,7 +118,7 @@ type DigestManager struct {
 }
 
 // Start start digest manager
-func (m *DigestManager) Start() {
+func (m *defaultDigestScheduler) Start() {
 	m.Lock()
 	defer m.Unlock()
 	if m.status != workerStatusCreated {
@@ -92,7 +141,7 @@ func (m *DigestManager) Start() {
 }
 
 // Stop stop digest manager
-func (m *DigestManager) Stop() {
+func (m *defaultDigestScheduler) Stop() {
 	m.Lock()
 	defer m.Unlock()
 	switch m.status {
@@ -106,14 +155,14 @@ func (m *DigestManager) Stop() {
 }
 
 // Status get status
-func (m *DigestManager) Status() workerStatus {
+func (m *defaultDigestScheduler) Status() workerStatus {
 	m.Lock()
 	defer m.Unlock()
 	return m.status
 }
 
 // WaitStopped get wait stop
-func (m *DigestManager) WaitStopped(ctx context.Context, timeout time.Duration) error {
+func (m *defaultDigestScheduler) WaitStopped(ctx context.Context, timeout time.Duration) error {
 	if m.Status() == workerStatusStopped {
 		return nil
 	}
@@ -132,7 +181,7 @@ func (m *DigestManager) WaitStopped(ctx context.Context, timeout time.Duration) 
 }
 
 // Get get denyDigestInfo
-func (m *DigestManager) Get(digest string) *denyDigestInfo {
+func (m *defaultDigestScheduler) Get(digest string) *denyDigestInfo {
 	failpoint.Inject("GetDenyDigestInfo", func(val failpoint.Value) {
 		if val.(string) == digest {
 			at := &denyDigestInfo{expiredAt: time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local)}
@@ -142,7 +191,7 @@ func (m *DigestManager) Get(digest string) *denyDigestInfo {
 	return m.denyDigests[digest]
 }
 
-func (m *DigestManager) toStopped(err error) {
+func (m *defaultDigestScheduler) toStopped(err error) {
 	m.status = workerStatusStopped
 	m.err = err
 
@@ -150,7 +199,7 @@ func (m *DigestManager) toStopped(err error) {
 	m.updateHeartBeatTicker.Stop()
 }
 
-func (m *DigestManager) digestLoop() (err error) {
+func (m *defaultDigestScheduler) digestLoop() (err error) {
 	var resource pools.Resource
 	if resource, err = m.sessPool.Get(); err != nil {
 		return err
@@ -187,7 +236,15 @@ func (m *DigestManager) digestLoop() (err error) {
 	}
 }
 
-func (m *DigestManager) updateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
+func (m *defaultDigestScheduler) setDenyDigests(digests map[string]*denyDigestInfo) {
+	m.denyDigests = digests
+}
+
+func (m *defaultDigestScheduler) getDenyDigests() map[string]*denyDigestInfo {
+	return m.denyDigests
+}
+
+func (m *defaultDigestScheduler) updateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
 	ctx = kv.WithInternalSourceType(ctx, "digestManager")
 	for digest, info := range m.denyDigests {
 		if info.lastRequestTime == nil {
@@ -203,7 +260,7 @@ func (m *DigestManager) updateHeartBeat(ctx context.Context, se sqlexec.SQLExecu
 	return nil
 }
 
-func (m *DigestManager) reloadDenyDigests(se sqlexec.SQLExecutor) error {
+func (m *defaultDigestScheduler) reloadDenyDigests(se sqlexec.SQLExecutor) error {
 	ctx := kv.WithInternalSourceType(context.Background(), "digestManager")
 	rs, err := se.ExecuteInternal(ctx, selectDigestTemplate, time.Now())
 	if err != nil {
@@ -246,16 +303,19 @@ func (m *DigestManager) reloadDenyDigests(se sqlexec.SQLExecutor) error {
 
 // NewDigestManager creates a new digest manager
 func NewDigestManager(sessPool sessionPool) *DigestManager {
-	manager := &DigestManager{
-		sessPool:              sessPool,
-		denyDigests:           make(map[string]*denyDigestInfo, 0),
-		scheduleTicker:        time.NewTicker(digestManagerLoopTickerInterval),
-		updateHeartBeatTicker: time.NewTicker(digestManagerLoopTickerInterval),
+	var scheduler digestScheduler
+	if config.GetMCTechConfig().SQLChecker.Enabled {
+		ctx, cancel := context.WithCancel(context.Background())
+		scheduler = &defaultDigestScheduler{
+			ctx:                   logutil.WithKeyValue(ctx, "deny-digest-worker", "deny-digest-manager"),
+			cancel:                cancel,
+			sessPool:              sessPool,
+			denyDigests:           make(map[string]*denyDigestInfo, 0),
+			scheduleTicker:        time.NewTicker(digestManagerLoopTickerInterval),
+			updateHeartBeatTicker: time.NewTicker(digestManagerLoopTickerInterval),
+		}
+	} else {
+		scheduler = &nopDigestScheduler{}
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	manager.ctx = logutil.WithKeyValue(ctx, "deny-digest-worker", "deny-digest-manager")
-	manager.cancel = cancel
-
-	return manager
+	return &DigestManager{scheduler}
 }
