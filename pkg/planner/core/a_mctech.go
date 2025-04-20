@@ -160,7 +160,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 				}
 			}
 		}
-		if r, err := mctx.GetDbIndex(); err == nil {
+		if r, err := mctx.GetDWIndex(); err == nil {
 			index = toPtr(int(r))
 		}
 	}
