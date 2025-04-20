@@ -31,9 +31,9 @@ type Context interface {
 	// @title CurrentDB
 	// @description 当前数据库
 	CurrentDB() string
-	// @title GetDbIndex
+	// @title GetDWIndex
 	// @description 获取当前使用的global_dw库的索引号
-	GetDbIndex() (DbIndex, error)
+	GetDWIndex() (DWIndex, error)
 	// @title ToPhysicalDbName
 	// @description 把给定的库名转换为真实的物理库名。根据传入sql中的dbPrefix添加前缀，如果前缀已存在则什么也不做
 	ToPhysicalDbName(db string) (string, error)
@@ -85,10 +85,10 @@ type ModifyContext interface {
 	// @description 设置sql预处理的结果
 	// @param result PrepareResult
 	SetPrepareResult(result PrepareResult)
-	// @title SetDBSelector
-	// @description 设置DbSelector
-	// @param selector DBSelector
-	SetDBSelector(selector DBSelector)
+	// @title SetDWSelector
+	// @description 设置DWSelector
+	// @param selector DWSelector
+	SetDWSelector(selector DWSelector)
 	// @title SetSQLRewrited
 	// @description 设置sql是否已被改动的标记
 	// @param rewrited bool
@@ -113,9 +113,9 @@ type BaseContextAware interface {
 	BaseContext() Context
 }
 
-// DBSelector global_dw_* db index selector
-type DBSelector interface {
-	GetDbIndex() (DbIndex, error)
+// DWSelector global_dw_* db index selector
+type DWSelector interface {
+	GetDWIndex() (DWIndex, error)
 }
 
 const (
@@ -408,7 +408,7 @@ func (r *prepareResult) DbPrefix() string {
 type baseContext struct {
 	startedAt        time.Time
 	inPrepareStmt    bool
-	selector         DBSelector
+	selector         DWSelector
 	prepareResult    PrepareResult
 	sqlRewrited      bool
 	sqlHasGlobalDB   bool
@@ -515,7 +515,7 @@ func (d *baseContext) Reset() {
 
 // ------------------------------------------------
 
-func (d *baseContext) SetDBSelector(selector DBSelector) {
+func (d *baseContext) SetDWSelector(selector DWSelector) {
 	d.selector = selector
 }
 
@@ -559,11 +559,11 @@ func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	}
 	// 处理dw库的索引
 	if d.IsGlobalDb(db) && strings.HasSuffix(db, "_dw") {
-		dbIndex, err := d.GetDbIndex()
+		dwIndex, err := d.GetDWIndex()
 		if err != nil {
 			return "", err
 		}
-		db = fmt.Sprintf("%s_%d", db, dbIndex)
+		db = fmt.Sprintf("%s_%d", db, dwIndex)
 	}
 
 	prefixAvaliable := isProductDatabase(db)
@@ -620,12 +620,12 @@ func (d *baseContext) IsGlobalDb(db string) bool {
 	return false
 }
 
-func (d *baseContext) GetDbIndex() (DbIndex, error) {
+func (d *baseContext) GetDWIndex() (DWIndex, error) {
 	sel := d.selector
 	if sel == nil {
-		return DbIndexNone, errors.New("db selector is nil")
+		return DWIndexNone, errors.New("db selector is nil")
 	}
-	return sel.GetDbIndex()
+	return sel.GetDWIndex()
 }
 
 func (d *baseContext) GetDbs(stmt ast.StmtNode) []string {
@@ -651,16 +651,16 @@ func isProductDatabase(logicDb string) bool {
 		strings.HasPrefix(logicDb, DbAssetPrefix) // asset_* 是花钱的
 }
 
-// DbIndex 表示数据库后缀索引的类型
-type DbIndex int
+// DWIndex 表示数据库后缀索引的类型
+type DWIndex int
 
 const (
-	// DbIndexNone 表示空值
-	DbIndexNone DbIndex = -1
-	// DbIndexFirst global_dw_*库的序号为1的索引
-	DbIndexFirst DbIndex = 1
-	// DbIndexSecond global_dw_*库的序号为2的索引
-	DbIndexSecond DbIndex = 2
+	// DWIndexNone 表示空值
+	DWIndexNone DWIndex = -1
+	// DWIndexFirst global_dw_*库的序号为1的索引
+	DWIndexFirst DWIndex = 1
+	// DWIndexSecond global_dw_*库的序号为2的索引
+	DWIndexSecond DWIndex = 2
 )
 
 // NewContext function callback

@@ -66,9 +66,9 @@ func do(request *http.Request) ([]byte, error) {
 		case strings.HasSuffix(path, "/nexts"):
 			res, ok = values["Sequence.Nexts"]
 		case strings.HasSuffix(path, "/current-db"):
-			res, ok = values["DbIndex.CurrentDB"]
+			res, ok = values["DWIndex.Current"]
 		case strings.HasPrefix(path, "/db;by-request"):
-			res, ok = values["DbIndex.DBByRequest"]
+			res, ok = values["DWIndex.ByRequest"]
 		}
 
 		if ok {
