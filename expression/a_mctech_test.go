@@ -3,18 +3,19 @@
 package expression
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/mctech"
 	mmock "github.com/pingcap/tidb/mctech/mock"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
-	"github.com/pingcap/tidb/util/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,7 +24,7 @@ func TestMCTechSequence(t *testing.T) {
 
 	for _, name := range []string{ast.MCTechSequence, ast.MCSeq} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(), datumsToConstants(nil))
+		f, err := fc.getFunction(ctx, datumsToConstants(nil))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		v, err := evalBuiltinFunc(f, chunk.Row{})
@@ -37,8 +38,7 @@ func TestMCTechSequenceDecode(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechSequenceDecode, ast.MCSeqDecode} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums(1318030351881216)))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(1318030351881216)))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		v, err := evalBuiltinFunc(f, chunk.Row{})
@@ -53,7 +53,7 @@ func TestMCTechJustVersionPass(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechVersionJustPass, ast.MCVersionJustPass} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(), datumsToConstants(nil))
+		f, err := fc.getFunction(ctx, datumsToConstants(nil))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		v, err := evalBuiltinFunc(f, chunk.Row{})
@@ -67,8 +67,7 @@ func TestMCTechEncrypt(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechEncrypt, ast.MCEncrypt} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums("bindsang")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums("bindsang")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		_, err = evalBuiltinFunc(f, chunk.Row{})
@@ -80,8 +79,7 @@ func TestMCTechDecrypt(t *testing.T) {
 	for _, name := range []string{ast.MCTechDecrypt, ast.MCDecrypt} {
 		fc := funcs[name]
 
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums("{crypto}a4UzL7Cnyyc+D/sK6U7GJA==")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums("{crypto}a4UzL7Cnyyc+D/sK6U7GJA==")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		_, err = evalBuiltinFunc(f, chunk.Row{})
@@ -165,7 +163,7 @@ func TestMCTechDecryptMask(t *testing.T) {
 		for _, name := range []string{ast.MCTechDecrypt, ast.MCDecrypt} {
 			fc := funcs[name]
 
-			f, err := fc.getFunction(mock.NewContext(), datumsToConstants(types.MakeDatums(args...)))
+			f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(args...)))
 			require.NoError(t, err)
 			resetStmtContext(ctx)
 			result, err := evalBuiltinFunc(f, chunk.Row{})
@@ -185,7 +183,7 @@ func TestGetFullSqlWithNotConfig(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
+		f, err := fc.getFunction(ctx,
 			datumsToConstants(types.MakeDatums("2023-10-10 19:55:40", 1697003594436)))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
@@ -211,8 +209,7 @@ func TestGetFullSqlByTime(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums(dt, 1697003594435)))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(dt, 1697003594435)))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
@@ -233,8 +230,7 @@ func TestGetFullSqlByString(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums(datetime, "1697003594436", "pre")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1697003594436", "pre")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
@@ -255,8 +251,7 @@ func TestGetFullSqlByStringAndGroup(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums(datetime, "1697003594437")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1697003594437")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
@@ -277,12 +272,59 @@ func TestGetFullSqlNotExists(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(mock.NewContext(),
-			datumsToConstants(types.MakeDatums(datetime, 1697003594437, "product")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, 1697003594437, "product")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
 		require.NoError(t, err)
 		require.True(t, d.IsNull())
 	}
+}
+
+func TestDataWarehouseIndexInfo(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
+		mmock.M(t, map[string]any{
+			"DWIndex.Current": map[string]any{"current": 1},
+		}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
+	}()
+
+	ctx := createContext(t)
+	for _, name := range []string{ast.MCTechDataWarehouseIndexInfo, ast.MCDWIndexInfo} {
+		fc := funcs[name]
+		f, err := fc.getFunction(ctx, datumsToConstants(nil))
+		require.NoError(t, err)
+		resetStmtContext(ctx)
+		mctx, err := mctech.WithNewContext(ctx)
+		require.NoError(t, err)
+		roles := testFlagRoles(0)
+		result, err := mctech.NewPrepareResult("", &roles, nil, map[string]any{})
+		require.NoError(t, err)
+		modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+		modifyCtx.SetPrepareResult(result)
+		d, err := evalBuiltinFunc(f, chunk.Row{})
+		require.NoError(t, err)
+		data, err := d.GetMysqlJSON().MarshalJSON()
+		require.NoError(t, err)
+		info := mctech.DWIndexInfo{}
+		err = json.Unmarshal(data, &info)
+		require.NoError(t, err)
+		require.Equal(t, mctech.DWIndexInfo{Current: 1, Background: 2}, info)
+	}
+}
+
+type testFlagRoles int
+
+func (*testFlagRoles) TenantOmit() bool {
+	return true
+}
+
+func (*testFlagRoles) TenantOnly() bool {
+	return false
+}
+
+func (*testFlagRoles) AcrossDB() bool {
+	return false
 }
