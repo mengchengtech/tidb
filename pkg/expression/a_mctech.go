@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/udf"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
@@ -26,6 +27,7 @@ var (
 	_ functionClass = &mctechEncryptFunctionClass{}
 	_ functionClass = &mctechSequenceDecodeFunctionClass{}
 	_ functionClass = &mctechGetFullSQLFunctionClass{}
+	_ functionClass = &mctechDataWarehouseIndexInfoFunctionClass{}
 )
 var (
 	_ builtinFunc = &builtinMCTechSequenceSig{}
@@ -35,6 +37,7 @@ var (
 	_ builtinFunc = &builtinMCTechEncryptSig{}
 	_ builtinFunc = &builtinMCTechSequenceDecodeSig{}
 	_ builtinFunc = &builtinMCTechGetFullSQLSig{}
+	_ builtinFunc = &builtinMCTechDataWarehouseIndexInfoSig{}
 )
 
 func init() {
@@ -45,6 +48,7 @@ func init() {
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
 	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 3}}
+	funcs[ast.MCDWIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
@@ -52,24 +56,28 @@ func init() {
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
 	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 3}}
+	funcs[ast.MCTechDataWarehouseIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
 	deferredFunctions[ast.MCTechSequence] = struct{}{}
 	deferredFunctions[ast.MCTechVersionJustPass] = struct{}{}
 	deferredFunctions[ast.MCSeq] = struct{}{}
 	deferredFunctions[ast.MCVersionJustPass] = struct{}{}
+	deferredFunctions[ast.MCDWIndexInfo] = struct{}{}
 
 	// 不可折叠函数（一般用在projection中表函数表达式中，整个sql中只按sql字面出现次数调用还是返回结果中每一行都调用一次）
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
 	unFoldableFunctions[ast.MCTechVersionJustPass] = struct{}{}
 	unFoldableFunctions[ast.MCSeq] = struct{}{}
 	unFoldableFunctions[ast.MCVersionJustPass] = struct{}{}
+	unFoldableFunctions[ast.MCDWIndexInfo] = struct{}{}
 
 	// mutableEffectsFunctions集合中保存的函数名称sql中不缓存，每次（行）执行的结果可能都不一样
 	mutableEffectsFunctions[ast.MCTechSequence] = struct{}{}
 	mutableEffectsFunctions[ast.MCTechVersionJustPass] = struct{}{}
 	mutableEffectsFunctions[ast.MCSeq] = struct{}{}
 	mutableEffectsFunctions[ast.MCVersionJustPass] = struct{}{}
+	mutableEffectsFunctions[ast.MCDWIndexInfo] = struct{}{}
 }
 
 type mctechSequenceDecodeFunctionClass struct {
@@ -471,6 +479,46 @@ func (b *builtinMCTechGetFullSQLSig) evalString(row chunk.Row) (sql string, isNu
 		return "", true, err
 	}
 	return fullsql, isNull, nil
+}
+
+// --------------------------------------------------------------
+
+type mctechDataWarehouseIndexInfoFunctionClass struct {
+	baseFunctionClass
+}
+
+func (c *mctechDataWarehouseIndexInfoFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
+	if err := c.verifyArgs(args); err != nil {
+		return nil, err
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETJson)
+	if err != nil {
+		return nil, err
+	}
+	sig := &builtinMCTechDataWarehouseIndexInfoSig{bf}
+	return sig, nil
+}
+
+type builtinMCTechDataWarehouseIndexInfoSig struct {
+	baseBuiltinFunc
+}
+
+func (b *builtinMCTechDataWarehouseIndexInfoSig) Clone() builtinFunc {
+	newSig := &builtinMCTechDataWarehouseIndexInfoSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (p *builtinMCTechDataWarehouseIndexInfoSig) evalJSON(row chunk.Row) (types.BinaryJSON, bool, error) {
+	mctx, err := mctech.GetContext(p.ctx)
+	if err != nil {
+		return types.CreateBinaryJSON(nil), true, err
+	}
+	info, err := mctx.GetDWIndexInfo()
+	if err != nil {
+		return types.CreateBinaryJSON(nil), true, err
+	}
+	return types.CreateBinaryJSON(info.ToMap()), false, nil
 }
 
 // --------------------------------------------------------------
