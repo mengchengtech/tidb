@@ -40,6 +40,143 @@ var (
 	_ builtinFunc = &builtinMCTechDataWarehouseIndexInfoSig{}
 )
 
+type parameterInfo struct {
+	name        string
+	tp          string
+	description string
+}
+
+type returnInfo struct {
+	tp          string
+	description string
+}
+
+type signatureInfo struct {
+	parameters  []parameterInfo
+	returnType  returnInfo
+	description string
+}
+
+type mctechFunctionInfo struct {
+	name       string
+	shortName  string
+	mutable    bool
+	hidden     bool
+	signatures []signatureInfo
+}
+
+var mctechFunctionHelps = []mctechFunctionInfo{
+	{
+		name: "mctech_sequence", shortName: "mc_seq", mutable: true,
+		signatures: []signatureInfo{
+			{
+				description: "获取主键序列，与程序框架里获取主键序列的算法和来源相同",
+				returnType: returnInfo{
+					tp:          "bigint",
+					description: "即时生成的主键序列值。生成的值里包含了当前的时间信息，可通过mctech_sequence_decode函数解析出时间信息。",
+				},
+			},
+		},
+	},
+	{
+		hidden: true,
+		name:   "mctech_version_just_pass", shortName: "mc_version_just_pass",
+		signatures: []signatureInfo{
+			{
+				description: "获取一个比当前主键序列值的时间略小一点（目前是3秒）的值，一般用于查询中version过滤条件",
+				returnType: returnInfo{
+					tp:          "bigint",
+					description: "即时生成的一个version值",
+				},
+			},
+		},
+	},
+	{
+		name: "mctech_decrypt", shortName: "mc_decrypt", mutable: true,
+		signatures: []signatureInfo{
+			{
+				description: "解密自定义算法加密的字符串",
+				parameters:  []parameterInfo{{name: "cipher", tp: "string", description: "要解密的字符串"}},
+				returnType: returnInfo{
+					tp:          "string",
+					description: "解密后原始的字符串",
+				},
+			},
+			{
+				description: "解密自定义算法加密的字符串，并且使用内置的mask字符替换原始字符串中指定位置和长度的字符，隐藏敏感信息",
+				parameters: []parameterInfo{
+					{name: "cipher", tp: "string", description: "要解密的字符串"},
+					{name: "from", tp: "int", description: "需要替换为内置字符的起始位置（从1开始）"},
+					{name: "length", tp: "int", description: "需要替换的长度"},
+				},
+				returnType: returnInfo{
+					tp:          "string",
+					description: "解密后被内置mask字符替换后的字符串。内置mask字符为'*'。当调用方式为 ('.....', 4, 4) 时，如果解码后的原始字符串为'13812345678'，实际返回的结果为 '138****5678'",
+				},
+			},
+			{
+				description: "解密自定义算法加密的字符串，并且使用传入的mask字符替换原始字符串中指定位置和长度的字符，隐藏敏感信息",
+				parameters: []parameterInfo{
+					{name: "cipher", tp: "string", description: "要解密的字符串"},
+					{name: "from", tp: "int", description: "需要替换为内置字符的起始位置（从1开始）"},
+					{name: "length", tp: "int", description: "需要替换的长度"},
+					{name: "mask", tp: "char", description: "用给定的字符代码内置的默认字符执行替换"},
+				},
+				returnType: returnInfo{
+					tp:          "string",
+					description: "解密后被给定mask字符替换后的字符串。当调用方式为 ('.....', 4, 4, '#') 时，如果解码后的原始字符串为'13812345678'，实际返回的结果为 '138####5678'",
+				},
+			},
+		},
+	},
+	{
+		name: "mctech_encrypt", shortName: "mc_encrypt", mutable: true,
+		signatures: []signatureInfo{{
+			description: "用自定义加密算法加密给定的字符串",
+			parameters:  []parameterInfo{{name: "plain", tp: "string", description: "需要加密的字符串"}},
+			returnType: returnInfo{
+				tp:          "string",
+				description: "加密后的字符串，以'{cipher}'为前缀",
+			},
+		}},
+	},
+	{
+		name: "mctech_sequence_decode", shortName: "mc_seq_decode", mutable: true,
+		signatures: []signatureInfo{{
+			description: "从序列值中提取时间信息，可用于了解生成该序列值的具体时间",
+			parameters:  []parameterInfo{{name: "seq", tp: "bigint", description: "由 mctech_sequence 方法，或代码框架中等效调用方式生成的序列值"}},
+			returnType: returnInfo{
+				tp:          "datetime",
+				description: "序列中包含的时间信息。例如传入 1712497548663304 返回值为 '2024-01-26 18:45:26'",
+			},
+		}},
+	},
+	{
+		name: "mctech_get_full_sql", shortName: "mc_get_full_sql", mutable: true,
+		signatures: []signatureInfo{{
+			description: "获取sql执行信息中的保存在磁盘上的完整sql。仅限于在导入过sql执行信息的数据库上使用",
+			parameters: []parameterInfo{
+				{name: "at", tp: "datetime|string", description: "sql执行信息中'at'字段的值。"},
+				{name: "txId", tp: "bigint", description: "sql执行信息中tx_id字段的值。"},
+			},
+			returnType: returnInfo{
+				tp:          "string",
+				description: "从磁盘上加载的完整sql。如果磁盘上找不到，则返回null",
+			},
+		}},
+	},
+	{
+		name: "mctech_get_data_warehouse_index_info", shortName: "mc_dw_index_info", mutable: false,
+		signatures: []signatureInfo{{
+			description: "获取数仓前后台库索引信息",
+			returnType: returnInfo{
+				tp:          "json",
+				description: "返回结果为固定结构的json格式，类似于 {\"current\":1,\"background\":2}。其中 current表示当前正在使用的dw库索引，background表示后台dw库索引",
+			},
+		}},
+	},
+}
+
 func init() {
 	// mctech function.
 	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCSeq, 0, 0}}
@@ -49,6 +186,7 @@ func init() {
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
 	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 3}}
 	funcs[ast.MCDWIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
+	funcs[ast.MCHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 0}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
@@ -57,6 +195,7 @@ func init() {
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
 	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 3}}
 	funcs[ast.MCTechDataWarehouseIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
+	funcs[ast.MCTechHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 0}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
 	deferredFunctions[ast.MCTechSequence] = struct{}{}
@@ -518,6 +657,74 @@ func (b *builtinMCTechDataWarehouseIndexInfoSig) evalJSON(row chunk.Row) (types.
 		return types.CreateBinaryJSON(nil), true, err
 	}
 	return types.CreateBinaryJSON(info.ToMap()), false, nil
+}
+
+// --------------------------------------------------------------
+
+type mctechHelpFunctionClass struct {
+	baseFunctionClass
+}
+
+func (c *mctechHelpFunctionClass) getFunction(ctx sessionctx.Context, args []Expression) (builtinFunc, error) {
+	if err := c.verifyArgs(args); err != nil {
+		return nil, err
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString)
+	if err != nil {
+		return nil, err
+	}
+	bf.tp.SetFlen(mysql.MaxFieldCharLength)
+	sig := &builtinMCTechHelpSig{bf}
+	return sig, nil
+}
+
+type builtinMCTechHelpSig struct {
+	baseBuiltinFunc
+}
+
+func (b *builtinMCTechHelpSig) Clone() builtinFunc {
+	newSig := &builtinMCTechHelpSig{}
+	newSig.cloneFrom(&b.baseBuiltinFunc)
+	return newSig
+}
+
+func (b *builtinMCTechHelpSig) evalString(row chunk.Row) (string, bool, error) {
+	lst := []string{}
+	for i, item := range mctechFunctionHelps {
+		if item.hidden {
+			continue
+		}
+
+		if i > 0 {
+			lst = append(lst, "============================ function split =======================================")
+		}
+		lst = append(lst, fmt.Sprintf("FUNCTION:: %s|%s", item.name, item.shortName))
+		if len(item.signatures) > 0 {
+			for j, sign := range item.signatures {
+				if j > 0 {
+					lst = append(lst, "  ------------------------------ overload split ----------------------------------------")
+				}
+				parameters := []string{}
+				for _, p := range sign.parameters {
+					parameters = append(parameters, fmt.Sprintf("%s %s", p.name, p.tp))
+				}
+				lst = append(lst, fmt.Sprintf("  SIGNATURE:: (%s) %s", strings.Join(parameters, ", "), sign.returnType.tp))
+				lst = append(lst, fmt.Sprintf("    %s", sign.description))
+				if len(parameters) > 0 {
+					lst = append(lst, "  PARAMETERS::")
+					for _, p := range sign.parameters {
+						lst = append(lst, fmt.Sprintf("    %s: %s", p.name, p.description))
+					}
+				}
+				if sign.returnType.description != "" && sign.returnType.tp != "" {
+					lst = append(lst, "  RETURNS::")
+					lst = append(lst, fmt.Sprintf("    %s", sign.returnType.description))
+				}
+			}
+		}
+	}
+
+	return strings.Join(lst, "\n"), false, nil
 }
 
 // --------------------------------------------------------------
