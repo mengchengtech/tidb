@@ -315,6 +315,20 @@ func TestDataWarehouseIndexInfo(t *testing.T) {
 	}
 }
 
+func TestMCTechHelp(t *testing.T) {
+	ctx := createContext(t)
+	for _, name := range []string{ast.MCTechHelp, ast.MCHelp} {
+		fc := funcs[name]
+		f, err := fc.getFunction(ctx, datumsToConstants(nil))
+		require.NoError(t, err)
+		resetStmtContext(ctx)
+		d, err := evalBuiltinFunc(f, ctx, chunk.Row{})
+		require.NoError(t, err)
+		content := d.GetString()
+		fmt.Print(content)
+	}
+}
+
 type testFlagRoles int
 
 func (*testFlagRoles) TenantOmit() bool {
