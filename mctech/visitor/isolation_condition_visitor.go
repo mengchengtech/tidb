@@ -1,4 +1,4 @@
-package isolation
+package visitor
 
 import (
 	"container/list"
@@ -10,114 +10,6 @@ import (
 	"github.com/pingcap/tidb/parser/opcode"
 )
 
-type nodeScope[T any] struct {
-	items *list.List
-}
-
-func (s nodeScope[T]) Size() int {
-	return s.items.Len()
-}
-
-func (s nodeScope[T]) Push(item T) {
-	s.items.PushFront(item)
-}
-
-func (s nodeScope[T]) Pop() T {
-	first := s.items.Front()
-	var v T
-	if first == nil {
-		return v
-	}
-	v = first.Value.(T)
-	s.items.Remove(first)
-	return v
-}
-
-func (s nodeScope[T]) Peek() T {
-	first := s.items.Front()
-	var v T
-	if first == nil {
-		return v
-	}
-	return first.Value.(T)
-}
-
-func (s nodeScope[T]) Entries() *list.List {
-	return s.items
-}
-
-type databaseNameVisitor struct {
-	context mctech.Context
-	dbNames map[string]bool // sql中用到的数据库名称
-}
-
-type cteScopeItem struct {
-	statement ast.Node
-	cteNames  []string
-}
-
-func (v *databaseNameVisitor) DBNames() map[string]bool {
-	return v.dbNames
-}
-
-// Enter implements interface Visitor
-func (v *databaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
-	var err error
-	switch node := n.(type) {
-	case *ast.ColumnName:
-		err = v.enterColumnName(node)
-	}
-	if err != nil {
-		panic(err)
-	}
-	return n, false
-}
-
-// Leave implements interface Visitor
-func (v *databaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
-	var err error
-	switch node := n.(type) {
-	case *ast.TableName:
-		err = v.leaveTableName(node)
-	}
-	if err != nil {
-		panic(err)
-	}
-	return n, true
-}
-
-func (v *databaseNameVisitor) enterColumnName(node *ast.ColumnName) error {
-	dbName := node.Schema.L
-	if dbName == "" {
-		return nil
-	}
-
-	// database.table.column
-	physicalDbName, err := v.context.ToPhysicalDbName(dbName)
-	if err == nil {
-		if physicalDbName != dbName {
-			node.Schema = model.NewCIStr(physicalDbName)
-		}
-	}
-	return err
-}
-
-func (v *databaseNameVisitor) leaveTableName(node *ast.TableName) error {
-	dbName := node.Schema.L
-	if dbName != "" {
-		physicalDbName, err := v.context.ToPhysicalDbName(dbName)
-		if err != nil {
-			return err
-		}
-
-		if physicalDbName != dbName {
-			node.Schema = model.NewCIStr(physicalDbName)
-		}
-	}
-	v.dbNames[node.Schema.L] = true
-	return nil
-}
-
 type isolationConditionVisitor struct {
 	*databaseNameVisitor
 	// 租户条件是否使用参数化方式
@@ -126,7 +18,6 @@ type isolationConditionVisitor struct {
 	excludes   []ast.ExprNode
 	includes   []ast.ExprNode
 
-	withClauseScope     *nodeScope[*cteScopeItem]
 	columnModifiedScope *nodeScope[bool]
 }
 
@@ -141,6 +32,8 @@ func newDatabaseNameVisitor(mctx mctech.Context) *databaseNameVisitor {
 	return &databaseNameVisitor{
 		context: mctx,
 		dbNames: map[string]bool{},
+
+		withClauseScope: &nodeScope[*cteScopeItem]{items: list.New()},
 	}
 }
 
@@ -163,7 +56,6 @@ func newIsolationConditionVisitor(
 	visitor := &isolationConditionVisitor{
 		usingParam:          mctx.UsingTenantParam(),
 		databaseNameVisitor: newDatabaseNameVisitor(mctx),
-		withClauseScope:     &nodeScope[*cteScopeItem]{items: list.New()},
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
 	result := mctx.PrepareResult()
@@ -193,12 +85,6 @@ func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildr
 		switch node := n.(type) {
 		case *ast.LoadDataStmt:
 			v.enterLoadDataStatement(node)
-		case
-			*ast.UpdateStmt, *ast.DeleteStmt, *ast.SelectStmt,
-			*ast.SetOprSelectList, *ast.SetOprStmt: // InsertStmt不支持With
-			v.enterWithScope(node)
-		case *ast.WithClause:
-			v.setWithClause(node)
 		case *ast.InsertStmt: // include replace / insert .... duplicate
 			v.enterInsertStatement(node)
 		case *ast.SubqueryExpr: // subquery
@@ -213,25 +99,18 @@ func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildr
 
 // Leave implements interface Visitor
 func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
-	v.databaseNameVisitor.Leave(n)
 	if v.enabled() {
 		switch node := n.(type) {
-		case
-			*ast.SetOprSelectList, *ast.SetOprStmt:
-			v.leaveWithScope(node)
 		case *ast.DeleteStmt:
 			v.leaveDeleteStatement(node)
-			v.leaveWithScope(node)
 		case *ast.UpdateStmt:
 			v.leaveUpdateStatement(node)
-			v.leaveWithScope(node)
 		case *ast.InsertStmt: // include replace / insert .... duplicate
 			v.leaveInsertStatement(node)
 		case *ast.LoadDataStmt:
 			v.leaveLoadDataStatement(node)
 		case *ast.SelectStmt:
 			v.leaveSelectStatement(node)
-			v.leaveWithScope(node)
 		case *ast.ValuesExpr: // values ()
 		case *ast.SubqueryExpr: // subquery
 			v.leaveSubquery(node)
@@ -239,33 +118,9 @@ func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 			v.leaveTableSource(node)
 		}
 	}
+	v.databaseNameVisitor.Leave(n)
 
 	return n, true
-}
-
-func (v *isolationConditionVisitor) enterWithScope(stmt ast.Node) {
-	v.withClauseScope.Push(&cteScopeItem{
-		statement: stmt,
-	})
-}
-
-func (v *isolationConditionVisitor) setWithClause(withClause *ast.WithClause) {
-	cteNames := make([]string, len(withClause.CTEs))
-	for i, cte := range withClause.CTEs {
-		rawName := cte.Name.L
-		cteNames[i] = rawName
-	}
-
-	item := v.withClauseScope.Peek()
-	item.cteNames = cteNames
-}
-
-func (v *isolationConditionVisitor) leaveWithScope(node ast.Node) {
-	item := v.withClauseScope.Peek()
-	if item.statement != node {
-		return
-	}
-	v.withClauseScope.Pop()
 }
 
 func (v *isolationConditionVisitor) shouldProcess(tableName *ast.TableName) bool {
@@ -380,13 +235,12 @@ func (v *isolationConditionVisitor) createAndCondition(left ast.ExprNode, right 
 		return right
 	} else if right == nil {
 		return left
-	} else {
-		// left, right 都不为nil
-		return &ast.BinaryOperationExpr{
-			L:  left,
-			Op: opcode.LogicAnd,
-			R:  right,
-		}
+	}
+	// left, right 都不为nil
+	return &ast.BinaryOperationExpr{
+		L:  left,
+		Op: opcode.LogicAnd,
+		R:  right,
 	}
 }
 
@@ -479,29 +333,13 @@ func (v *isolationConditionVisitor) processJoinClause(tableRefs *ast.Join) ast.E
 
 func (v *isolationConditionVisitor) createTenantConditionFromTable(
 	table *ast.TableName, alias model.CIStr) ast.ExprNode {
-	dbName := table.Schema.O
-	tableName := table.Name.L
-
-	sd := v.context
-	if dbName == "" {
-		// dbName为空时，有可能是视图的引用
-		if v.withClauseScope.Size() > 0 {
-			lst := v.withClauseScope.Entries()
-			el := lst.Front()
-			for el != nil {
-				withCTE := el.Value.(*cteScopeItem)
-				for _, a := range withCTE.cteNames {
-					if a == tableName {
-						// 视图引用，不用处理
-						return nil
-					}
-				}
-				el = el.Next()
-			}
-		}
-		dbName = sd.CurrentDB()
+	dbName, isCteName := v.resolveDbName(table)
+	if isCteName {
+		// 视图引用，什么也不做
+		return nil
 	}
 
+	sd := v.context
 	if !sd.IsGlobalDb(dbName) {
 		// 只处理global_xxxx的表
 		return nil

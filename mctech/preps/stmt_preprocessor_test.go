@@ -67,6 +67,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& tenant:'  gdcd   ' */ select * from company", "global_platform", "{{{,}{,{gdcd,false},[{mpp,allow} {tenant,gdcd}],{false,[],[]}}},global_platform}", ""},
 		{"pf", "/*& tenant:  '  gdcd   ' */ select * from company", "global_platform", "{{{,}{,{gdcd,false},[{mpp,allow} {tenant,gdcd}],{false,[],[]}}},global_platform}", ""},
 		{"pf", "/*& tenant: */ select * from company", "", "", "当前用户无法确定所属租户信息"},
+		{"pf", "select * from platform.company", "platform", "{{{,}{,{,false},[{mpp,allow}],{false,[],[]}}},global_platform}", ""},
 		// 空值
 		{"test", "/*& custom: */ select * from company", "test", "{{{,}{,{,false},[{custom,} {mpp,allow}],{false,[],[]}}},test}", ""},
 		{"pf", "/*& tenant:'' */ select * from company", "", "", "当前用户无法确定所属租户信息"},
@@ -79,7 +80,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		// across
 		{"pf", "/*& tenant:ztsj */ /*& across:global_cq3,global_ds */ select * from company", "global_platform", "{{{,}{,{ztsj,false},[{across,global_cq3|global_ds} {mpp,allow} {tenant,ztsj}],{false,[],[]}}},global_platform}", ""},
 		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", "public_data", "{{{,}{mock,{,false},[{dbPrefix,mock} {mpp,allow}],{false,[],[]}}},public_data}", ""},
+		{"pd", "/*& dbPrefix:mock */ select * from company", "mock_public_data", "{{{,}{mock,{,false},[{dbPrefix,mock} {mpp,allow}],{false,[],[]}}},public_data}", ""},
 		// replace
 		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", "public_data", "{{{,}{,{gslq,false},[{mpp,allow} {tenant,gslq}],{false,[],[]}}},public_data}", ""},   // replace
 		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", "public_data", "{{{,}{,{gslq,false},[{mpp,allow} {tenant,gslq}],{false,[],[]}}},public_data}", ""}, // replace
