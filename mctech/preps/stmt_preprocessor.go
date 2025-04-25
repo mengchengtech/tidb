@@ -119,10 +119,9 @@ func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
 	// 执行到此处说明当前语句一定是DML或QUERY
 	// sql没有被改写，但是用到了global_xxx数据库，并且没有设置global为true
 	if !mctx.SQLRewrited() && mctx.SQLHasGlobalDB() &&
-		!prepareResult.Global() {
+		!prepareResult.TenantOmit() {
 		// 检查DML语句和QUERY语句改写状态
-		user := currentUser(mctx.Session())
-		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
+		return errors.New("当前用户无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */")
 	}
 	return nil
 }
@@ -152,7 +151,7 @@ func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 	modifyCtx.SetSQLHasGlobalDB(true)
 	result := mctx.PrepareResult()
-	if result.Global() {
+	if result.TenantOmit() {
 		// 启用global时，允许跨任意数据库查询
 		return dbs, false, nil
 	}

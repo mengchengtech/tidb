@@ -153,7 +153,7 @@ func newIsolationConditionVisitor(
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
 	result := mctx.PrepareResult()
-	if result.Global() {
+	if result.TenantOmit() {
 		length := len(result.Excludes())
 		if length > 0 {
 			exprList := make([]ast.ExprNode, length)
@@ -269,7 +269,7 @@ func (v *isolationConditionVisitor) enterLoadDataStatement(node *ast.LoadDataStm
 	}
 
 	// 只处理global_xxxx的表
-	if sd.PrepareResult().Global() || !sd.IsGlobalDb(dbName) {
+	if sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName) {
 		return
 	}
 
@@ -292,7 +292,7 @@ func (v *isolationConditionVisitor) enterInsertStatement(node *ast.InsertStmt) {
 	}
 
 	// 只处理global_xxxx的表
-	if sd.PrepareResult().Global() || !sd.IsGlobalDb(dbName) {
+	if sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName) {
 		return
 	}
 
@@ -513,7 +513,7 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 
 	var condition ast.ExprNode
 	rt := sd.PrepareResult()
-	if rt.Global() {
+	if rt.TenantOmit() {
 		if len(v.excludes) > 0 {
 			condition = &ast.PatternInExpr{
 				Expr: tenantField,

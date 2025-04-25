@@ -24,14 +24,18 @@ func initMock(t *testing.T, store kv.Storage) *testkit.TestKit {
 }
 
 type mctechTestCase interface {
-	Source() any
+	Source(i int) any
 	Failure() string
 }
 
-func createSession(_ *testing.T, tk *testkit.TestKit, user string, roles ...string) sessionctx.Context {
-	session := tk.Session()
-	vars := session.GetSessionVars()
-	vars.User = &auth.UserIdentity{Username: user, Hostname: "%"}
+type mctechSessionTestCase interface {
+	mctechTestCase
+	Roles() []string
+}
+
+func initSession(s sessionctx.Context, roles []string) {
+	vars := s.GetSessionVars()
+	vars.User = &auth.UserIdentity{Username: "mock_user", Hostname: "%"}
 
 	if len(roles) > 0 {
 		ar := make([]*auth.RoleIdentity, len(roles))
@@ -40,12 +44,10 @@ func createSession(_ *testing.T, tk *testkit.TestKit, user string, roles ...stri
 		}
 		vars.ActiveRoles = ar
 	}
-
-	return session
 }
 
-type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, c T, mctechCtx mctech.Context) error
-type runTestCaseType[T mctechTestCase] func(t *testing.T, c T) error
+type runTestCaseWithSessionType[T mctechSessionTestCase] func(t *testing.T, i int, c T, mctechCtx mctech.Context) error
+type runTestCaseType[T mctechTestCase] func(t *testing.T, i int, c T) error
 
 type parser interface {
 	Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
@@ -58,39 +60,41 @@ var dbMap = map[string]string{
 }
 
 func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], cases []T) {
-	for _, c := range cases {
-		err := runTestCase(t, c)
+	for i, c := range cases {
+		err := runTestCase(t, i, c)
 		failure := c.Failure()
 		if err == nil && failure == "" {
 			continue
 		}
 
 		if failure != "" {
-			require.ErrorContainsf(t, err, failure, "source %v", c.Source())
+			require.ErrorContainsf(t, err, failure, "source %v", c.Source(i))
 		} else {
-			require.NoErrorf(t, err, "source %v", c.Source())
+			require.NoErrorf(t, err, "source %v", c.Source(i))
 		}
 	}
 }
 
-func doRunWithSessionTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T, user string, roles ...string) {
+func doRunWithSessionTest[T mctechSessionTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T) {
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
-	session := createSession(t, tk, user, roles...)
 
-	for _, c := range cases {
+	session := tk.Session()
+
+	for i, c := range cases {
+		initSession(session, c.Roles())
 		mctechCtx, err := mctech.WithNewContext(session)
 		require.NoError(t, err)
 
-		err = runTestCase(t, c, mctechCtx)
+		err = runTestCase(t, i, c, mctechCtx)
 		if err == nil {
 			continue
 		}
 
 		if c.Failure() != "" {
-			require.ErrorContainsf(t, err, c.Failure(), "source %v", c.Source())
+			require.ErrorContainsf(t, err, c.Failure(), "source %v", c.Source(i))
 		} else {
-			require.NoErrorf(t, err, "source %v", c.Source())
+			require.NoErrorf(t, err, "source %v", c.Source(i))
 		}
 	}
 }

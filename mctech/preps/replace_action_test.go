@@ -23,8 +23,8 @@ func (c *replaceTestCase) Failure() string {
 	return c.failure
 }
 
-func (c *replaceTestCase) Source() any {
-	return fmt.Sprintf("%s -> %s", c.format, c.tenant)
+func (c *replaceTestCase) Source(i int) any {
+	return fmt.Sprintf("(%d) %s -> %s", i, c.format, c.tenant)
 }
 
 func TestReplaceAction(t *testing.T) {
@@ -37,7 +37,7 @@ func TestReplaceAction(t *testing.T) {
 	doRunTest(t, testReplaceCase, cases)
 }
 
-func testReplaceCase(t *testing.T, c *replaceTestCase) error {
+func testReplaceCase(t *testing.T, i int, c *replaceTestCase) error {
 	sql := "select * from {{tenant}}_platform.t1 a inner join {{tenant}}_platform.t2 on t1.id = t2.id"
 	var args = c.format
 	if strings.Contains(c.format, "%") {
@@ -51,6 +51,6 @@ func testReplaceCase(t *testing.T, c *replaceTestCase) error {
 	}
 
 	require.NotContains(t, outSQL, "{{tenant}}")
-	require.Contains(t, outSQL, fmt.Sprintf("%s_", c.tenant), c.Source())
+	require.Contains(t, outSQL, fmt.Sprintf("%s_", c.tenant), c.Source(i))
 	return nil
 }

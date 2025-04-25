@@ -140,26 +140,37 @@ func (d *tidbSessionMCTechContext) Clear() {
 
 // FlagRoles custom roles
 type mctechFlagRoles struct {
-	tenantOnly bool // 是否包含tenan_only 角色
+	tenantOmit bool // 是否跳过租户隔离，用于一些需要同步数据的特殊场景
+	tenantOnly bool // 是否包含tenant_only 角色
 	acrossDB   bool // 是否包含 across_db 角色。保留字段，暂时没有使用
+}
+
+func (r *mctechFlagRoles) TenantOmit() bool {
+	return r.tenantOmit
 }
 
 func (r *mctechFlagRoles) TenantOnly() bool {
 	return r.tenantOnly
 }
 
-func (r *mctechFlagRoles) SetTenantOnly(tenantOnly bool) {
-	r.tenantOnly = tenantOnly
-}
-
 func (r *mctechFlagRoles) AcrossDB() bool {
 	return r.acrossDB
 }
 
-// NewFlagRoles create new MCTechRoles instance
-func NewFlagRoles(tenantOnly, acrossDB bool) mctech.FlagRoles {
-	return &mctechFlagRoles{
+func newFlagRoles(tenantOnly, tenantOmit, acrossDB bool) (*mctechFlagRoles, error) {
+	if tenantOnly && tenantOmit {
+		return nil, errors.New("当前用户不允许同时包含'租户隔离'和'忽略租户'角色")
+	}
+
+	roles := &mctechFlagRoles{
 		tenantOnly: tenantOnly,
+		tenantOmit: tenantOmit,
 		acrossDB:   acrossDB,
 	}
+	return roles, nil
+}
+
+// NewFlagRoles create FlagRoles instance
+func NewFlagRoles(tenantOnly, tenantOmit, acrossDB bool) (mctech.FlagRoles, error) {
+	return newFlagRoles(tenantOnly, tenantOmit, acrossDB)
 }
