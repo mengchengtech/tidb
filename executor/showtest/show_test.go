@@ -1524,7 +1524,7 @@ func TestShowBuiltin(t *testing.T) {
 	require.NotNil(t, res)
 	rows := res.Rows()
 	// modify by zhangbing
-	const builtinFuncNum = 302
+	const builtinFuncNum = 304
 	// modify end
 	require.Equal(t, builtinFuncNum, len(rows))
 	require.Equal(t, rows[0][0].(string), "abs")
