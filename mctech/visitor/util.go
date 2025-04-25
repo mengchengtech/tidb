@@ -1,4 +1,4 @@
-package isolation
+package visitor
 
 import (
 	"github.com/pingcap/tidb/mctech"
