@@ -32,9 +32,12 @@ type Context interface {
 	// @title CurrentDB
 	// @description 当前数据库
 	CurrentDB() string
-	// @title GetDWIndex
-	// @description 获取当前使用的global_dw库的索引号
-	GetDWIndex() (DWIndex, error)
+	// @title SelectDWIndex
+	// @description 选择当前环境下计算出的global_dw库的索引号
+	SelectDWIndex() (*DWIndex, error)
+	// @title GetDWIndexInfo
+	// @description 获取global_dw库的全部索引信息
+	GetDWIndexInfo() (*DWIndexInfo, error)
 	// @title ToPhysicalDbName
 	// @description 把给定的库名转换为真实的物理库名。根据传入sql中的dbPrefix添加前缀，如果前缀已存在则什么也不做
 	ToPhysicalDbName(db string) (string, error)
@@ -114,7 +117,8 @@ type BaseContextAware interface {
 
 // DWSelector global_dw_* db index selector
 type DWSelector interface {
-	GetDWIndex() (DWIndex, error)
+	SelectIndex(dbPrefix, requestID string, forcebackground bool) (*DWIndex, error)
+	GetIndexInfo(dbPrefix string) (*DWIndexInfo, error)
 }
 
 const (
@@ -539,11 +543,11 @@ func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	}
 	// 处理dw库的索引
 	if d.IsGlobalDb(db) && strings.HasSuffix(db, "_dw") {
-		dwIndex, err := d.GetDWIndex()
+		dwIndex, err := d.SelectDWIndex()
 		if err != nil {
 			return "", err
 		}
-		db = fmt.Sprintf("%s_%d", db, dwIndex)
+		db = fmt.Sprintf("%s_%d", db, *dwIndex)
 	}
 
 	prefixAvaliable := isProductDatabase(db)
@@ -600,12 +604,34 @@ func (d *baseContext) IsGlobalDb(db string) bool {
 	return false
 }
 
-func (d *baseContext) GetDWIndex() (DWIndex, error) {
+const paramBackgroundKey = "background"
+const paramRequestIDKey = "requestId"
+
+func (d *baseContext) SelectDWIndex() (*DWIndex, error) {
 	sel := d.selector
 	if sel == nil {
-		return DWIndexNone, errors.New("db selector is nil")
+		return nil, errors.New("db selector is nil")
 	}
-	return sel.GetDWIndex()
+
+	result := d.prepareResult
+	params := result.Params()
+	dbPrefix := result.DbPrefix()
+	var requestID string
+	_, forceBackground := params[paramBackgroundKey]
+	if !forceBackground {
+		if value, ok := params[paramRequestIDKey]; ok {
+			requestID = value.(string)
+		}
+	}
+	return sel.SelectIndex(dbPrefix, requestID, forceBackground)
+}
+
+func (d *baseContext) GetDWIndexInfo() (*DWIndexInfo, error) {
+	sel := d.selector
+	if sel == nil {
+		return nil, errors.New("db selector is nil")
+	}
+	return sel.GetIndexInfo(d.prepareResult.DbPrefix())
 }
 
 func (d *baseContext) GetDbs(stmt ast.StmtNode) []string {
@@ -635,13 +661,24 @@ func isProductDatabase(logicDb string) bool {
 type DWIndex int
 
 const (
-	// DWIndexNone 表示空值
-	DWIndexNone DWIndex = -1
 	// DWIndexFirst global_dw_*库的序号为1的索引
 	DWIndexFirst DWIndex = 1
 	// DWIndexSecond global_dw_*库的序号为2的索引
 	DWIndexSecond DWIndex = 2
 )
+
+// DWIndexInfo 数据仓库前后台库信息
+type DWIndexInfo struct {
+	Current    DWIndex // 当前正在使用的库索引
+	Background DWIndex // 后台库，用于预生成数据
+}
+
+func (info *DWIndexInfo) ToMap() map[string]any {
+	return map[string]any{
+		"current":    int64(info.Current),
+		"background": int64(info.Background),
+	}
+}
 
 // NewContext function callback
 var NewContext func(sctx sessionctx.Context, usingTenantParam bool) Context

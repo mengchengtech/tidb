@@ -57,8 +57,15 @@ type testDWSelector struct {
 	dwIndex mctech.DWIndex
 }
 
-func (s *testDWSelector) GetDWIndex() (mctech.DWIndex, error) {
-	return s.dwIndex, nil
+func (s *testDWSelector) SelectIndex(dbPrefix, requestID string, forcebackground bool) (*mctech.DWIndex, error) {
+	return &s.dwIndex, nil
+}
+
+func (s *testDWSelector) GetIndexInfo(dbPrefix string) (*mctech.DWIndexInfo, error) {
+	return &mctech.DWIndexInfo{
+		Current:    s.dwIndex,
+		Background: s.dwIndex ^ 0x0003,
+	}, nil
 }
 
 func newTestMCTechContext(currentDb string, global bool, excludes, includes []string) (mctech.Context, error) {

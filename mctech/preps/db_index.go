@@ -4,15 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pkg/errors"
 )
-
-const paramBackgroundKey = "background"
-const paramRequestIDKey = "requestId"
 
 // 整体切换前后台库的参数值KEY
 const localCacheKey = "$$global"
@@ -21,135 +19,151 @@ var ticketMap = NewCache(60*time.Second, 20*time.Second)
 var currentMap = NewCache(15*time.Second, 10*time.Second)
 
 type dwSelector struct {
-	// private final static URI BASE_URI;
-	result  mctech.PrepareResult
 	dwIndex *mctech.DWIndex
 }
 
-func newDWSelector(result mctech.PrepareResult) mctech.DWSelector {
-	return &dwSelector{
-		result: result,
-	}
+var selector *dwSelector
+var selectorInitOnce sync.Once
+
+func getDWSelector() mctech.DWSelector {
+	selectorInitOnce.Do(func() {
+		selector = &dwSelector{}
+	})
+	return selector
 }
 
-func (d *dwSelector) GetDWIndex() (mctech.DWIndex, error) {
+func (d *dwSelector) SelectIndex(dbPrefix, requestID string, forceBackground bool) (*mctech.DWIndex, error) {
 	if d.dwIndex != nil {
-		return *d.dwIndex, nil
+		return d.dwIndex, nil
 	}
 
-	result := d.result
-	params := result.Params()
-	env := result.DbPrefix()
-	var dwIndex = mctech.DWIndexNone
+	var dwIndex *mctech.DWIndex
 	var err error
-	_, forceBackground := params[paramBackgroundKey]
 	if forceBackground {
 		// 强制使用后台库
-		dwIndex, err = d.forceBackground(env)
+		dwIndex, err = d.forceBackground(dbPrefix)
 	} else {
-		if ticket, ok := params[paramRequestIDKey]; ok {
+		if requestID != "" {
 			// 同一个ticket使用相同的后端库
-			dwIndex, err = d.getDWIndexByTicket(env, ticket.(string))
+			dwIndex, err = d.getIndexByRequestID(dbPrefix, requestID)
 		}
 	}
 
 	if err != nil {
-		return mctech.DWIndexNone, err
+		return nil, err
 	}
 
-	if dwIndex < 0 {
-		dwIndex, err = d.getDWIndex(true, env)
+	if dwIndex == nil {
+		var info *mctech.DWIndexInfo
+		if info, err = d.getIndexInfo(true, dbPrefix); err == nil {
+			dwIndex = &info.Current
+		}
 	}
 
-	if dwIndex > 0 {
-		d.dwIndex = new(mctech.DWIndex)
-		*d.dwIndex = dwIndex
-	}
+	d.dwIndex = dwIndex
 	return dwIndex, err
 }
 
-func (d *dwSelector) forceBackground(env string) (mctech.DWIndex, error) {
-	// 从缓存中取取的当前正在用的库的索引
-	indexFromRedis, err := d.getDWIndex(false, env)
-	if err != nil {
-		return mctech.DWIndexNone, err
-	}
-	// 取后端库
-	bgIndex := indexFromRedis ^ 0x0003
-	return bgIndex, nil
+func (d *dwSelector) GetIndexInfo(dbPrefix string) (*mctech.DWIndexInfo, error) {
+	return d.getIndexInfo(true, dbPrefix)
 }
 
-func (d *dwSelector) getDWIndexByTicket(env string, requestID string) (mctech.DWIndex, error) {
+func (d *dwSelector) forceBackground(dbPrefix string) (*mctech.DWIndex, error) {
+	// 从缓存中取取的当前正在用的库的索引
+	info, err := d.getIndexInfo(false, dbPrefix)
+	if err != nil {
+		return nil, err
+	}
+	// 取后端库
+	return &info.Background, nil
+}
+
+func (d *dwSelector) getIndexByRequestID(dbPrefix string, requestID string) (*mctech.DWIndex, error) {
 	// 从缓存中获取，如果不存在就创建一个
 	if value, ok := ticketMap.Get(requestID); ok {
-		return value.(mctech.DWIndex), nil
+		index := value.(mctech.DWIndex)
+		return &index, nil
 	}
 
-	value, err := d.getDWIndexByTicketFromService(env, requestID)
+	index, err := d.getIndexByRequestIDFromService(dbPrefix, requestID)
 	if err != nil {
-		return mctech.DWIndexNone, err
+		return nil, err
 	}
-	ticketMap.Set(requestID, value)
-	return value, nil
+	ticketMap.Set(requestID, *index)
+	return index, nil
 }
 
 // 从缓存中取取的当前正在用的库的索引
-func (d *dwSelector) getDWIndex(local bool, env string) (mctech.DWIndex, error) {
+func (d *dwSelector) getIndexInfo(local bool, dbPrefix string) (*mctech.DWIndexInfo, error) {
 	if local {
 		if value, ok := currentMap.Get(localCacheKey); ok {
-			return value.(mctech.DWIndex), nil
+			return value.(*mctech.DWIndexInfo), nil
 		}
 	}
 
 	// 本地缓存不存在，从远程服务中获取
-	index, err := d.getDWIndexFromService(env)
+	info, err := d.getIndexFromService(dbPrefix)
 	if err != nil {
-		return mctech.DWIndexNone, err
+		return nil, err
 	}
 
-	currentMap.Set(localCacheKey, index)
-	return index, nil
+	currentMap.Set(localCacheKey, info)
+	return info, nil
 }
 
-func (d *dwSelector) getDWIndexFromService(env string) (mctech.DWIndex, error) {
+func (d *dwSelector) getIndexFromService(dbPrefix string) (*mctech.DWIndexInfo, error) {
 	apiPrefix := config.GetMCTechConfig().DbChecker.APIPrefix
-	apiURL := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, env)
+	apiURL := fmt.Sprintf("%scurrent-db?env=%s", apiPrefix, dbPrefix)
 	get, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
-		return mctech.DWIndexNone, err
+		return nil, err
 	}
 
 	body, err := mctech.DoRequest(get)
 	if err != nil {
-		return mctech.DWIndexNone, err
+		return nil, err
+	}
+
+	jo := map[string]mctech.DWIndex{}
+	err = json.Unmarshal(body, &jo)
+	if err != nil {
+		return nil, errors.Wrap(err, "get dw index errors")
+	}
+
+	info := &mctech.DWIndexInfo{Current: jo["current"]}
+
+	if background, ok := jo["background"]; ok {
+		info.Background = background
+	} else {
+		// 兼容旧的代码
+		// TODO: rpc调用能返回background信息时，可以移除
+		info.Background = info.Current ^ 0x0003
+	}
+
+	return info, nil
+}
+
+func (d *dwSelector) getIndexByRequestIDFromService(dbPrefix string, requestID string) (*mctech.DWIndex, error) {
+	apiPrefix := config.GetMCTechConfig().DbChecker.APIPrefix
+	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, dbPrefix, requestID)
+	get, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := mctech.DoRequest(get)
+	if err != nil {
+		return nil, err
 	}
 
 	var js = map[string]mctech.DWIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return mctech.DWIndexNone, errors.Wrap(err, "get dw index errors")
-	}
-	return js["current"], nil
-}
-
-func (d *dwSelector) getDWIndexByTicketFromService(env string, requestID string) (mctech.DWIndex, error) {
-	apiPrefix := config.GetMCTechConfig().DbChecker.APIPrefix
-	apiURL := fmt.Sprintf("%sdb;by-request?env=%s&request_id=%s", apiPrefix, env, requestID)
-	get, err := http.NewRequest("GET", apiURL, nil)
-	if err != nil {
-		return mctech.DWIndexNone, err
+		return nil, errors.Wrap(err, "get dw index by request errors")
 	}
 
-	body, err := mctech.DoRequest(get)
-	if err != nil {
-		return mctech.DWIndexNone, err
+	if index, ok := js["db"]; ok {
+		return &index, nil
 	}
-
-	var js = map[string]mctech.DWIndex{}
-	err = json.Unmarshal(body, &js)
-	if err != nil {
-		return mctech.DWIndexNone, errors.Wrap(err, "get dw index by request errors")
-	}
-
-	return js["db"], nil
+	return nil, fmt.Errorf("get db index error. dbPrefix: '%s', requestID: '%s'", dbPrefix, requestID)
 }

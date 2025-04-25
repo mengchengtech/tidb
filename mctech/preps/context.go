@@ -41,6 +41,7 @@ type tidbSessionMCTechContext struct {
 // newContext function
 func newContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
 	baseCtx := mctech.NewBaseContext(usingTenantParam)
+	baseCtx.(mctech.ModifyContext).SetDWSelector(getDWSelector())
 	return &tidbSessionMCTechContext{
 		Context: baseCtx,
 		session: session,
