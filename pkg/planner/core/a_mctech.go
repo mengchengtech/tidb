@@ -29,6 +29,7 @@ import (
 func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan, error) {
 	p := &MCTech{
 		Format:   stmt.Format,
+		Stmt:     stmt,
 		ExecStmt: stmt.Stmt,
 	}
 	p.SetSCtx(b.ctx)
@@ -40,7 +41,8 @@ type MCTech struct {
 	baseSchemaProducer
 
 	Format   string
-	ExecStmt ast.StmtNode
+	Stmt     ast.StmtNode // mctech 语句本身
+	ExecStmt ast.StmtNode // mctech 包含的子语句
 	Rows     [][]*types.Datum
 }
 
@@ -63,7 +65,8 @@ var columnDefs = []*columnDef{
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
 	{"db", mysql.TypeVarchar, 50},
-	{"dw_index", mysql.TypeTiny, getDefaultFieldLength(mysql.TypeTiny)},
+	{"dbs", mysql.TypeVarchar, 512},
+	{"dw_index", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"params", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"prepared_sql", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
 }
@@ -137,7 +140,8 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		tenantFrom *string
 		params     = map[string]any{}
 		db         = e.SCtx().GetSessionVars().CurrentDB
-		index      *int
+		dbs        = ""
+		index      = map[string]any(nil)
 		restoreSQL = sb.String()
 	)
 
@@ -158,10 +162,14 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 					tenantFrom = toPtr("hint")
 				}
 			}
+			info, err := mctx.GetDWIndexInfo()
+			if err != nil {
+				index = map[string]any{"error": err.Error()}
+			} else {
+				index = info.ToMap()
+			}
 		}
-		if r, err := mctx.GetDWIndex(); err == nil {
-			index = toPtr(int(r))
-		}
+		dbs = strings.Join(mctx.GetDbs(e.Stmt), ",")
 	}
 
 	var row = []*types.Datum{
@@ -172,8 +180,9 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		createDatumByPrimitivePt(tenant),
 		createDatumByPrimitivePt(tenantFrom),
 		createDatum(db),
-		createDatumByPrimitivePt(index),
-		createDatum(types.CreateBinaryJSON(params)),
+		createDatum(dbs),
+		createDatumByJSON(index),
+		createDatumByJSON(params),
 		createDatum(restoreSQL),
 	}
 	e.Rows = append(e.Rows, row)
@@ -191,6 +200,16 @@ func createDatumByPrimitivePt[T any](value *T) *types.Datum {
 		d.SetNull()
 	} else {
 		d.SetValueWithDefaultCollation(*value)
+	}
+	return d
+}
+
+func createDatumByJSON(value map[string]any) *types.Datum {
+	d := &types.Datum{}
+	if value == nil {
+		d.SetNull()
+	} else {
+		d.SetMysqlJSON(types.CreateBinaryJSON(value))
 	}
 	return d
 }

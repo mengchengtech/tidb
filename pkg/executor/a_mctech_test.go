@@ -34,7 +34,7 @@ func TestMCTechStatementsSummary(t *testing.T) {
 	tk.MustExec("use test")
 
 	cases := []*mctechStmtCases{
-		{"mctech select * from information_schema.statements_summary", "<nil>|||{}|<nil>|<nil>|test|<nil>|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
+		{"mctech select * from information_schema.statements_summary", "<nil>|||{}|<nil>|<nil>|test||<nil>|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
 	}
 
 	for _, c := range cases {
