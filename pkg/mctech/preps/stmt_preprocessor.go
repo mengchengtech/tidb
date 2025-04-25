@@ -9,7 +9,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/mctech"
-	"github.com/pingcap/tidb/pkg/mctech/isolation"
+	"github.com/pingcap/tidb/pkg/mctech/visitor"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 )
 
@@ -128,7 +128,7 @@ func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
 
 func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = isolation.ApplyExtension(mctx, stmt, charset, collation)
+	dbs, skipped, err = visitor.ApplyExtension(mctx, stmt, charset, collation)
 
 	failpoint.Inject("SetSQLDBS", func(v failpoint.Value) {
 		str := v.(string)
