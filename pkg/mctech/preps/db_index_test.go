@@ -55,11 +55,14 @@ func contextRunTestCase(t *testing.T, i int, c *testContextCase) error {
 	if err != nil {
 		return err
 	}
-	selector := preps.NewDWSelectorForTest(result)
-	index, err := selector.GetDWIndex()
+	selector := preps.GetDWSelectorForTest()
+	context := mctech.NewBaseContext(false)
+	context.(mctech.ModifyContext).SetPrepareResult(result)
+	context.(mctech.ModifyContext).SetDWSelector(selector)
+	index, err := context.SelectDWIndex()
 	if err != nil {
 		return err
 	}
-	require.Equal(t, c.expect, index, c.Source(i))
+	require.Equal(t, c.expect, *index, c.Source(i))
 	return nil
 }
