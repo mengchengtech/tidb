@@ -66,6 +66,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& tenant:'  gdcd   ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		{"pf", "/*& tenant:  '  gdcd   ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		{"pf", "/*& tenant: */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
+		{"pf", "select * from platform.company", []string{"platform"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		// 空值
 		{"test", "/*& custom: */ select * from company", []string{"test"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"custom": "", "mpp": "allow"}, "db": "test", "comments": map[string]any{}}, ""},
 		{"pf", "/*& tenant:'' */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
@@ -78,7 +79,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		// across
 		{"pf", "/*& tenant:ztsj */ /*& across:global_cq3,global_ds */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "ztsj", "fromRole": false}, "params": map[string]any{"tenant": "ztsj", "across": "global_cq3|global_ds", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		// dbPrefix
-		{"pd", "/*& dbPrefix:mock */ select * from company", []string{"public_data"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}, "db": "public_data", "comments": map[string]any{}}, ""},
+		{"pd", "/*& dbPrefix:mock */ select * from company", []string{"mock_public_data"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "prefix": "mock", "params": map[string]any{"dbPrefix": "mock", "mpp": "allow"}, "db": "public_data", "comments": map[string]any{}}, ""},
 		// replace
 		{"pd", "/*& $replace:tenant */ /*& tenant:gslq */ select * from company", []string{"public_data"}, map[string]any{"tenant": map[string]any{"code": "gslq", "fromRole": false}, "params": map[string]any{"tenant": "gslq", "mpp": "allow"}, "db": "public_data", "comments": map[string]any{}}, ""},   // replace
 		{"pd", "/*& $replace:tenant */ /*& tenant:'gslq' */ select * from company", []string{"public_data"}, map[string]any{"tenant": map[string]any{"code": "gslq", "fromRole": false}, "params": map[string]any{"tenant": "gslq", "mpp": "allow"}, "db": "public_data", "comments": map[string]any{}}, ""}, // replace
