@@ -156,9 +156,9 @@ func (g *GlobalValueInfo) GetInfoForTest() map[string]any {
 
 // FlagRoles custom roles
 type FlagRoles interface {
-	TenantOnly() bool // 是否包含tenan_only 角色
-	SetTenantOnly(tenantOnly bool)
-	AcrossDB() bool // 是否包含 across_db 角色。保留字段，暂时没有使用
+	TenantOmit() bool // 是否忽略租户隔离，用于一些需要同步数据的特殊场景
+	TenantOnly() bool // 是否包含tenant_only 角色
+	AcrossDB() bool   // 是否包含 across_db 角色。保留字段，暂时没有使用
 }
 
 // Comments sql中特殊的注释信息
@@ -225,7 +225,7 @@ type PrepareResult interface {
 	// Roles current user has some roles
 	Roles() FlagRoles
 	// Global global
-	Global() bool
+	TenantOmit() bool
 	// Comments custom comment
 	Comments() Comments
 	// Excludes excludes
@@ -282,6 +282,12 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 		return nil, errors.New("存在tenant信息时，global不允许设置为true")
 	}
 
+	if roles.TenantOmit() {
+		// 存在忽略租户的角色，租户code设置为""
+		tenantCode = ""
+		fromRole = false
+	}
+
 	var dbPrefix string
 	if v, ok = params[ParamDbPrefix]; ok {
 		dbPrefix = v.(string)
@@ -333,9 +339,9 @@ func (r *prepareResult) Roles() FlagRoles {
 	return r.roles
 }
 
-// Global global
-func (r *prepareResult) Global() bool {
-	return r.globalInfo.Global
+// TenantOmit tenant omit
+func (r *prepareResult) TenantOmit() bool {
+	return r.globalInfo.Global || r.roles.TenantOmit()
 }
 
 // Comments custom comment

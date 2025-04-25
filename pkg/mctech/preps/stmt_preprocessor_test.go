@@ -2,6 +2,7 @@ package preps_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/pingcap/failpoint"
@@ -23,8 +24,12 @@ func (m *mctechStmtResolverTestCase) Failure() string {
 	return m.failure
 }
 
-func (m *mctechStmtResolverTestCase) Source() any {
-	return m.sql
+func (m *mctechStmtResolverTestCase) Source(i int) any {
+	return fmt.Sprintf("(%d) %s", i, m.sql)
+}
+
+func (m *mctechStmtResolverTestCase) Roles() []string {
+	return nil
 }
 
 func TestStmtResolverWithRoot(t *testing.T) {
@@ -41,8 +46,8 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& global:!ys2 */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2"}}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		{"pf", "select * from company /*& global:!ys2,!ys3 */", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "global": map[string]any{"set": true, "excludes": []string{"ys2", "ys3"}}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		// hint 格式不匹配
-		{"pf", "/*  & global:true */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
-		{"pf", "/* global:true */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		{"pf", "/*  & global:true */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
+		{"pf", "/* global:true */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
 		{"test", "/* global:true */ select * from company", []string{"test"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"mpp": "allow"}, "db": "test", "comments": map[string]any{}}, ""},
 		{"pf", "/*& tenant:' */ select * from company", nil, nil, "\"tenant\" hint 值格式不正确 -> '"},
 		{"pf", "/*& tenant:'gslq */ select * from company", nil, nil, "\"tenant\" hint 值格式不正确 -> 'gslq"},
@@ -56,11 +61,11 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/*& tenant:'  gdcd' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		{"pf", "/*& tenant:'  gdcd   ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 		{"pf", "/*& tenant:  '  gdcd   ' */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
-		{"pf", "/*& tenant: */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		{"pf", "/*& tenant: */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
 		// 空值
 		{"test", "/*& custom: */ select * from company", []string{"test"}, map[string]any{"tenant": map[string]any{"code": "", "fromRole": false}, "params": map[string]any{"custom": "", "mpp": "allow"}, "db": "test", "comments": map[string]any{}}, ""},
-		{"pf", "/*& tenant:'' */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
-		{"pf", "/*& tenant:'    ' */ select * from company", nil, nil, "当前用户root无法确定所属租户信息"},
+		{"pf", "/*& tenant:'' */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
+		{"pf", "/*& tenant:'    ' */ select * from company", nil, nil, "当前用户无法确定所属租户信息"},
 
 		// request_id
 		{"pf", "/*& tenant:gdcd */ /*& requestId:abc123456 */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"requestId": "abc123456", "tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
@@ -82,8 +87,8 @@ func TestStmtResolverWithRoot(t *testing.T) {
 
 		// 租户隔离角色
 		{"pf", "/*& impersonate: tenant */ select * from company", nil, nil, "impersonate的值错误。可选值为'tenant_only'"},
-		{"pf", "/*& impersonate: tenant_only */ select * from company", nil, nil, "当前用户root无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */"},
-		{"pf", "/*& global:true */ /*& impersonate: tenant_only */ select * from company", nil, nil, "当前数据库用户包含租户隔离角色，不允许启用 global hint"},
+		{"pf", "/*& impersonate: tenant_only */ select * from company", nil, nil, "当前用户无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */"},
+		{"pf", "/*& global:true */ /*& impersonate: tenant_only */ select * from company", nil, nil, "当前用户包含'租户隔离'角色，不允许启用 'global' hint"},
 		{"pf", "/*& tenant|gdcd */ /*& impersonate: tenant_only */ select * from company", []string{"global_platform"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "impersonate": "tenant_only", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 
 		// custom comment
@@ -97,7 +102,7 @@ func TestStmtResolverWithRoot(t *testing.T) {
 		{"pf", "/* from:'demo-service' */ /* package:'@mctech/dp-impala' */ /*& tenant|gdcd */ /*& impersonate: tenant_only */ select * from company", []string{"global_platform"}, map[string]any{"db": "global_platform", "tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"impersonate": "tenant_only", "mpp": "allow", "tenant": "gdcd"}, "comments": map[string]any{"service": "demo-service", "pkg": "@mctech/dp-impala"}}, ""},
 	}
 
-	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
+	doRunWithSessionTest(t, stmtResoverRunTestCase, cases)
 }
 
 func TestStmtResolverNormalizeDB(t *testing.T) {
@@ -109,10 +114,10 @@ func TestStmtResolverNormalizeDB(t *testing.T) {
 	cases := []*mctechStmtResolverTestCase{
 		{"pf", "/*& tenant|gdcd */ select * from company", []string{"global_cq3", "global_mtlp", "global_platform", "global_qa"}, map[string]any{"tenant": map[string]any{"code": "gdcd", "fromRole": false}, "params": map[string]any{"tenant": "gdcd", "mpp": "allow"}, "db": "global_platform", "comments": map[string]any{}}, ""},
 	}
-	doRunWithSessionTest(t, stmtResoverRunTestCase, cases, "root")
+	doRunWithSessionTest(t, stmtResoverRunTestCase, cases)
 }
 
-func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechCtx mctech.Context) error {
+func stmtResoverRunTestCase(t *testing.T, i int, c *mctechStmtResolverTestCase, mctechCtx mctech.Context) error {
 	db, ok := dbMap[c.shortDb]
 	if !ok {
 		db = "test"
@@ -162,7 +167,7 @@ func stmtResoverRunTestCase(t *testing.T, c *mctechStmtResolverTestCase, mctechC
 	if c.expectValue == nil {
 		c.expectValue = map[string]any{}
 	}
-	require.Equal(t, c.expectDBs, dbs, c.Source())
-	require.Equal(t, c.expectValue, info, c.Source())
+	require.Equal(t, c.expectDBs, dbs, c.Source(i))
+	require.Equal(t, c.expectValue, info, c.Source(i))
 	return nil
 }
