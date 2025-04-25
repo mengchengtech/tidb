@@ -6,8 +6,8 @@ func NewMutexDatabaseCheckerWithParamsForTest(mutex, exclude, across []string) *
 	return newMutexDatabaseCheckerWithParams(mutex, exclude, across)
 }
 
-func NewDWSelectorForTest(result mctech.PrepareResult) mctech.DWSelector {
-	return newDWSelector(result)
+func GetDWSelectorForTest() mctech.DWSelector {
+	return newDWSelector()
 }
 
 func NewGlobalValueFormatterForTest() valueFormatter {
