@@ -52,7 +52,7 @@ go_test(
     ],
     embed = [":preps"],
     flaky = True,
-    shard_count = 20,
+    shard_count = 10,
     deps = [
         "//pkg/config",
         "//pkg/kv",
@@ -61,6 +61,7 @@ go_test(
         "//pkg/parser/ast",
         "//pkg/parser/auth",
         "//pkg/session/types",
+        "//pkg/sessionctx",
         "//pkg/testkit",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",

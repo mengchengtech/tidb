@@ -22,8 +22,8 @@ func (c *testStringFilterCase) Failure() string {
 	return ""
 }
 
-func (c *testStringFilterCase) Source() any {
-	return fmt.Sprintf("%s -> %s", c.pattern, c.target)
+func (c *testStringFilterCase) Source(i int) any {
+	return fmt.Sprintf("(%d) %s -> %s", i, c.pattern, c.target)
 }
 
 func TestStringFilter(t *testing.T) {
@@ -55,8 +55,8 @@ func (c *testDatabaseCheckerCase) Failure() string {
 	return c.failure
 }
 
-func (c *testDatabaseCheckerCase) Source() any {
-	return fmt.Sprintf("%t -> %v", c.tenantOnly, c.dbs)
+func (c *testDatabaseCheckerCase) Source(i int) any {
+	return fmt.Sprintf("(%d) %t -> %v", i, c.tenantOnly, c.dbs)
 }
 
 func newTestMCTechContext(roles mctech.FlagRoles, comments mctech.Comments, across string) (mctech.Context, error) {
@@ -139,23 +139,26 @@ func (a *mockStmtTextAware) OriginalText() string {
 	return "mock original text"
 }
 
-func checkRunTestCase(t *testing.T, c *testDatabaseCheckerCase) error {
+func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase) error {
 	option := config.GetMCTechConfig()
 	checker := preps.NewMutexDatabaseCheckerWithParamsForTest(
 		option.DbChecker.Mutex,
 		option.DbChecker.Exclude,
 		option.DbChecker.Across)
 
-	roles := preps.NewFlagRoles(c.tenantOnly, true)
+	roles, err := preps.NewFlagRoles(c.tenantOnly, false, true)
+	if err != nil {
+		return err
+	}
 	comments := preps.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
 	context, _ := newTestMCTechContext(roles, comments, c.across)
 	return checker.Check(context, &mockStmtTextAware{}, c.dbs)
 }
 
-func filterRunTestCase(t *testing.T, c *testStringFilterCase) error {
+func filterRunTestCase(t *testing.T, i int, c *testStringFilterCase) error {
 	p, ok := mctech.NewStringFilter(c.pattern)
 	require.True(t, ok)
 	success := p.Match(c.target)
-	require.Equal(t, c.success, success, c.Source())
+	require.Equal(t, c.success, success, c.Source(i))
 	return nil
 }
