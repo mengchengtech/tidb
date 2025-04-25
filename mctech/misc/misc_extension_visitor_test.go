@@ -24,8 +24,19 @@ type testDWSelector struct {
 	dwIndex mctech.DWIndex
 }
 
-func (s *testDWSelector) GetDWIndex() (mctech.DWIndex, error) {
-	return s.dwIndex, nil
+func (s *testDWSelector) SelectIndex(dbPrefix, requestID string, forcebackground bool) (*mctech.DWIndex, error) {
+	return &s.dwIndex, nil
+}
+
+func (s *testDWSelector) SelectIndexByResult(result mctech.PrepareResult) (*mctech.DWIndex, error) {
+	return &s.dwIndex, nil
+}
+
+func (s *testDWSelector) GetIndexInfo(dbPrefix string) (*mctech.DWIndexInfo, error) {
+	return &mctech.DWIndexInfo{
+		Current:    s.dwIndex,
+		Background: s.dwIndex ^ 0x0003,
+	}, nil
 }
 
 type miscMCTechTestCase struct {

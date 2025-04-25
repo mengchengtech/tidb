@@ -34,7 +34,6 @@ func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql stri
 
 	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
 	modifyCtx.SetPrepareResult(result)
-	modifyCtx.SetDWSelector(newDWSelector(result))
 	// 改写session上的数据库
 	vars := mctx.Session().GetSessionVars()
 	currDb := vars.CurrentDB
