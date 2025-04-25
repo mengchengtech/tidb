@@ -18,6 +18,7 @@ type testBuildMCTechCase struct {
 	from        string
 	pkg         string
 	tenantOnly  bool
+	tenantOmit  bool
 	mpp         string
 	tenantRole  string
 	impersonate bool
@@ -53,13 +54,15 @@ func TestBuildMCTechTenantEnabled(t *testing.T) {
 
 	sql := "mctech SELECT * FROM t1"
 	cases := []testBuildMCTechCase{
-		{"demo-service", "", false, "", "", false, "", "1||{demo-service,}||none|%s|18446744073709551615|{\"mpp\":\"allow\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf0", "", false, "disable", "", false, "", "1||{demo-service.pf0,}||none|%s|18446744073709551615|{\"mpp\":\"disable\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf1", "@mctech/dp-impala", false, "force", "", false, "", "1||{demo-service.pf1,@mctech/dp-impala}||none|%s|18446744073709551615|{\"mpp\":\"force\"} SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf2", "@mctech/dp-impala", false, "allow", "", true, "gslq", "0||{demo-service.pf2,@mctech/dp-impala}|gslq|hint|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"gslq\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf3", "@mctech/dp-impala", false, "", "code_sxlq", true, "", "0||{demo-service.pf3,@mctech/dp-impala}|sxlq|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"sxlq\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", true, "allow", "code_mctest", true, "", "0||{demo-service.pf4,@mctech/dp-impala}|mctest|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", true, "allow", "code_mctest", true, "mctest", "0||{demo-service.pf4,@mctech/dp-impala}|mctest|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service", "", false, false, "", "", false, "", "1||{demo-service,}||none|%s|18446744073709551615|{\"mpp\":\"allow\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf0", "", false, false, "disable", "", false, "", "1||{demo-service.pf0,}||none|%s|18446744073709551615|{\"mpp\":\"disable\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf1", "@mctech/dp-impala", false, false, "force", "", false, "", "1||{demo-service.pf1,@mctech/dp-impala}||none|%s|18446744073709551615|{\"mpp\":\"force\"} SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf2", "@mctech/dp-impala", false, false, "allow", "", true, "gslq", "0||{demo-service.pf2,@mctech/dp-impala}|gslq|hint|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"gslq\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf3", "@mctech/dp-impala", false, false, "", "code_sxlq", true, "", "0||{demo-service.pf3,@mctech/dp-impala}|sxlq|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"sxlq\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", true, false, "allow", "code_mctest", true, "", "0||{demo-service.pf4,@mctech/dp-impala}|mctest|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", true, false, "allow", "code_mctest", true, "mctest", "0||{demo-service.pf4,@mctech/dp-impala}|mctest|role|%s|18446744073709551615|{\"impersonate\":\"tenant_only\",\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
+		// tenant_omit
+		{"demo-service.pf5", "", false, true, "", "", false, "mctest", "1||{demo-service.pf5,}||none|%s|18446744073709551615|{\"mpp\":\"allow\",\"tenant\":\"mctest\"}|SELECT * FROM `%s`.`t1`%s"},
 	}
 
 	dbs := []string{"global_pf", "public_data"}
@@ -84,13 +87,15 @@ func TestBuildMCTechTenantDisabled(t *testing.T) {
 
 	sql := "mctech SELECT * FROM t1"
 	cases := []testBuildMCTechCase{
-		{"demo-service", "", false, "", "", false, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf0", "", false, "disable", "", false, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf1", "@mctech/dp-impala", false, "force", "", false, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf2", "@mctech/dp-impala", false, "allow", "", true, "gslq", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf3", "@mctech/dp-impala", false, "", "code_sxlq", true, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", true, "allow", "code_mctest", true, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
-		{"demo-service.pf4", "@mctech/dp-impala", true, "allow", "code_mctest", true, "mctest", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service", "", false, false, "", "", false, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf0", "", false, false, "disable", "", false, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf1", "@mctech/dp-impala", false, false, "force", "", false, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf2", "@mctech/dp-impala", false, false, "allow", "", true, "gslq", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf3", "@mctech/dp-impala", false, false, "", "code_sxlq", true, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", true, false, "allow", "code_mctest", true, "", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		{"demo-service.pf4", "@mctech/dp-impala", true, false, "allow", "code_mctest", true, "mctest", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
+		// tenant_omit
+		{"demo-service.pf5", "", false, true, "", "", false, "mctest", "0||{}||none|%s|18446744073709551615|{}|SELECT * FROM `%s`.`t1`%s"},
 	}
 
 	dbs := []string{"global_pf", "public_data"}
@@ -126,6 +131,10 @@ func testCase(t *testing.T, tk *testkit.TestKit, db string, sql string, tenantEn
 	if c.tenantOnly {
 		roles = append(roles, "tenant_only")
 	}
+	if c.tenantOmit {
+		roles = append(roles, "tenant_omit")
+	}
+
 	var tenant string
 	if c.tenantRole != "" {
 		roles = append(roles, c.tenantRole)
@@ -147,7 +156,7 @@ func testCase(t *testing.T, tk *testkit.TestKit, db string, sql string, tenantEn
 		lst = append(lst, fmt.Sprintf("/*& tenant:'%s' */", tenant))
 	}
 
-	if strings.HasPrefix(db, "global_") && tenant != "" && tenantEnabled {
+	if strings.HasPrefix(db, "global_") && !c.tenantOmit && tenant != "" && tenantEnabled {
 		tenantCondition = fmt.Sprintf(" WHERE (`t1`.`tenant`=_UTF8MB4'%s')", tenant)
 	}
 

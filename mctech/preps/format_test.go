@@ -20,8 +20,8 @@ func (c *converterTestCase) Failure() string {
 	return c.failure
 }
 
-func (c *converterTestCase) Source() any {
-	return fmt.Sprintf("%s -> %s", c.name, c.value)
+func (c *converterTestCase) Source(i int) any {
+	return fmt.Sprintf("(%d) %s -> %s", i, c.name, c.value)
 }
 
 func createGlobalInfo(global bool, excludes []string) *mctech.GlobalValueInfo {
@@ -49,12 +49,12 @@ func TestValueConverter(t *testing.T) {
 	doRunTest(t, convertRunTestCase, cases)
 }
 
-func convertRunTestCase(t *testing.T, c *converterTestCase) error {
+func convertRunTestCase(t *testing.T, i int, c *converterTestCase) error {
 	gc := preps.NewGlobalValueFormatterForTest()
 	out, err := gc.Format(c.name, c.value)
 	if err != nil {
 		return err
 	}
-	require.Equal(t, c.expect, out, c.Source())
+	require.Equal(t, c.expect, out, c.Source(i))
 	return nil
 }

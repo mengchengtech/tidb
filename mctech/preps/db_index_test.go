@@ -1,6 +1,7 @@
 package preps_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/pingcap/failpoint"
@@ -22,8 +23,8 @@ func (c *testContextCase) Failure() string {
 	return c.failure
 }
 
-func (c *testContextCase) Source() any {
-	return c.response
+func (c *testContextCase) Source(i int) any {
+	return fmt.Sprintf("(%d) %s", i, c.response)
 }
 
 func TestDbSelectorGetDbIndex(t *testing.T) {
@@ -40,13 +41,17 @@ func TestDbSelectorGetDbIndex(t *testing.T) {
 	doRunTest(t, contextRunTestCase, cases)
 }
 
-func contextRunTestCase(t *testing.T, c *testContextCase) error {
+func contextRunTestCase(t *testing.T, i int, c *testContextCase) error {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
 		mock.M(t, c.response),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 
-	result, err := mctech.NewPrepareResult(c.tenant, preps.NewFlagRoles(true, false), nil, c.params)
+	roles, err := preps.NewFlagRoles(true, false, false)
+	if err != nil {
+		return err
+	}
+	result, err := mctech.NewPrepareResult(c.tenant, roles, nil, c.params)
 	if err != nil {
 		return err
 	}
@@ -55,6 +60,6 @@ func contextRunTestCase(t *testing.T, c *testContextCase) error {
 	if err != nil {
 		return err
 	}
-	require.Equal(t, c.expect, index, c.Source())
+	require.Equal(t, c.expect, index, c.Source(i))
 	return nil
 }

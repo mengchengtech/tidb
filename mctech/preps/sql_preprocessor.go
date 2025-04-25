@@ -9,21 +9,18 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 )
 
+const tenantOmitRole = "tenant_omit"
 const tenantOnlyRole = "tenant_only"
 const acrossDBRole = "across_db"
 
 var tenantCodePattern = regexp.MustCompile(`(?i)^code_(.+)?$`)
 
-func currentUser(ctx sessionctx.Context) string {
-	vars := ctx.GetSessionVars()
-	return vars.User.Username
-}
-
-func resolveActiveRoles(ctx sessionctx.Context) (roles mctech.FlagRoles, tenantCode string, err error) {
+func resolveActiveRoles(ctx sessionctx.Context, forceTenantOnly bool) (roles *mctechFlagRoles, tenantCode string, err error) {
 	vars := ctx.GetSessionVars()
 	var (
 		tenantOnly bool // 角色上是否存在只允许限制在某个租户上执行的角色
 		acrossDB   bool // 角色上是否存在支持跨库查询的标记角色。
+		tenantOmit bool // 角色上是否存在忽略租户隔离的标记角色
 	)
 	tenantFromRoles := make([]string, 0, len(vars.ActiveRoles))
 	for _, r := range vars.ActiveRoles {
@@ -32,6 +29,8 @@ func resolveActiveRoles(ctx sessionctx.Context) (roles mctech.FlagRoles, tenantC
 			tenantOnly = true
 		case acrossDBRole:
 			acrossDB = true
+		case tenantOmitRole:
+			tenantOmit = true
 		default:
 			subs := tenantCodePattern.FindStringSubmatch(r.Username)
 			if subs != nil {
@@ -39,12 +38,13 @@ func resolveActiveRoles(ctx sessionctx.Context) (roles mctech.FlagRoles, tenantC
 			}
 		}
 	}
+
 	// var isAdmin = user == "root"
 
 	tenantFromRolesLength := len(tenantFromRoles)
 	// if !isAdmin && tenantFromRolesLength > 0 && tenantFromRolesLength != len(roleNames) {
 	// 	// 1. 如果发现有一个code_{tenant} 角色，不能再有其他任何角色，否则报错
-	// 	return tenantOnly, tenantCode, fmt.Errorf("当前用户%s同时属于多种类型的角色。", user)
+	// 	return tenantOnly, tenantCode, errors.New("当前用户同时属于多种类型的角色。")
 	// }
 
 	if tenantFromRolesLength > 0 {
@@ -58,14 +58,21 @@ func resolveActiveRoles(ctx sessionctx.Context) (roles mctech.FlagRoles, tenantC
 			// 只有一个角色能提供租户信息
 			for index := 1; index < tenantFromRolesLength; index++ {
 				if tenantCode != tenantFromRoles[index] {
-					user := currentUser(ctx)
-					return nil, "", fmt.Errorf("用户%s所属的角色存在多个租户的信息", user)
+					return nil, "", errors.New("当前用户所属的角色存在多个租户的信息")
 				}
 			}
 		}
 	}
 
-	return NewFlagRoles(tenantOnly, acrossDB), tenantCode, nil
+	if forceTenantOnly {
+		tenantOnly = true
+	}
+
+	if roles, err = newFlagRoles(tenantOnly, tenantOmit, acrossDB); err != nil {
+		return nil, "", err
+	}
+
+	return roles, tenantCode, err
 }
 
 var valueFormatters = map[string]valueFormatter{
@@ -122,15 +129,16 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
 		}
 	}
 
-	roles, tenantCode, err := resolveActiveRoles(mctx.Session())
-	if err != nil {
-		return nil, err
-	}
-
+	var forceTenantOnly = false
 	if v, ok := params[mctech.ParamImpersonate]; ok {
 		if role := v.(string); role == tenantOnlyRole {
-			roles.SetTenantOnly(true)
+			forceTenantOnly = true
 		}
+	}
+
+	roles, tenantCode, err := resolveActiveRoles(mctx.Session(), forceTenantOnly)
+	if err != nil {
+		return nil, err
 	}
 
 	result, err := mctech.NewPrepareResult(tenantCode, roles, comments, params)
@@ -138,8 +146,8 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
 		return nil, err
 	}
 
-	if result.Global() && roles.TenantOnly() {
-		return nil, errors.New("当前数据库用户包含租户隔离角色，不允许启用 global hint")
+	if result.TenantOmit() && roles.TenantOnly() {
+		return nil, errors.New("当前用户包含'租户隔离'角色，不允许启用 'global' hint")
 	}
 
 	return result, nil
