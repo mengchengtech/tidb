@@ -16,9 +16,11 @@ var (
 	// createMCTechDenyDigest is a table about deny sql digest
 	createMCTechDenyDigest = `CREATE TABLE IF NOT EXISTS mysql.mctech_deny_digest (
 		digest varchar(64) PRIMARY KEY,
-    query longtext,
-		expired_at datetime not null,
-		last_request_time datetime NULL
+		created_at datetime not null,
+		expired_at datetime,
+		last_request_time datetime NULL,
+    query_sql longtext not null,
+		remark text
 	);`
 )
 
