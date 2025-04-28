@@ -37,15 +37,17 @@ func TestReloadDenyDigests(t *testing.T) {
 func initDbAndData(tk *testkit.TestKit) {
 	createSQL := `CREATE TABLE IF NOT EXISTS mysql.mctech_deny_digest (
 		digest varchar(64) PRIMARY KEY,
-    query longtext,
-		expired_at datetime not null,
-		last_request_time datetime NULL
+		created_at datetime not null,
+		expired_at datetime,
+		last_request_time datetime NULL,
+    query_sql longtext not null,
+		remark text
 	);`
 	tk.MustExec(createSQL)
 	tk.MustExec(`insert into mysql.mctech_deny_digest
-	(digest, query, expired_at, last_request_time)
+	(digest, created_at, expired_at, last_request_time, query_sql)
 	values
-	('digest-1', null, '2024-06-01', null)
-	, ('digest-2', null, '9999-10-01', null)
+	('digest-1', '2024-05-01', '2024-06-01', null, 'select 1')
+	, ('digest-2', '2024-05-01', '9999-10-01', null, 'select 2')
 	`)
 }
