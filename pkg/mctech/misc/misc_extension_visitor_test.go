@@ -97,7 +97,11 @@ func doRunMiscMCTechTestCase(t *testing.T, c *miscMCTechTestCase) error {
 }
 
 func newTestMCTechContext() (mctech.Context, error) {
-	result, err := mctech.NewPrepareResult("gslq4dev", preps.NewFlagRoles(true, false), nil, map[string]any{
+	roles, err := preps.NewFlagRoles(true, false, false)
+	if err != nil {
+		return nil, err
+	}
+	result, err := mctech.NewPrepareResult("gslq4dev", roles, nil, map[string]any{
 		"dbPrefix": "mock",
 	})
 

@@ -144,7 +144,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	if mctx != nil {
 		result := mctx.PrepareResult()
 		if result != nil {
-			global = result.Global()
+			global = result.TenantOmit()
 			params = result.Params()
 			excludes = result.Excludes()
 			comments = result.Comments().String()
@@ -286,10 +286,8 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 		}
 	}
 
-	sessionVars := sctx.GetSessionVars()
 	if tenantValue == nil || tenantCode == "" {
-		user := sessionVars.User.Username
-		return fmt.Errorf("当前用户%s无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */", user)
+		return errors.New("当前用户无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */")
 	}
 
 	extArgs, err := appendExtensionArgs(extParams, func() (expression.Expression, error) {
