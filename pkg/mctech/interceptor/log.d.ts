@@ -100,9 +100,20 @@ declare interface FullTraceLog {
    */
   sql: string
   /**
-   * 当sql保存的内容不完整时，zip保存压缩后的完整sql内容
+   * 当sql保存的内容不完整时，保存压缩后的完整sql内容
    */
-  zip?: string
+  compress?: compressSQLObject
+}
+
+declare interface compressSQLObject {
+  /**
+   * 完整sql长度
+   */
+  len: number
+  /**
+   * 当sql保存的内容不完整时，保存压缩后的完整sql内容
+   */
+  data: string
 }
 
 declare interface clientInfo {
