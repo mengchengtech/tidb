@@ -10,6 +10,7 @@ import (
 
 var (
 	_ zapcore.ObjectMarshaler = &logSQLTraceObject{}
+	_ zapcore.ObjectMarshaler = &compressSQLObject{}
 	_ zapcore.ObjectMarshaler = &logTimeObject{}
 	_ zapcore.ObjectMarshaler = &copTimeObject{}
 	_ zapcore.ObjectMarshaler = &txTimeObject{}
@@ -43,7 +44,7 @@ type logSQLTraceObject struct {
 	digest   string             // sql 语句的hash
 	warnings *logWarningObjects // 执行中生成的警告信息
 	sql      string             // 原始sql，或sql片断
-	zip      []byte             // 压缩后的sql文本
+	compress *compressSQLObject // 压缩后的SQL信息
 	err      error              // sql执行错误信息
 }
 
@@ -98,8 +99,10 @@ func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	}
 
 	enc.AddString("sql", st.sql)
-	if len(st.zip) > 0 {
-		enc.AddBinary("zip", st.zip)
+	if st.compress != nil {
+		if err := enc.AddObject("compress", st.compress); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -113,6 +116,7 @@ type clientInfo struct {
 	pkg     string // 执行当前sql的依赖包
 }
 
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
 func (t *clientInfo) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("conn", encode(t.conn))
 	enc.AddString("address", t.address)
@@ -127,15 +131,16 @@ func (t *clientInfo) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	return nil
 }
 
-type logTimeObject struct {
-	all   time.Duration // 执行总时间，执行 SQL 耗费的自然时间
-	parse time.Duration // 解析语法树用时，含mctech扩展
-	plan  time.Duration // 生成执行计划耗时
-	tidb  time.Duration // tidb-server里用时
-	send  time.Duration // 发送到客户端用时
+type compressSQLObject struct {
+	len  int    // 原始sql长度
+	data []byte // 压缩后的sql文本数据
+}
 
-	cop copTimeObject // cop task相关的时间
-	tx  *txTimeObject // 提交事务相关的信息（含显示事务/隐式事务）
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
+func (s *compressSQLObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddBinary("data", s.data)
+	enc.AddInt("len", s.len)
+	return nil
 }
 
 type copTimeObject struct {
@@ -144,6 +149,7 @@ type copTimeObject struct {
 	tiflash time.Duration // 从执行计划中汇总统计的TiFlash执行Coprocessor 耗时
 }
 
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
 func (t *copTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("wall", t.wall)
 	enc.AddDuration("tikv", t.tikv)
@@ -156,10 +162,22 @@ type txTimeObject struct {
 	commit   time.Duration // 事务两阶段提交中第二阶段（commit 阶段）的耗时
 }
 
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
 func (t *txTimeObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddDuration("prewrite", t.prewrite)
 	enc.AddDuration("commit", t.commit)
 	return nil
+}
+
+type logTimeObject struct {
+	all   time.Duration // 执行总时间，执行 SQL 耗费的自然时间
+	parse time.Duration // 解析语法树用时，含mctech扩展
+	plan  time.Duration // 生成执行计划耗时
+	tidb  time.Duration // tidb-server里用时
+	send  time.Duration // 发送到客户端用时
+
+	cop copTimeObject // cop task相关的时间
+	tx  *txTimeObject // 提交事务相关的信息（含显示事务/隐式事务）
 }
 
 // MarshalLogObject implements the zapcore.ObjectMarshaler interface.
@@ -235,6 +253,7 @@ func (lw *logWarningObjects) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 
 type warningObjects []*logWarningObject
 
+// MarshalLogArray implements the zapcore.ArrayMarshaler interface.
 func (w warningObjects) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 	for _, o := range w {
 		if err := enc.AppendObject(o); err != nil {
@@ -249,6 +268,7 @@ type logWarningObject struct {
 	extra bool
 }
 
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
 func (lw *logWarningObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 	enc.AddString("msg", lw.msg)
 	enc.AddBool("extra", lw.extra)

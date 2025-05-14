@@ -371,7 +371,10 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		if _, err := gz.Write([]byte(origSQL)); err == nil {
 			if err := gz.Flush(); err == nil {
 				if err := gz.Close(); err == nil {
-					traceLog.zip = b.Bytes()
+					traceLog.compress = &compressSQLObject{
+						len:  sqlLen,
+						data: b.Bytes(),
+					}
 					traceLog.sql = origSQL[:prefixEnd] + ellipsis + origSQL[suffixStart:] + fmt.Sprintf("len(%d)", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
