@@ -43,31 +43,44 @@ func GetFullSQL(at types.Time, txID int64, group string) (sql string, isNull boo
 	date := gotime.Format(dateFormat)
 	hour := strconv.Itoa(gotime.Hour())
 	minute := strconv.Itoa(gotime.Minute())
-	fileDir := path.Join(fullSQLDir, date, hour, minute)
-	fullPath := path.Join(fileDir, fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID))
-	// 先使用带分钟的路径查询文件
-	if _, err := os.Stat(fullPath); err != nil {
-		if pe, ok := err.(*os.PathError); ok {
-			// 不存在时再使用不含分钟的路径查询文件
-			if pe.Err == syscall.ENOENT {
-				// TODO: 等存留的旧的SQL日志文件自然过期后就可以不用尝试下面的方式
-				fileDir = path.Join(fullSQLDir, date, hour)
-				fullPath = path.Join(fileDir, fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID))
-				if _, err = os.Stat(fullPath); err != nil {
-					if pe, ok = err.(*os.PathError); ok {
-						if pe.Err == syscall.ENOENT {
-							return "", true, nil
-						}
-					}
-				}
-				err = nil
-			}
+	second := strconv.Itoa(gotime.Second())
+	fileName := fmt.Sprintf("%d-%d.gz", gotime.UnixMilli(), txID)
+	// FIXME: 等所现有旧的格式的日志自然清除后直接只保留最全的格式
+	timeDirs := []string{
+		path.Join(hour, minute, second), // {hour}/{minute}/{second}
+		// Duplicated
+		path.Join(hour, minute), // {hour}/{minute}
+		// Duplicated
+		path.Join(hour), // {hour}
+	}
+
+	var fullPath string
+	for _, timeDir := range timeDirs {
+		tempPath := path.Join(fullSQLDir, date, timeDir, fileName)
+		if _, err = os.Stat(tempPath); err == nil {
+			// 找到文件
+			fullPath = tempPath
+			break
 		}
 
-		if err != nil {
-			logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
-			return "", true, fmt.Errorf("get compress sql file error, [%s, %d, %s]", at, txID, group)
+		// 未找到文件或者发生其它错误
+		if pe, ok := err.(*os.PathError); ok {
+			if pe.Err != syscall.ENOENT {
+				// 发生其它错误，退出循环
+				break
+			}
+			// 文件不存在，忽略错误
+			err = nil
 		}
+	}
+
+	if err != nil {
+		logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+		return "", true, fmt.Errorf("get compress sql file error, [%s, %d, %s]", at, txID, group)
+	}
+
+	if len(fullPath) == 0 {
+		return "", true, nil
 	}
 
 	var fi *os.File
