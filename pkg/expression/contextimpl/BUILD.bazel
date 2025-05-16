@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "contextimpl",
-    srcs = ["sessionctx.go"],
+    srcs = [
+        "a_mctech.go",
+        "sessionctx.go",
+    ],
     importpath = "github.com/pingcap/tidb/pkg/expression/contextimpl",
     visibility = ["//visibility:public"],
     deps = [
@@ -19,6 +22,7 @@ go_library(
         "//pkg/sessionctx/variable",
         "//pkg/types",
         "//pkg/util",
+        "//pkg/util/context",
         "//pkg/util/intest",
         "//pkg/util/logutil",
         "//pkg/util/mathutil",

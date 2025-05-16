@@ -23,11 +23,15 @@ import (
 	"github.com/pingcap/tidb/pkg/sessionctx/stmtctx"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/types"
+	vsctx "github.com/pingcap/tidb/pkg/util/context"
 	"github.com/pingcap/tidb/pkg/util/mathutil"
 )
 
 // EvalContext is used to evaluate an expression
 type EvalContext interface {
+	// add by zhangbing
+	VSCtx() vsctx.ValueStoreContext
+	// add end
 	// CtxID indicates the id of the context.
 	CtxID() uint64
 	// SQLMode returns the sql mode
