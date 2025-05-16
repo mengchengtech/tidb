@@ -59,6 +59,7 @@ go_test(
     name = "ttlworker_test",
     timeout = "moderate",
     srcs = [
+        "a_mctech_test.go",
         "del_test.go",
         "job_manager_integration_test.go",
         "job_manager_test.go",

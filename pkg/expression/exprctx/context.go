@@ -63,6 +63,9 @@ func (a *SimplePlanColumnIDAllocator) GetLastPlanColumnID() int64 {
 type EvalContext interface {
 	contextutil.WarnHandler
 	ParamValues
+	// add by zhangbing
+	VSCtx() contextutil.ValueStoreContext
+	// add end
 	// CtxID indicates the id of the context.
 	CtxID() uint64
 	// SQLMode returns the sql mode

@@ -23,6 +23,7 @@ const (
 	MCEncrypt         = "mc_encrypt"
 	MCSeqDecode       = "mc_seq_decode"
 	MCGetFullSql      = "mc_get_full_sql"
+	MCDWIndexInfo     = "mc_dw_index_info"
 
 	// 全名
 	MCTechSequence        = "mctech_sequence"
@@ -31,6 +32,8 @@ const (
 	MCTechEncrypt         = "mctech_encrypt"
 	MCTechSequenceDecode  = "mctech_sequence_decode"
 	MCTechGetFullSql      = "mctech_get_full_sql"
+	// 获取数仓库的索引信息
+	MCTechDataWarehouseIndexInfo = "mctech_get_data_warehouse_index_info"
 )
 
 type MCTechStmt struct {

@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "sessionexpr",
-    srcs = ["sessionctx.go"],
+    srcs = [
+        "a_mctech.go",
+        "sessionctx.go",
+    ],
     importpath = "github.com/pingcap/tidb/pkg/expression/sessionexpr",
     visibility = ["//visibility:public"],
     deps = [
