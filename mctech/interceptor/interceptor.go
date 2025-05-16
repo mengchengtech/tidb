@@ -375,7 +375,7 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 						len:  sqlLen,
 						data: b.Bytes(),
 					}
-					traceLog.sql = origSQL[:prefixEnd] + ellipsis + origSQL[suffixStart:] + fmt.Sprintf("len(%d)", sqlLen)
+					traceLog.sql = origSQL[:prefixEnd] + ellipsis + origSQL[suffixStart:] + fmt.Sprintf(" [len(%d)]", sqlLen)
 				} else {
 					log.Error("trace sql error", zap.Error(err))
 				}

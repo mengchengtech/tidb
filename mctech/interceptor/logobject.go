@@ -44,7 +44,7 @@ type logSQLTraceObject struct {
 	digest   string             // sql 语句的hash
 	warnings *logWarningObjects // 执行中生成的警告信息
 	sql      string             // 原始sql，或sql片断
-	compress *compressSQLObject // 压缩后的SQL信息
+	compress *compressSQLObject // 当sql保存的内容不完整时，保存压缩后的完整sql内容
 	err      error              // sql执行错误信息
 }
 
@@ -132,7 +132,7 @@ func (t *clientInfo) MarshalLogObject(enc zapcore.ObjectEncoder) error {
 }
 
 type compressSQLObject struct {
-	len  int    // 原始sql长度
+	len  int    // 原始sql字符串字节长度
 	data []byte // 压缩后的sql文本数据
 }
 

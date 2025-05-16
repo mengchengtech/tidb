@@ -107,11 +107,11 @@ declare interface FullTraceLog {
 
 declare interface compressSQLObject {
   /**
-   * 完整sql长度
+   * 原始sql字符串字节长度
    */
   len: number
   /**
-   * 当sql保存的内容不完整时，保存压缩后的完整sql内容
+   * 压缩后的sql文本数据
    */
   data: string
 }
