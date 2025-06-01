@@ -1,12 +1,12 @@
-package digestworker_test
+package worker_test
 
 import (
 	"testing"
 	"time"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/pkg/mctech/digestworker"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
+	"github.com/pingcap/tidb/pkg/mctech/worker"
 	"github.com/pingcap/tidb/pkg/session"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
@@ -21,7 +21,7 @@ func TestReloadDenyDigests(t *testing.T) {
 	}()
 	store := testkit.CreateMockStore(t)
 	dom, _ := session.GetDomain(store)
-	m := digestworker.NewDigestManager(nil)
+	m := worker.NewDigestManager(nil)
 	dom.SetDenyDigestManagerForTest(m)
 	tk := testkit.NewTestKit(t, store)
 	initDbAndData(tk)
