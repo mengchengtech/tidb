@@ -31,7 +31,7 @@ func TestReloadDenyDigests(t *testing.T) {
 	require.Nil(t, info1)
 	info2 := m.Get("digest-2")
 	require.NotNil(t, info2)
-	require.Equal(t, info2.ExpiredAt(), time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local))
+	require.Equal(t, info2.ExpiredAt, time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local))
 }
 
 func initDbAndData(tk *testkit.TestKit) {

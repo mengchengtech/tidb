@@ -6,9 +6,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
 )
 
-// DenyDigestInfo exports the denyDigestInfo for test
-type DenyDigestInfo = denyDigestInfo
-
 // DenyDigests returns the deny digests
 func (m *DigestManager) DenyDigests() map[string]*DenyDigestInfo {
 	return m.getDenyDigests()

@@ -12,25 +12,17 @@ import (
 	"go.uber.org/zap"
 )
 
-// DenyDigestInfo DenyDigestInfo interface
-type DenyDigestInfo interface {
-	// 被拒绝执行的sql配置的digest失效时间
-	ExpiredAt() time.Time
-	// 设置最后一次请求时间
-	SetLastRequestTime(time.Time)
-}
-
 // DenyDigestManager DenyDigestManager interface
 type DenyDigestManager interface {
 	// Get 是否拒绝执行 digest 对应的sql
-	Get(digest string) (DenyDigestInfo, bool)
+	Get(digest string) (*mctechworker.DenyDigestInfo, bool)
 }
 
 type denyDigestManager struct {
 	mgr *mctechworker.DigestManager
 }
 
-func (m *denyDigestManager) Get(digest string) (DenyDigestInfo, bool) {
+func (m *denyDigestManager) Get(digest string) (*mctechworker.DenyDigestInfo, bool) {
 	info := m.mgr.Get(digest)
 	return info, info != nil
 }

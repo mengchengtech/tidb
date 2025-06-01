@@ -32,21 +32,10 @@ const (
 	workerStatusStopped
 )
 
-type denyDigestInfo struct {
-	expiredAt       time.Time
-	lastRequestTime *time.Time
-}
-
-func (d *denyDigestInfo) ExpiredAt() time.Time {
-	return d.expiredAt
-}
-
-func (d *denyDigestInfo) LastRequestTime() *time.Time {
-	return d.lastRequestTime
-}
-
-func (d *denyDigestInfo) SetLastRequestTime(t time.Time) {
-	d.lastRequestTime = &t
+// DenyDigestInfo 禁止执行的sql语句信息
+type DenyDigestInfo struct {
+	ExpiredAt       time.Time
+	LastRequestTime *time.Time
 }
 
 type sessionPool interface {
@@ -55,13 +44,13 @@ type sessionPool interface {
 }
 
 type digestScheduler interface {
-	Get(digest string) *denyDigestInfo
+	Get(digest string) *DenyDigestInfo
 	Start()
 	Stop()
 	WaitStopped(ctx context.Context, timeout time.Duration) error
 
-	getDenyDigests() map[string]*denyDigestInfo
-	setDenyDigests(digests map[string]*denyDigestInfo)
+	getDenyDigests() map[string]*DenyDigestInfo
+	setDenyDigests(digests map[string]*DenyDigestInfo)
 	reloadDenyDigests(se sqlexec.SQLExecutor) error
 	updateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error
 }
@@ -75,7 +64,7 @@ type nopDigestScheduler struct {
 }
 
 // Get get denyDigestInfo
-func (m *nopDigestScheduler) Get(digest string) *denyDigestInfo {
+func (m *nopDigestScheduler) Get(digest string) *DenyDigestInfo {
 	return nil
 }
 
@@ -87,11 +76,11 @@ func (m *nopDigestScheduler) WaitStopped(ctx context.Context, timeout time.Durat
 	return nil
 }
 
-func (m *nopDigestScheduler) setDenyDigests(digests map[string]*denyDigestInfo) {
+func (m *nopDigestScheduler) setDenyDigests(digests map[string]*DenyDigestInfo) {
 	panic(errors.New("[setDenyDigests] not supported"))
 }
 
-func (m *nopDigestScheduler) getDenyDigests() map[string]*denyDigestInfo {
+func (m *nopDigestScheduler) getDenyDigests() map[string]*DenyDigestInfo {
 	panic(errors.New("[getDenyDigests] not supported"))
 }
 
@@ -112,7 +101,7 @@ type defaultDigestScheduler struct {
 	wg     util.WaitGroupWrapper
 
 	sessPool              sessionPool
-	denyDigests           map[string]*denyDigestInfo
+	denyDigests           map[string]*DenyDigestInfo
 	scheduleTicker        *time.Ticker
 	updateHeartBeatTicker *time.Ticker
 }
@@ -181,10 +170,10 @@ func (m *defaultDigestScheduler) WaitStopped(ctx context.Context, timeout time.D
 }
 
 // Get get denyDigestInfo
-func (m *defaultDigestScheduler) Get(digest string) *denyDigestInfo {
+func (m *defaultDigestScheduler) Get(digest string) *DenyDigestInfo {
 	failpoint.Inject("GetDenyDigestInfo", func(val failpoint.Value) {
 		if val.(string) == digest {
-			at := &denyDigestInfo{expiredAt: time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local)}
+			at := &DenyDigestInfo{ExpiredAt: time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local)}
 			failpoint.Return(at)
 		}
 	})
@@ -236,26 +225,26 @@ func (m *defaultDigestScheduler) digestLoop() (err error) {
 	}
 }
 
-func (m *defaultDigestScheduler) setDenyDigests(digests map[string]*denyDigestInfo) {
+func (m *defaultDigestScheduler) setDenyDigests(digests map[string]*DenyDigestInfo) {
 	m.denyDigests = digests
 }
 
-func (m *defaultDigestScheduler) getDenyDigests() map[string]*denyDigestInfo {
+func (m *defaultDigestScheduler) getDenyDigests() map[string]*DenyDigestInfo {
 	return m.denyDigests
 }
 
 func (m *defaultDigestScheduler) updateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
 	ctx = kv.WithInternalSourceType(ctx, "digestManager")
 	for digest, info := range m.denyDigests {
-		if info.lastRequestTime == nil {
+		if info.LastRequestTime == nil {
 			continue
 		}
 		sql := updateDigestRequestTemplate
-		args := []any{*info.lastRequestTime, digest}
+		args := []any{*info.LastRequestTime, digest}
 		if _, err := se.ExecuteInternal(ctx, sql, args...); err != nil {
 			return errors.Wrapf(err, "execute sql: %s", sql)
 		}
-		info.lastRequestTime = nil
+		info.LastRequestTime = nil
 	}
 	return nil
 }
@@ -280,25 +269,31 @@ func (m *defaultDigestScheduler) reloadDenyDigests(se sqlexec.SQLExecutor) error
 		return err
 	}
 
-	newMap := make(map[string]*denyDigestInfo, len(rows))
+	newMap := make(map[string]*DenyDigestInfo, len(rows))
 	for _, row := range rows {
 		digest := row.GetString(0)
 		at, err := row.GetTime(1).GoTime(time.Local)
 
-		var info *denyDigestInfo
+		var info *DenyDigestInfo
 		if info = m.denyDigests[digest]; info == nil {
 			if err != nil {
 				return err
 			}
-			info = &denyDigestInfo{expiredAt: at}
+			info = &DenyDigestInfo{ExpiredAt: at}
 		} else {
-			info.expiredAt = at
+			info.ExpiredAt = at
 		}
 		newMap[digest] = info
 	}
 	m.denyDigests = newMap
 
 	return nil
+}
+
+// DenyDigestManager DenyDigestManager interface
+type DenyDigestManager interface {
+	// Get 是否拒绝执行 digest 对应的sql
+	Get(digest string) (*DenyDigestInfo, bool)
 }
 
 // NewDigestManager creates a new digest manager
@@ -310,7 +305,7 @@ func NewDigestManager(sessPool sessionPool) *DigestManager {
 			ctx:                   logutil.WithKeyValue(ctx, "deny-digest-worker", "deny-digest-manager"),
 			cancel:                cancel,
 			sessPool:              sessPool,
-			denyDigests:           make(map[string]*denyDigestInfo, 0),
+			denyDigests:           make(map[string]*DenyDigestInfo, 0),
 			scheduleTicker:        time.NewTicker(digestManagerLoopTickerInterval),
 			updateHeartBeatTicker: time.NewTicker(digestManagerLoopTickerInterval),
 		}
