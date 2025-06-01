@@ -149,7 +149,7 @@ func ignoreTrace(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode
 	databases := metrics.Ignore.ByDatabases
 	var dbs []string
 	if stmt != nil {
-		dbs = mctx.GetDbs(stmt)
+		dbs = mctx.GetSchema(stmt).Databases
 	} else {
 		dbs = []string{sctx.GetSessionVars().CurrentDB}
 	}
@@ -385,10 +385,9 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		}
 	}
 
-	lst := mctx.GetDbs(stmt)
-	if len(lst) > 0 {
-		traceLog.dbs = strings.Join(lst, ",")
-	}
+	schema := mctx.GetSchema(stmt)
+	traceLog.dbs = strings.Join(schema.Databases, ",")
+	traceLog.tables = schema.Tables
 	if result := mctx.PrepareResult(); result != nil {
 		traceLog.tenant = result.Tenant().Code()
 		if params := result.Params(); params != nil {

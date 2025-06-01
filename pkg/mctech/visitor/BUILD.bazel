@@ -3,8 +3,8 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "visitor",
     srcs = [
-        "database_name_visitor.go",
         "isolation_condition_visitor.go",
+        "table_name_visitor.go",
         "util.go",
     ],
     importpath = "github.com/pingcap/tidb/pkg/mctech/visitor",
@@ -14,6 +14,7 @@ go_library(
         "//pkg/parser/ast",
         "//pkg/parser/model",
         "//pkg/parser/opcode",
+        "@com_github_pingcap_failpoint//:failpoint",
     ],
 )
 
@@ -21,9 +22,9 @@ go_test(
     name = "visitor_test",
     timeout = "short",
     srcs = [
-        "database_name_visitor_test.go",
         "isolation_condition_visitor_test.go",
         "main_test.go",
+        "table_name_visitor_test.go",
     ],
     flaky = True,
     deps = [
