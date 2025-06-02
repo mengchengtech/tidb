@@ -12,8 +12,10 @@ import (
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/prepare"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
-	"github.com/pingcap/tidb/pkg/planner/core"
+	plannercore "github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/util/execdetails"
@@ -146,10 +148,16 @@ func (*interceptor) AfterHandleStmt(sctx sessionctx.Context, stmt ast.StmtNode, 
 
 // ignoreTrace 是否跳过记录sql跟踪日志
 func ignoreTrace(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode, metrics *config.MctechMetrics) bool {
+	switch stmt.(type) {
+	case *ast.PrepareStmt, *prepare.BinaryPrepareStmt:
+		// FIXME: 暂时不记录 prepare 语句和 prepare 命令
+		return true
+	}
 	databases := metrics.Ignore.ByDatabases
 	var dbs []string
 	if stmt != nil {
-		dbs = mctx.GetSchema(stmt).Databases
+		schema, _ := getSchemaAndDigest(sctx, mctx, stmt)
+		dbs = schema.Databases
 	} else {
 		dbs = []string{sctx.GetSessionVars().CurrentDB}
 	}
@@ -263,6 +271,12 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		case *ast.ExecuteStmt:
 			// 从对应的prepare语句中提取sql
 			origSQL = fetchFullExecuteSQL(typedStmt, sessVars)
+		case *ast.PrepareStmt:
+			// 从对应的prepare语句中提取sql
+			origSQL = fetchFullParepareSQL(typedStmt, sessVars)
+		case *prepare.BinaryPrepareStmt:
+			// 从对应的prepare语句中提取sql
+			origSQL = fetchFullParepareSQL(typedStmt, sessVars)
 		default:
 			origSQL = stmt.OriginalText()
 		}
@@ -316,7 +330,7 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		// 另一方面 传入的 execStmt 参数的实例也是在 session.ExecuteStmt 方法内部创建的, 并且创建时间还在 StmtCtx 重置状态后。
 		// 因此可以认为只要 execStmt 有值，则StmtCtx的值一定也是最新的，反之当execStmt为nil时，StmtCtx 的状态不确定，此时不能使用
 		if stmtCtx := sessVars.StmtCtx; stmtCtx != nil {
-			if plan, ok := stmtCtx.GetPlan().(core.Plan); ok {
+			if plan, ok := stmtCtx.GetPlan().(plannercore.Plan); ok {
 				traceLog.rows = executor.GetResultRowsCount(stmtCtx, plan)
 			}
 			// 添加开发辅助代码
@@ -355,8 +369,6 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 					traceLog.times.tx = &txTimeObject{prewrite: cd.PrewriteTime, commit: cd.CommitTime}
 				}
 			}
-			_, d := stmtCtx.SQLDigest()
-			traceLog.digest = d.String()
 		}
 	}
 
@@ -385,7 +397,9 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		}
 	}
 
-	schema := mctx.GetSchema(stmt)
+	schema, d := getSchemaAndDigest(sctx, mctx, stmt)
+	traceLog.digest = d.String()
+
 	traceLog.dbs = strings.Join(schema.Databases, ",")
 	traceLog.tables = schema.Tables
 	if result := mctx.PrepareResult(); result != nil {
@@ -415,7 +429,7 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sqlStmtInfo) {
 	switch s := stmt.(type) {
 	case *ast.ExecuteStmt:
-		if prepStmt, err := core.GetPreparedStmt(s, sessVars); err != nil {
+		if prepStmt, err := plannercore.GetPreparedStmt(s, sessVars); err != nil {
 			panic(err)
 		} else {
 			raw := getSQLStmtInfo(prepStmt.PreparedAst.Stmt, sessVars)
@@ -423,7 +437,7 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 				info = &sqlStmtInfo{"exec", raw.sqlType, raw.modified}
 			}
 		}
-	case *ast.PrepareStmt:
+	case *ast.PrepareStmt, *prepare.BinaryPrepareStmt:
 		info = sqlPrepareInfo
 	case *ast.DeallocateStmt:
 		info = sqlDeallocateInfo
@@ -477,4 +491,38 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		info = nil
 	}
 	return info
+}
+
+func getSchemaAndDigest(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode) (mctech.StmtSchemaInfo, *parser.Digest) {
+	var (
+		planCacheStmt *plannercore.PlanCacheStmt
+		digest        *parser.Digest
+	)
+	switch rawStmt := stmt.(type) {
+	case *ast.PrepareStmt:
+		stmtName := rawStmt.Name
+		vars := sctx.GetSessionVars()
+		prepStmt, err := vars.GetPreparedStmtByName(stmtName)
+		if err != nil {
+			panic(err)
+		}
+		planCacheStmt = prepStmt.(*plannercore.PlanCacheStmt)
+	case *prepare.BinaryPrepareStmt:
+		planCacheStmt = rawStmt.PrepStmt.(*plannercore.PlanCacheStmt)
+	case *ast.ExecuteStmt:
+		planCacheStmt = rawStmt.PrepStmt.(*plannercore.PlanCacheStmt)
+	}
+
+	var targetStmt ast.StmtNode
+	if planCacheStmt != nil {
+		// prepare, execute语句特殊处理
+		targetStmt = planCacheStmt.PreparedAst.Stmt
+		digest = planCacheStmt.SQLDigest
+	} else {
+		targetStmt = stmt
+		if stmtCtx := sctx.GetSessionVars().StmtCtx; stmtCtx != nil {
+			_, digest = stmtCtx.SQLDigest()
+		}
+	}
+	return mctx.GetSchema(targetStmt), digest
 }

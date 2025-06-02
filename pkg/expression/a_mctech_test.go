@@ -342,3 +342,7 @@ func (*testFlagRoles) TenantOnly() bool {
 func (*testFlagRoles) AcrossDB() bool {
 	return false
 }
+
+func (*testFlagRoles) TryMerge(mctech.FlagRoles) bool {
+	return true
+}

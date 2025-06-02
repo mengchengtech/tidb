@@ -3,10 +3,13 @@ package interceptor
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/mctech/prepare"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/planner/core"
@@ -56,6 +59,34 @@ func mustCompress(sqlLen int, threshold int) (int, int, bool) {
 	// 截取sql最后字符串的起始位置
 	suffixStart := sqlLen - maxInt(0, minInt(sqlSuffixLen, threshold-sqlPrefixLen))
 	return prefixEnd, suffixStart, true
+}
+
+func fetchFullParepareSQL(prepareStmt any, sessVars *variable.SessionVars) (origSQL string) {
+	var (
+		prepStmt *core.PlanCacheStmt
+		sb       strings.Builder
+		err      error
+	)
+	switch t := prepareStmt.(type) {
+	case *prepare.BinaryPrepareStmt:
+		prepStmt = t.PrepStmt.(*core.PlanCacheStmt)
+		sb.WriteString(";Type=Binary")
+	case *ast.PrepareStmt:
+		var prep any
+		if prep, err = sessVars.GetPreparedStmtByName(t.Name); err != nil {
+			panic(err)
+		}
+		prepStmt = prep.(*core.PlanCacheStmt)
+		sb.WriteString(";Type=SQL;Name=" + t.Name)
+	default:
+		panic(fmt.Errorf("not supported type. (%v)", reflect.TypeOf(prepareStmt)))
+	}
+	origSQL = prepStmt.PreparedAst.Stmt.OriginalText()
+
+	if sb.Len() > 0 {
+		origSQL += sb.String()
+	}
+	return origSQL
 }
 
 func fetchFullExecuteSQL(executeStmt *ast.ExecuteStmt, sessVars *variable.SessionVars) (origSQL string) {

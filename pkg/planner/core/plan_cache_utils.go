@@ -206,6 +206,9 @@ func GeneratePlanCacheStmtWithAST(ctx context.Context, sctx sessionctx.Context, 
 	}
 
 	preparedObj := &PlanCacheStmt{
+		// add by zhangbing
+		MCTechExtensions: NewMCTechExtensions(sctx, paramStmt),
+		// add end
 		PreparedAst:         prepared,
 		StmtDB:              vars.CurrentDB,
 		StmtText:            paramSQL,
@@ -514,6 +517,9 @@ func (*PlanCacheQueryFeatures) Leave(in ast.Node) (out ast.Node, ok bool) {
 
 // PlanCacheStmt store prepared ast from PrepareExec and other related fields
 type PlanCacheStmt struct {
+	// add by zhangbing
+	MCTechExtensions
+	// add end
 	PreparedAst *ast.Prepared
 	StmtDB      string // which DB the statement will be processed over
 	VisitInfos  []visitInfo

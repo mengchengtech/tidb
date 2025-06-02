@@ -164,6 +164,12 @@ func (r *mctechFlagRoles) AcrossDB() bool {
 	return r.acrossDB
 }
 
+func (r *mctechFlagRoles) TryMerge(other mctech.FlagRoles) bool {
+	return r.tenantOmit == other.TenantOmit() ||
+		r.tenantOnly == other.TenantOnly() ||
+		r.acrossDB == other.AcrossDB()
+}
+
 func newFlagRoles(tenantOnly, tenantOmit, acrossDB bool) (*mctechFlagRoles, error) {
 	if tenantOnly && tenantOmit {
 		return nil, errors.New("当前用户不允许同时包含'租户隔离'和'忽略租户'角色")

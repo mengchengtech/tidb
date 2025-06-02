@@ -24,8 +24,64 @@ import (
 	"github.com/pingcap/tidb/pkg/types"
 	"github.com/pingcap/tidb/pkg/util/chunk"
 	"github.com/pingcap/tidb/pkg/util/codec"
+	"github.com/pingcap/tidb/pkg/util/intest"
 	"github.com/pingcap/tidb/pkg/util/rowcodec"
 )
+
+// MCTechExtensions mctech extension interface to extend PlanCacheStmt struct
+type MCTechExtensions interface {
+	mctech.Resolved
+	Schema() mctech.StmtSchemaInfo
+}
+
+type mctechExtensions struct {
+	prepareResult    mctech.PrepareResult
+	schema           mctech.StmtSchemaInfo
+	sqlRewrited      bool
+	sqlHasGlobalDB   bool
+	usingTenantParam bool
+}
+
+var (
+	_ mctech.Resolved  = &mctechExtensions{}
+	_ MCTechExtensions = &mctechExtensions{}
+)
+
+func (e *mctechExtensions) PrepareResult() mctech.PrepareResult {
+	return e.prepareResult
+}
+
+func (e *mctechExtensions) Schema() mctech.StmtSchemaInfo {
+	return e.schema
+}
+
+func (e *mctechExtensions) SQLRewrited() bool {
+	return e.sqlRewrited
+}
+
+func (e *mctechExtensions) SQLHasGlobalDB() bool {
+	return e.sqlHasGlobalDB
+}
+
+func (e *mctechExtensions) UsingTenantParam() bool {
+	return e.usingTenantParam
+}
+
+// NewMCTechExtensions create MCTechExtensions interface instance
+func NewMCTechExtensions(sctx sessionctx.Context, stmt ast.StmtNode) MCTechExtensions {
+	mctx := mctech.GetContextStrict(sctx)
+	if mctx == nil && intest.InTest {
+		return &mctechExtensions{}
+	}
+	return &mctechExtensions{
+		prepareResult: mctx.PrepareResult(),
+		schema:        mctx.GetSchema(stmt),
+
+		sqlRewrited:      mctx.SQLRewrited(),
+		sqlHasGlobalDB:   mctx.SQLHasGlobalDB(),
+		usingTenantParam: mctx.UsingTenantParam(),
+	}
+}
 
 func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan, error) {
 	p := &MCTech{
@@ -327,6 +383,12 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 	if mctx, err = mctech.GetContext(sctx); err != nil {
 		return err
 	}
+
+	// 替换其中的一部分信息
+	extensions := e.PrepStmt.MCTechExtensions
+	modifyContext := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyContext.SetResolved(extensions)
+	modifyContext.SetSchema(e.PrepStmt.PreparedAst.Stmt, extensions.Schema())
 
 	var (
 		tenantValue expression.Expression
