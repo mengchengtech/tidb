@@ -9,6 +9,7 @@ import (
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/pingcap/tidb/pkg/mctech/preps"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,16 +58,6 @@ func (c *testDatabaseCheckerCase) Failure() string {
 
 func (c *testDatabaseCheckerCase) Source(i int) any {
 	return fmt.Sprintf("(%d) %t -> %v", i, c.tenantOnly, c.dbs)
-}
-
-func newTestMCTechContext(roles mctech.FlagRoles, comments mctech.Comments, across string) (mctech.Context, error) {
-	result, err := mctech.NewPrepareResult("gslq", roles, comments, map[string]any{
-		"global": mctech.NewGlobalValue(false, nil, nil),
-		"across": across,
-	})
-	context := mctech.NewBaseContext(false)
-	context.(mctech.ModifyContext).SetPrepareResult(result)
-	return context, err
 }
 
 func TestDatabaseChecker(t *testing.T) {
@@ -139,7 +130,7 @@ func (a *mockStmtTextAware) OriginalText() string {
 	return "mock original text"
 }
 
-func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase) error {
+func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase, sctx sessionctx.Context) error {
 	option := config.GetMCTechConfig()
 	checker := preps.NewMutexDatabaseCheckerWithParamsForTest(
 		option.DbChecker.Mutex,
@@ -151,11 +142,20 @@ func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase) error {
 		return err
 	}
 	comments := preps.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
-	context, _ := newTestMCTechContext(roles, comments, c.across)
-	return checker.Check(context, &mockStmtTextAware{}, c.dbs)
+	result, err := mctech.NewPrepareResult("gslq", roles, comments, map[string]any{
+		"global": mctech.NewGlobalValue(false, nil, nil),
+		"across": c.across,
+	})
+	if err != nil {
+		panic(err)
+	}
+	mctx, _ := mctech.WithNewContext(sctx)
+	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx.SetPrepareResult(result)
+	return checker.Check(mctx, &mockStmtTextAware{}, c.dbs)
 }
 
-func filterRunTestCase(t *testing.T, i int, c *testStringFilterCase) error {
+func filterRunTestCase(t *testing.T, i int, c *testStringFilterCase, _ sessionctx.Context) error {
 	p, ok := mctech.NewStringFilter(c.pattern)
 	require.True(t, ok)
 	success := p.Match(c.target)

@@ -3485,6 +3485,7 @@ func bootstrapSessionImpl(store kv.Storage, createSessionsImpl func(store kv.Sto
 	dom.StartTTLJobManager()
 	// add by zhangbing
 	dom.StartDenyDigestManager()
+	dom.StartServiceCrossDBManager()
 	// add end
 
 	analyzeCtxs, err := createSessions(store, analyzeConcurrencyQuota)

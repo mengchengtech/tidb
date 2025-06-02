@@ -18,11 +18,13 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//pkg/config",
+        "//pkg/domain",
         "//pkg/mctech",
         "//pkg/mctech/ddl",
         "//pkg/mctech/interceptor",
         "//pkg/mctech/misc",
         "//pkg/mctech/visitor",
+        "//pkg/mctech/worker",
         "//pkg/parser/ast",
         "//pkg/sessionctx",
         "//pkg/sessionctx/variable",

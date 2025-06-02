@@ -10,48 +10,76 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/pkg/config"
+	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/pingcap/tidb/pkg/mctech"
+	mctechworker "github.com/pingcap/tidb/pkg/mctech/worker"
+	"github.com/pingcap/tidb/pkg/util/intest"
 	"go.uber.org/zap"
 )
 
+type globalCrossDBInfo struct {
+	DBList []string
+}
+
 type databaseGrouper struct {
-	groups []string
+	groups []globalCrossDBInfo
 }
 
 func newDatabaseGrouper(groups []string) *databaseGrouper {
-	return &databaseGrouper{
-		groups: append(make([]string, 0, len(groups)), groups...),
+	grouper := &databaseGrouper{groups: make([]globalCrossDBInfo, 0, len(groups))}
+	for _, item := range groups {
+		grouper.groups = append(grouper.groups, globalCrossDBInfo{DBList: config.StrToSlice(item, "|")})
 	}
+	return grouper
 }
 
 // MatchGroup 检查给定的数据库名称是否完全包含于某个分组中
 // dbNames: 要分组的数据库称表
 // specialGroups: 除了初始默认的分组条件外，额外传入的只对本次生效的分组条件
-func (g *databaseGrouper) MatchGroup(dbNames []string, specialGroup string) bool {
-	gps := g.groups
+// info: 数据库中配置的给某个服务定制的跨库查询特殊配置
+func (g *databaseGrouper) MatchGroup(dbNames []string, specialGroup string, infoList []*mctechworker.ServiceCrossDBInfo) bool {
 	if len(specialGroup) > 0 {
-		gps = append([]string{}, gps...)
-		gps = append(gps, specialGroup)
-	}
-
-	// 先处理在分组中的数据库
-	for _, gp := range gps {
-		match := true
-		for _, dbName := range dbNames {
-			if !strings.Contains(gp, dbName) {
-				// 不包含在当前规则中
-				match = false
-				break
-			}
-		}
-
-		if match {
-			// 当前规则不能全包含所有用到的数据库
+		// sql中显示指定的需要跨库查询的数据库列表
+		if g.matchSingleGroup(dbNames, config.StrToSlice(specialGroup, "|")) {
 			return true
 		}
 	}
 
+	// 先匹配公共分组中的数据库组
+	for _, gp := range g.groups {
+		// 配置文件中指定的全局可以跨库查询的数据库列表
+		if g.matchSingleGroup(dbNames, gp.DBList) {
+			// 当前规则能够全部包含所有用到的数据库
+			return true
+		}
+	}
+
+	// 再匹配当前服务识别到的数据库组
+	for _, info := range infoList {
+		if info.AllowAll {
+			// 允许当前服务所有库跨库查询
+			return true
+		}
+
+		for _, gp := range info.Groups {
+			if g.matchSingleGroup(dbNames, gp.DBList) {
+				// 当前规则能够全部包含所有用到的数据库
+				return true
+			}
+		}
+	}
+
 	return false
+}
+func (g *databaseGrouper) matchSingleGroup(dbNames []string, dbList []string) bool {
+	for _, dbName := range dbNames {
+		if !slices.Contains(dbList, dbName) {
+			// 不包含在当前规则中
+			return false
+		}
+	}
+
+	return true
 }
 
 // StmtTextAware stmt aware
@@ -160,8 +188,31 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 		return nil
 	}
 
-	if match := c.acrossGrouper.MatchGroup(logicNames, specialGroup); match {
-		// 数据库全部属于一个分组
+	var infoList []*mctechworker.ServiceCrossDBInfo
+	if r := mctx.PrepareResult(); r != nil {
+		comments := r.Comments()
+		if comments != nil {
+			// 通过服务名称获取到的跨库查询的数据库列表信息
+			if svc := comments.Service(); svc != nil {
+				if info, err := getServiceCrossDBInfo(mctx, svc.From()); err != nil {
+					log.Error("get ServiceCrossDBInfo error", zap.String("type", "service"), zap.String("name", svc.From()), zap.Error(err))
+				} else if info != nil {
+					infoList = append(infoList, info)
+				}
+			}
+
+			// 通过包名称获取到的跨库查询的数据库列表信息
+			if pkg := comments.Package(); pkg != nil {
+				if info, err := getServiceCrossDBInfo(mctx, pkg.Name()); err != nil {
+					log.Error("get ServiceCrossDBInfo error", zap.String("type", "package"), zap.String("name", pkg.Name()), zap.Error(err))
+				} else if info != nil {
+					infoList = append(infoList, info)
+				}
+			}
+		}
+	}
+	if match := c.acrossGrouper.MatchGroup(logicNames, specialGroup, infoList); match {
+		// 数据库全部属于一个分组，或者允许跨库查询
 		return nil
 	}
 
@@ -196,6 +247,23 @@ func (c *mutexDatabaseChecker) dbPredicate(dbName string) bool {
 	}
 	// 不符合互斥数据库
 	return false
+}
+
+func getServiceCrossDBInfo(mctx mctech.Context, service string) (*mctechworker.ServiceCrossDBInfo, error) {
+	dom := domain.GetDomain(mctx.Session())
+	var (
+		mgr domain.ServiceCrossDBManager
+		ok  bool
+	)
+	if mgr, ok = dom.ServiceCrossDBManager(); !ok {
+		if !intest.InTest {
+			return nil, errors.New("Domain.serviceCrossDBManager is nil")
+		}
+		return nil, nil
+	}
+
+	info, _ := mgr.Get(service)
+	return info, nil
 }
 
 func checkExcepts(result mctech.PrepareResult) bool {

@@ -6,7 +6,7 @@ import (
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
-	"github.com/pingcap/tidb/pkg/mctech/worker"
+	mctechworker "github.com/pingcap/tidb/pkg/mctech/worker"
 	"github.com/pingcap/tidb/pkg/session"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
@@ -21,11 +21,12 @@ func TestReloadDenyDigests(t *testing.T) {
 	}()
 	store := testkit.CreateMockStore(t)
 	dom, _ := session.GetDomain(store)
-	m := worker.NewDigestManager(nil)
+	m := mctechworker.NewDigestManager(nil)
 	dom.SetDenyDigestManagerForTest(m)
 	tk := testkit.NewTestKit(t, store)
-	initDbAndData(tk)
-	m.ReloadDenyDigests(tk.Session())
+	initMCTechDenyDigest(tk)
+	err := m.ReloadAll(tk.Session())
+	require.NoError(t, err)
 
 	info1 := m.Get("digest-1")
 	require.Nil(t, info1)
@@ -34,16 +35,8 @@ func TestReloadDenyDigests(t *testing.T) {
 	require.Equal(t, info2.ExpiredAt, time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local))
 }
 
-func initDbAndData(tk *testkit.TestKit) {
-	createSQL := `CREATE TABLE IF NOT EXISTS mysql.mctech_deny_digest (
-		digest varchar(64) PRIMARY KEY,
-		created_at datetime not null,
-		expired_at datetime,
-		last_request_time datetime NULL,
-    query_sql longtext not null,
-		remark text
-	);`
-	tk.MustExec(createSQL)
+func initMCTechDenyDigest(tk *testkit.TestKit) {
+	tk.MustExec(mctechworker.CreateMCTechDenyDigest)
 	tk.MustExec(`insert into mysql.mctech_deny_digest
 	(digest, created_at, expired_at, last_request_time, query_sql)
 	values

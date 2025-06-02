@@ -181,7 +181,8 @@ type Domain struct {
 	resourceGroupsController *rmclient.ResourceGroupsController
 
 	// add by zhangbing
-	denyDigestManager atomic.Pointer[denyDigestManager]
+	denyDigestManager     atomic.Pointer[denyDigestManager]
+	serviceCrossDBManager atomic.Pointer[serviceCrossDBManager]
 	// add end
 
 	serverID             uint64

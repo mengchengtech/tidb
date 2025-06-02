@@ -16,3 +16,12 @@ func (do *Domain) SetDenyDigestManagerForTest(mgr *mctechworker.DigestManager) {
 	}
 	do.denyDigestManager.Store(&denyDigestManager{mgr})
 }
+
+// SetServiceCrossDBManagerForTest returns the deny digest manager on this domain
+func (do *Domain) SetServiceCrossDBManagerForTest(mgr *mctechworker.CrossDBManager) {
+	if !intest.InTest {
+		err := errors.New("[EncodeForTest] not allow invoke")
+		panic(err)
+	}
+	do.serviceCrossDBManager.Store(&serviceCrossDBManager{mgr})
+}
