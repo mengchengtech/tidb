@@ -61,6 +61,9 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
+		"tables": []any{
+			map[string]any{"db": "global_ec3", "table": "project_construction_quantity_contract_bill_part"},
+		},
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
 		"client": map[string]any{
 			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
@@ -113,6 +116,9 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "cscrc", "across": "global_sq|global_qa",
+		"tables": []any{
+			map[string]any{"db": "global_ec3", "table": "project_construction_quantity_contract_bill_part"},
+		},
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
 		"client": map[string]any{
 			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
@@ -158,6 +164,9 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq",
+		"tables": []any{
+			map[string]any{"db": "global_ec3", "table": "project_construction_quantity_contract_bill_part"},
+		},
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
 		"client": map[string]any{
 			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
@@ -208,6 +217,9 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 
 	require.Equal(t, map[string]any{
 		"db": "global_ec3", "dbs": "global_ec3", "usr": "root", "tenant": "gslq",
+		"tables": []any{
+			map[string]any{"db": "global_ec3", "table": "project_construction_quantity_contract_bill_part"},
+		},
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
 		"client": map[string]any{
 			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),
@@ -260,7 +272,7 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	require.NotNil(t, logData)
 
 	require.Equal(t, map[string]any{
-		"db": "global_ec3", "dbs": "", "usr": "root",
+		"db": "global_ec3", "usr": "root",
 		"at": now, "txId": interceptor.EncodeForTest(sessVars.TxnCtx.StartTS),
 		"client": map[string]any{
 			"conn":    interceptor.EncodeForTest(sessVars.ConnectionID),

@@ -87,10 +87,10 @@ func handlerRunTestCase(t *testing.T, i int, c *handlerTestCase, mctechCtx mctec
 	}
 
 	for _, stmt := range stmts {
-		dbs := mctechCtx.GetDbs(stmt)
-		require.Equal(t, len(c.dbs), len(dbs))
-		for _, db := range dbs {
-			require.Contains(t, dbs, db, c.Source(i))
+		schema, _ := mctechCtx.GetSchema(stmt)
+		require.Equal(t, len(c.dbs), len(schema.Databases))
+		for _, db := range schema.Databases {
+			require.Contains(t, schema.Databases, db, c.Source(i))
 		}
 	}
 	require.Equal(t, c.expectChanged, changed, c.Source(i))

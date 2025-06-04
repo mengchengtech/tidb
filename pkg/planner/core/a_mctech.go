@@ -5,6 +5,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"time"
@@ -59,13 +60,14 @@ func getDefaultFieldLength(tp byte) int {
 
 var columnDefs = []*columnDef{
 	{"global", mysql.TypeTiny, 1},
-	{"excludes", mysql.TypeVarchar, 1024},
-	{"includes", mysql.TypeVarchar, 1024},
+	{"excludes", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+	{"includes", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"comments", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
 	{"db", mysql.TypeVarchar, 50},
-	{"dbs", mysql.TypeVarchar, 512},
+	{"dbs", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+	{"tables", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"dw_index", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"params", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"prepared_sql", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
@@ -135,13 +137,14 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		global     *bool
 		excludes   []string
 		includes   []string
-		comments   = map[string]any{}
+		comments   mctech.Comments
 		tenant     *string
 		tenantFrom *string
-		params     = map[string]any{}
+		params     map[string]any
 		db         = e.SCtx().GetSessionVars().CurrentDB
-		dbs        = ""
-		index      = map[string]any(nil)
+		dbs        []string
+		tables     []mctech.TableName
+		index      map[string]any
 		restoreSQL = sb.String()
 	)
 
@@ -152,7 +155,13 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 			params = result.Params()
 			excludes = result.Global().Excludes()
 			includes = result.Global().Includes()
-			comments = result.Comments().ToMap()
+			if excludes == nil {
+				excludes = []string{}
+			}
+			if includes == nil {
+				includes = []string{}
+			}
+			comments = result.Comments()
 			tenantCode := result.Tenant().Code()
 			if tenantCode != "" {
 				tenant = toPtr(tenantCode)
@@ -169,20 +178,24 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 				index = info.ToMap()
 			}
 		}
-		dbs = strings.Join(mctx.GetDbs(e.Stmt), ",")
+		if schema, exists := mctx.GetSchema(e.Stmt); exists {
+			dbs = schema.Databases
+			tables = schema.Tables
+		}
 	}
 
 	var row = []*types.Datum{
 		createDatumByPrimitivePt(global),
-		createDatum(strings.Join(excludes, ",")),
-		createDatum(strings.Join(includes, ",")),
-		createDatum(types.CreateBinaryJSON(comments)),
+		createDatumByArray(excludes),
+		createDatumByArray(includes),
+		createDatumByObject(comments),
 		createDatumByPrimitivePt(tenant),
 		createDatumByPrimitivePt(tenantFrom),
 		createDatum(db),
-		createDatum(dbs),
-		createDatumByJSON(index),
-		createDatumByJSON(params),
+		createDatumByArray(dbs),
+		createDatumByArray(tables),
+		createDatumByObject(index),
+		createDatumByObject(params),
 		createDatum(restoreSQL),
 	}
 	e.Rows = append(e.Rows, row)
@@ -204,12 +217,43 @@ func createDatumByPrimitivePt[T any](value *T) *types.Datum {
 	return d
 }
 
-func createDatumByJSON(value map[string]any) *types.Datum {
+func createDatumByArray[T any](value []T) *types.Datum {
 	d := &types.Datum{}
 	if value == nil {
 		d.SetNull()
 	} else {
-		d.SetMysqlJSON(types.CreateBinaryJSON(value))
+		v := make([]any, 0, len(value))
+		for _, el := range value {
+			var anyEl any = el
+			switch target := anyEl.(type) {
+			case string:
+				v = append(v, target)
+			case mctech.TableName:
+				v = append(v, target.ToMap())
+			}
+		}
+		d.SetMysqlJSON(types.CreateBinaryJSON(v))
+	}
+	return d
+}
+
+func createDatumByObject(value any) *types.Datum {
+	d := &types.Datum{}
+	if value == nil {
+		d.SetNull()
+	} else {
+		if reflect.ValueOf(value).IsNil() {
+			d.SetNull()
+		} else {
+			var v any
+			switch target := value.(type) {
+			case mctech.Comments:
+				v = target.ToMap()
+			default:
+				v = value
+			}
+			d.SetMysqlJSON(types.CreateBinaryJSON(v))
+		}
 	}
 	return d
 }
