@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,7 +15,63 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/util/intest"
+	"go.uber.org/zap/zapcore"
 )
+
+// StmtSchemaInfo 从sql解析出的数据库和表信息
+type StmtSchemaInfo struct {
+	// sql中解析出的数据库列表
+	Databases []string
+	// sql中解析出的数据库物理表名称（含库名）
+	Tables []TableName
+}
+
+// Sort sort Databases and Tables
+func (s *StmtSchemaInfo) Sort() {
+	if len(s.Databases) > 1 {
+		slices.Sort(s.Databases)
+	}
+	if len(s.Tables) > 1 {
+		slices.SortFunc(s.Tables, func(a, b TableName) int {
+			return a.CompareTo(b)
+		})
+	}
+}
+
+// TableName 数据库物理表名称（含库名）
+type TableName struct {
+	Database string
+	Table    string
+}
+
+// MarshalLogObject implements the zapcore.ObjectMarshaler interface.
+func (t *TableName) MarshalLogObject(enc zapcore.ObjectEncoder) error {
+	enc.AddString("db", t.Database)
+	enc.AddString("table", t.Table)
+	return nil
+}
+
+// ToMap 把当前对象转换为map
+func (t *TableName) ToMap() map[string]any {
+	return map[string]any{
+		"db":    t.Database,
+		"table": t.Table,
+	}
+}
+
+// String 把当前对象转换为字符串
+func (t *TableName) String() string {
+	return fmt.Sprintf("`%s`.`%s`", t.Database, t.Table)
+}
+
+// CompareTo 比较对象
+func (t *TableName) CompareTo(o TableName) int {
+	cmp := strings.Compare(t.Database, o.Database)
+	if cmp != 0 {
+		return cmp
+	}
+	return strings.Compare(t.Table, o.Table)
+}
 
 // Context mctech context interface
 type Context interface {
@@ -62,10 +119,13 @@ type Context interface {
 	UsingTenantParam() bool
 	// 是否是在execute语句中运行
 	InExecute() bool
-	// 获取给定sql语法树里用到的数据库
-	GetDbs(stmt ast.StmtNode) []string
-	// 设置给定sql语法树里用到的数据库
-	SetDbs(stmt ast.StmtNode, dbs []string)
+	// @title GetAllSchemas
+	// @description 获取所有Schemas
+	GetSchemas() map[ast.StmtNode]StmtSchemaInfo
+	// 获取给定sql语法树里用到的数据库和物理表
+	GetSchema(stmt ast.StmtNode) (StmtSchemaInfo, bool)
+	// 设置给定sql语法树里用到的数据库里的物理表
+	SetSchema(stmt ast.StmtNode, info StmtSchemaInfo)
 }
 
 // ContextForTest interface
@@ -425,7 +485,7 @@ type baseContext struct {
 	sqlHasGlobalDB   bool
 	usingTenantParam bool
 	inExecute        bool
-	dbsDict          map[ast.StmtNode][]string
+	schemaDict       map[ast.StmtNode]StmtSchemaInfo
 }
 
 var (
@@ -449,7 +509,7 @@ func NewBaseContext(usingTenantParam bool) Context {
 	return &baseContext{
 		startedAt:        time.Now(),
 		usingTenantParam: usingTenantParam,
-		dbsDict:          make(map[ast.StmtNode][]string),
+		schemaDict:       map[ast.StmtNode]StmtSchemaInfo{},
 	}
 }
 
@@ -660,15 +720,17 @@ func (d *baseContext) GetDWIndexInfo() (*DWIndexInfo, error) {
 	return sel.GetIndexInfo(d.parseResult.DbPrefix())
 }
 
-func (d *baseContext) GetDbs(stmt ast.StmtNode) []string {
-	if dbs, ok := d.dbsDict[stmt]; ok {
-		return dbs
-	}
-	return nil
+func (d *baseContext) GetSchemas() map[ast.StmtNode]StmtSchemaInfo {
+	return d.schemaDict
 }
 
-func (d *baseContext) SetDbs(stmt ast.StmtNode, dbs []string) {
-	d.dbsDict[stmt] = dbs
+func (d *baseContext) GetSchema(stmt ast.StmtNode) (StmtSchemaInfo, bool) {
+	schema, exists := d.schemaDict[stmt]
+	return schema, exists
+}
+
+func (d *baseContext) SetSchema(stmt ast.StmtNode, info StmtSchemaInfo) {
+	d.schemaDict[stmt] = info
 }
 
 /**

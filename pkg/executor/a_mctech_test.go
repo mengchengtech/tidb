@@ -34,7 +34,25 @@ func TestMCTechStatementsSummary(t *testing.T) {
 	tk.MustExec("use test")
 
 	cases := []*mctechStmtCases{
-		{"mctech select * from information_schema.statements_summary", "<nil>|||{}|<nil>|<nil>|test||<nil>|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
+		{
+			"mctech select * from information_schema.statements_summary",
+			strings.Join(
+				[]string{
+					"<nil>", // global
+					"<nil>", // excludes
+					"<nil>", // includes
+					"<nil>", // comments
+					"<nil>", // tenant
+					"<nil>", // tenant_from
+					"test",  // db
+					"<nil>", // dbs
+					"<nil>", // tables,
+					"<nil>", // dw_index
+					"<nil>", // params
+					"SELECT * FROM `information_schema`.`statements_summary`", // prepared_sql
+				}, "|"),
+			"",
+		},
 	}
 
 	for _, c := range cases {
