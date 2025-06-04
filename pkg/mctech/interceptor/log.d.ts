@@ -6,15 +6,24 @@ declare type Int = number
 declare type Int64 = number
 declare type UInt64 = number
 
+declare interface TableName {
+  db: string
+  table: string
+}
+
 declare interface FullTraceLog {
   /**
    * 执行sql时的当前库名称
    */
   db: string
   /**
-   * 执行的sql中用到的所有数据库名称列表。
+   * 执行的sql中用到的所有数据库名称列表
    */
   dbs: string
+  /**
+   * 执行的sql中用到的所有数据库名称列表
+   */
+  tables: TableName[]
   /**
    * 执行sql时使用的账号
    */

@@ -9,6 +9,20 @@ import (
 	"github.com/pingcap/tidb/pkg/parser/model"
 )
 
+type tblNameVisitor interface {
+	ast.Visitor
+	StmtSchemaInfo() mctech.StmtSchemaInfo
+}
+
+func newTableNameVisitor(mctx mctech.Context) *tableNameVisitor {
+	return &tableNameVisitor{
+		context:    mctx,
+		tableNames: map[string]mctech.TableName{},
+
+		withClauseScope: &nodeScope[*cteScopeItem]{items: list.New()},
+	}
+}
+
 type nodeScope[T any] struct {
 	items *list.List
 }
@@ -45,9 +59,9 @@ func (s nodeScope[T]) Entries() *list.List {
 	return s.items
 }
 
-type databaseNameVisitor struct {
-	context mctech.Context
-	dbNames map[string]bool // sql中用到的数据库名称
+type tableNameVisitor struct {
+	context    mctech.Context
+	tableNames map[string]mctech.TableName // sql中用到的数据库物理表的全名称
 
 	withClauseScope *nodeScope[*cteScopeItem]
 }
@@ -57,12 +71,19 @@ type cteScopeItem struct {
 	cteNames  []string
 }
 
-func (v *databaseNameVisitor) DBNames() map[string]bool {
-	return v.dbNames
+func (v *tableNameVisitor) StmtSchemaInfo() mctech.StmtSchemaInfo {
+	schema := mctech.StmtSchemaInfo{}
+	for _, table := range v.tableNames {
+		schema.Tables = append(schema.Tables, table)
+		if !slices.Contains(schema.Databases, table.Database) {
+			schema.Databases = append(schema.Databases, table.Database)
+		}
+	}
+	return schema
 }
 
 // Enter implements interface Visitor
-func (v *databaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
+func (v *tableNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
 	var err error
 	switch node := n.(type) {
 	case *ast.ColumnName:
@@ -81,7 +102,7 @@ func (v *databaseNameVisitor) Enter(n ast.Node) (node ast.Node, skipChildren boo
 }
 
 // Leave implements interface Visitor
-func (v *databaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
+func (v *tableNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	var err error
 	switch node := n.(type) {
 	case
@@ -97,18 +118,18 @@ func (v *databaseNameVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 	return n, true
 }
 
-func (v *databaseNameVisitor) enterWithScope(stmt ast.Node) {
+func (v *tableNameVisitor) enterWithScope(stmt ast.Node) {
 	v.withClauseScope.Push(&cteScopeItem{
 		statement: stmt,
 	})
 }
 
-func (v *databaseNameVisitor) addCTE(cte *ast.CommonTableExpression) {
+func (v *tableNameVisitor) addCTE(cte *ast.CommonTableExpression) {
 	item := v.withClauseScope.Peek()
 	item.cteNames = append(item.cteNames, cte.Name.L)
 }
 
-func (v *databaseNameVisitor) leaveWithScope(node ast.Node) {
+func (v *tableNameVisitor) leaveWithScope(node ast.Node) {
 	item := v.withClauseScope.Peek()
 	if item.statement != node {
 		return
@@ -116,7 +137,7 @@ func (v *databaseNameVisitor) leaveWithScope(node ast.Node) {
 	v.withClauseScope.Pop()
 }
 
-func (v *databaseNameVisitor) fetchDbName(table *ast.TableName) (dbName string, isCteName bool) {
+func (v *tableNameVisitor) fetchDbName(table *ast.TableName) (dbName string, isCteName bool) {
 	dbName = table.Schema.O
 	isCteName = false
 
@@ -145,7 +166,7 @@ func (v *databaseNameVisitor) fetchDbName(table *ast.TableName) (dbName string, 
 	return dbName, isCteName
 }
 
-func (v *databaseNameVisitor) enterColumnName(node *ast.ColumnName) error {
+func (v *tableNameVisitor) enterColumnName(node *ast.ColumnName) error {
 	dbName := node.Schema.L
 	if dbName == "" {
 		return nil
@@ -161,7 +182,7 @@ func (v *databaseNameVisitor) enterColumnName(node *ast.ColumnName) error {
 	return err
 }
 
-func (v *databaseNameVisitor) leaveTableName(node *ast.TableName) error {
+func (v *tableNameVisitor) leaveTableName(node *ast.TableName) error {
 	dbName, isCteName := v.fetchDbName(node)
 	if isCteName {
 		// 跳过视图
@@ -175,10 +196,11 @@ func (v *databaseNameVisitor) leaveTableName(node *ast.TableName) error {
 		}
 
 		if physicalDbName != dbName {
+			dbName = physicalDbName
 			node.Schema = model.NewCIStr(physicalDbName)
 		}
 	}
-
-	v.dbNames[node.Schema.L] = true
+	key := dbName + "|" + node.Name.L
+	v.tableNames[key] = mctech.TableName{Database: dbName, Table: node.Name.L}
 	return nil
 }

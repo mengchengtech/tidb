@@ -111,9 +111,9 @@ func TestStmtResolverWithRoot(t *testing.T) {
 }
 
 func TestStmtResolverNormalizeDB(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/preps/SetSQLDBS",
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/visitor/SetSQLDBS",
 		mock.M(t, "global_mtlp,global_qa,global_platform,global_cq3,global_mtlp,global_cq3"))
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/preps/SetSQLDBS")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/visitor/SetSQLDBS")
 
 	// {prefix:"", tenant:"", tenantFromRole: true, params:{tenant:"", mpp: "", global:{set:true, excludes: [""]}, db:"", comments:{}}}
 	cases := []*mctechStmtResolverTestCase{
@@ -151,12 +151,12 @@ func stmtResoverRunTestCase(t *testing.T, i int, c *mctechStmtResolverTestCase, 
 	charset, collation := session.GetSessionVars().GetCharsetInfo()
 	modifyCtx.Reset()
 
-	dbs, skipped, err := preps.GetPreprocessorForTest().ResolveStmt(mctechCtx, stmt, charset, collation)
+	schema, skipped, err := preps.GetPreprocessorForTest().ResolveStmt(mctechCtx, stmt, charset, collation)
 	if err != nil {
 		return err
 	}
 
-	if err = preps.GetDatabaseCheckerForTest().Check(mctechCtx, stmt, dbs); err != nil {
+	if err = preps.GetDatabaseCheckerForTest().Check(mctechCtx, stmt, schema.Databases); err != nil {
 		return err
 	}
 	if !skipped {
@@ -172,7 +172,7 @@ func stmtResoverRunTestCase(t *testing.T, i int, c *mctechStmtResolverTestCase, 
 	if c.expectValue == nil {
 		c.expectValue = map[string]any{}
 	}
-	require.Equal(t, c.expectDBs, dbs, c.Source(i))
+	require.Equal(t, c.expectDBs, schema.Databases, c.Source(i))
 	require.Equal(t, c.expectValue, info, c.Source(i))
 	return nil
 }
