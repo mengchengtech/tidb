@@ -8,7 +8,6 @@ import (
 
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
-	"github.com/pkg/errors"
 )
 
 // 整体切换前后台库的参数值KEY
@@ -120,7 +119,7 @@ func (d *dwSelector) getIndexFromService(dbPrefix string) (*mctech.DWIndexInfo, 
 	jo := map[string]mctech.DWIndex{}
 	err = json.Unmarshal(body, &jo)
 	if err != nil {
-		return nil, errors.Wrap(err, "get dw index errors")
+		return nil, fmt.Errorf("get dw index errors. %w", err)
 	}
 
 	info := &mctech.DWIndexInfo{Current: jo["current"]}
@@ -152,7 +151,7 @@ func (d *dwSelector) getIndexByRequestIDFromService(dbPrefix string, requestID s
 	var js = map[string]mctech.DWIndex{}
 	err = json.Unmarshal(body, &js)
 	if err != nil {
-		return nil, errors.Wrap(err, "get dw index by request errors")
+		return nil, fmt.Errorf("get dw index by request errors. %w", err)
 	}
 
 	if index, ok := js["db"]; ok {
