@@ -16,7 +16,6 @@ import (
 	"github.com/pingcap/log"
 	"github.com/pingcap/tidb/config"
 	"github.com/pingcap/tidb/mctech"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/semaphore"
 )
@@ -466,7 +465,7 @@ func SequenceDecode(id int64) (int64, error) {
 	var timeSegmentShift = 13
 
 	if id < 0 {
-		return 0, errors.Errorf("Invalid negative %d specified", id)
+		return 0, fmt.Errorf("invalid negative %d specified", id)
 	}
 
 	delta := id >> timeSegmentShift

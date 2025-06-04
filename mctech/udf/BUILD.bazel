@@ -17,7 +17,6 @@ go_library(
         "//util/logutil",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
-        "@com_github_pkg_errors//:errors",
         "@org_golang_x_sync//semaphore",
         "@org_uber_go_zap//:zap",
     ],

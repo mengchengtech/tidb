@@ -31,7 +31,6 @@ go_library(
         "@com_github_patrickmn_go_cache//:go-cache",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
-        "@com_github_pkg_errors//:errors",
         "@org_golang_x_exp//slices",
         "@org_uber_go_zap//:zap",
     ],
