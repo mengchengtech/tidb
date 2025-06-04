@@ -2,6 +2,8 @@ package digestworker
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -13,7 +15,6 @@ import (
 	"github.com/pingcap/tidb/pkg/util"
 	"github.com/pingcap/tidb/pkg/util/logutil"
 	"github.com/pingcap/tidb/pkg/util/sqlexec"
-	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -209,7 +210,7 @@ func (m *defaultDigestScheduler) digestLoop() (err error) {
 	se, ok := resource.(sqlexec.SQLExecutor)
 	if !ok {
 		m.sessPool.Put(resource)
-		return errors.Errorf("%T cannot be casted to sqlexec.SQLExecutor", resource)
+		return fmt.Errorf("%T cannot be casted to sqlexec.SQLExecutor", resource)
 	}
 
 	// 启动时先执行一次
@@ -253,7 +254,7 @@ func (m *defaultDigestScheduler) updateHeartBeat(ctx context.Context, se sqlexec
 		sql := updateDigestRequestTemplate
 		args := []any{*info.lastRequestTime, digest}
 		if _, err := se.ExecuteInternal(ctx, sql, args...); err != nil {
-			return errors.Wrapf(err, "execute sql: %s", sql)
+			return fmt.Errorf("execute sql: %s. %w", sql, err)
 		}
 		info.lastRequestTime = nil
 	}
