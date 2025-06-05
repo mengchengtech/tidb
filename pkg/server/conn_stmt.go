@@ -79,6 +79,9 @@ func (cc *clientConn) HandleStmtPrepare(ctx context.Context, sql string) error {
 	defer mctx.Clear()
 	// add end
 	stmt, columns, params, err := cc.ctx.Prepare(sql)
+	// add by zhangbing
+	cc.onExtensionBinaryPrepareEnd(stmt, sql, err)
+	// add end
 	if err != nil {
 		return err
 	}

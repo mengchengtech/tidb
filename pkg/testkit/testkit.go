@@ -377,8 +377,12 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 				return nil, errors.Trace(err)
 			}
 		}
-		// add by zhangbing
-		for _, stmt := range stmts {
+		warns := sc.GetWarnings()
+		parserWarns := warns[len(prevWarns):]
+		tk.Session().GetSessionVars().SetAlloc(tk.alloc)
+		var rs0 sqlexec.RecordSet
+		for i, stmt := range stmts {
+			// add by zhangbing
 			switch stmt.(type) {
 			case *ast.PrepareStmt, *ast.ExecuteStmt: // 跳过，此处不处理，在PrepareExec和ExecuteExec中处理
 			default:
@@ -387,13 +391,7 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...any)
 					return nil, err
 				}
 			}
-		}
-		// add end
-		warns := sc.GetWarnings()
-		parserWarns := warns[len(prevWarns):]
-		tk.Session().GetSessionVars().SetAlloc(tk.alloc)
-		var rs0 sqlexec.RecordSet
-		for i, stmt := range stmts {
+			// add end
 			var rs sqlexec.RecordSet
 			var err error
 			if s, ok := stmt.(*ast.NonTransactionalDMLStmt); ok {
