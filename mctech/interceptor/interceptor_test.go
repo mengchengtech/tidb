@@ -287,7 +287,7 @@ func TestFullSQLLogDbCheckerError(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{
 			"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true,
-			"DbChecker.Enabled": true, "DbChecker.Compatible": false,
+			"DbChecker.Enabled": true,
 		}),
 	)
 	defer func() {

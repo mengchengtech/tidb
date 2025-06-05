@@ -72,8 +72,7 @@ func newTestMCTechContext(roles mctech.FlagRoles, comments mctech.Comments, acro
 func TestDatabaseChecker(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]any{
-			"DbChecker.Compatible": false,
-			"DbChecker.Across":     []string{"global_mtlp|global_ma", "global_cq3|global_qa"},
+			"DbChecker.Across": []string{"global_mtlp|global_ma", "global_cq3|global_qa"},
 		}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
@@ -110,8 +109,7 @@ func TestDatabaseChecker(t *testing.T) {
 func TestDatabaseCheckerUseCustomComment(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]any{
-			"DbChecker.Compatible": false,
-			"DbChecker.Excepts":    []string{"demo-service", "another-demo-service.pf", "@mctech/dp-impala"},
+			"DbChecker.Excepts": []string{"demo-service", "another-demo-service.pf", "@mctech/dp-impala"},
 		}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
