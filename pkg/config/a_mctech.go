@@ -91,13 +91,12 @@ type Sequence struct {
 
 // DbChecker db isolation check used
 type DbChecker struct {
-	Enabled    bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
-	Compatible bool     `toml:"compatible" json:"compatible"` // 临时开关
-	APIPrefix  string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
-	Mutex      []string `toml:"mutex" json:"mutex"`           //
-	Exclude    []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
-	Across     []string `toml:"across" json:"across"`         // 额外允许跨库查询的数据库对。每一项为'|'分隔的数据库名
-	Excepts    []string `toml:"excepts" json:"excepts"`       // 排除在跨库约束检查之外的服务或依赖包列表。每一项的格式为: 1. {service}; 2. {service}.{product line}; 3. {package name}
+	Enabled   bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
+	APIPrefix string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
+	Mutex     []string `toml:"mutex" json:"mutex"`           //
+	Exclude   []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
+	Across    []string `toml:"across" json:"across"`         // 额外允许跨库查询的数据库对。每一项为'|'分隔的数据库名
+	Excepts   []string `toml:"excepts" json:"excepts"`       // 排除在跨库约束检查之外的服务或依赖包列表。每一项的格式为: 1. {service}; 2. {service}.{product line}; 3. {package name}
 }
 
 // Tenant append tenant condition used
@@ -138,8 +137,6 @@ const (
 
 	// DefaultDbCheckerEnabled one of config default value
 	DefaultDbCheckerEnabled = false
-	// DefaultDbCheckerCompatible one of config default value
-	DefaultDbCheckerCompatible = true
 
 	// DefaultTenantEnabled one of config default value
 	DefaultTenantEnabled = false
@@ -230,13 +227,12 @@ func init() {
 			APIPrefix: "http://node-infra-encryption-service.mc/",
 		},
 		DbChecker: DbChecker{
-			Enabled:    DefaultDbCheckerEnabled,
-			Compatible: DefaultDbCheckerCompatible,
-			APIPrefix:  "http://node-infra-dim-service.mc/",
-			Mutex:      []string{},
-			Exclude:    []string{},
-			Across:     []string{},
-			Excepts:    []string{},
+			Enabled:   DefaultDbCheckerEnabled,
+			APIPrefix: "http://node-infra-dim-service.mc/",
+			Mutex:     []string{},
+			Exclude:   []string{},
+			Across:    []string{},
+			Excepts:   []string{},
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
@@ -318,8 +314,6 @@ func GetMCTechConfig() *MCTech {
 			switch k {
 			case "Sequence.Mock":
 				opts.Sequence.Mock = toBool(v)
-			case "DbChecker.Compatible":
-				opts.DbChecker.Compatible = toBool(v)
 			case "DbChecker.Across":
 				opts.DbChecker.Across = toList(v)
 			case "DbChecker.Excepts":

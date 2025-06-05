@@ -82,8 +82,6 @@ const (
 )
 
 const (
-	// MCTechDbCheckerCompatible is one of mctech config items
-	MCTechDbCheckerCompatible = "mctech_db_checker_compatible"
 	// MCTechDbCheckerExcepts is one of mctech config items
 	MCTechDbCheckerExcepts = "mctech_db_checker_excepts"
 
@@ -129,15 +127,6 @@ func atomicStore[T any](pt *T, v T) {
 
 func init() {
 	var mctechSysVars = []*SysVar{
-		{Scope: ScopeGlobal, Name: MCTechDbCheckerCompatible, Type: TypeBool, Value: BoolToOnOff(config.DefaultDbCheckerCompatible),
-			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				return BoolToOnOff(atomicLoad(&config.GetMCTechConfig().DbChecker.Compatible)), nil
-			},
-			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				atomicStore(&config.GetMCTechConfig().DbChecker.Compatible, TiDBOptOn(val))
-				return nil
-			},
-		},
 		{Scope: ScopeGlobal, Name: MCTechMPPDefaultValue, Type: TypeEnum, Value: config.DefaultMPPValue,
 			PossibleValues: []string{"allow", "force", "disable"},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
@@ -302,7 +291,6 @@ func LoadMCTechSysVars() {
 	}
 	log.Warn("LoadMctechSysVars", zap.ByteString("config", bytes))
 
-	SetSysVar(MCTechDbCheckerCompatible, BoolToOnOff(option.DbChecker.Compatible))
 	SetSysVar(MCTechDbCheckerExcepts, strings.Join(option.DbChecker.Excepts, ","))
 
 	SetSysVar(MCTechMPPDefaultValue, option.MPP.DefaultValue)
