@@ -1,4 +1,4 @@
-package digestworker
+package worker
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/parser/terror"
 	"github.com/pingcap/tidb/pkg/util"
 	"github.com/pingcap/tidb/pkg/util/logutil"
@@ -18,8 +19,22 @@ import (
 	"go.uber.org/zap"
 )
 
-const updateDigestRequestTemplate = "UPDATE mysql.mctech_deny_digest SET last_request_time = %? WHERE digest = %?"
-const selectDigestTemplate = "SELECT digest, expired_at from mysql.mctech_deny_digest where expired_at >= %?"
+const (
+	// MCTechDenyDigest is a table name
+	MCTechDenyDigest = "mctech_deny_digest"
+	// CreateMCTechDenyDigest is a table about deny sql digest
+	CreateMCTechDenyDigest = `CREATE TABLE IF NOT EXISTS %n.%n (
+		digest varchar(64) PRIMARY KEY,
+		created_at datetime not null,
+		expired_at datetime,
+		last_request_time datetime NULL,
+    query_sql longtext not null,
+		remark text
+	);`
+
+	updateDigestRequestSQL = "UPDATE %n.%n SET last_request_time = %? WHERE digest = %?"
+	selectDigestSQL        = "SELECT digest, expired_at from %n.%n where expired_at >= %?"
+)
 
 const digestManagerLoopTickerInterval = 10 * time.Second
 const digestSQLTimeout = 30 * time.Second
@@ -251,8 +266,11 @@ func (m *defaultDigestScheduler) updateHeartBeat(ctx context.Context, se sqlexec
 		if info.lastRequestTime == nil {
 			continue
 		}
-		sql := updateDigestRequestTemplate
-		args := []any{*info.lastRequestTime, digest}
+		sql := updateDigestRequestSQL
+		args := []any{
+			mysql.SystemDB, MCTechDenyDigest,
+			*info.lastRequestTime, digest,
+		}
 		if _, err := se.ExecuteInternal(ctx, sql, args...); err != nil {
 			return fmt.Errorf("execute sql: %s. %w", sql, err)
 		}
@@ -263,7 +281,11 @@ func (m *defaultDigestScheduler) updateHeartBeat(ctx context.Context, se sqlexec
 
 func (m *defaultDigestScheduler) reloadDenyDigests(se sqlexec.SQLExecutor) error {
 	ctx := kv.WithInternalSourceType(context.Background(), "digestManager")
-	rs, err := se.ExecuteInternal(ctx, selectDigestTemplate, time.Now())
+	args := []any{
+		mysql.SystemDB, MCTechDenyDigest,
+		time.Now(),
+	}
+	rs, err := se.ExecuteInternal(ctx, selectDigestSQL, args...)
 	if err != nil {
 		return err
 	}

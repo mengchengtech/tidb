@@ -1,15 +1,17 @@
-package digestworker_test
+package worker_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/pingcap/failpoint"
-	"github.com/pingcap/tidb/pkg/mctech/digestworker"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
-	"github.com/pingcap/tidb/pkg/session"
+	mcworker "github.com/pingcap/tidb/pkg/mctech/worker"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
+	"github.com/tikv/client-go/v2/util"
 )
 
 func TestReloadDenyDigests(t *testing.T) {
@@ -20,11 +22,9 @@ func TestReloadDenyDigests(t *testing.T) {
 		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
 	}()
 	store := testkit.CreateMockStore(t)
-	dom, _ := session.GetDomain(store)
-	m := digestworker.NewDigestManager(nil)
-	dom.SetDenyDigestManagerForTest(m)
+	m := mcworker.NewDigestManager(nil)
 	tk := testkit.NewTestKit(t, store)
-	initDbAndData(tk)
+	initMCTechDenyDigest(tk)
 	m.ReloadDenyDigests(tk.Session())
 
 	info1 := m.Get("digest-1")
@@ -34,20 +34,16 @@ func TestReloadDenyDigests(t *testing.T) {
 	require.Equal(t, info2.ExpiredAt(), time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local))
 }
 
-func initDbAndData(tk *testkit.TestKit) {
-	createSQL := `CREATE TABLE IF NOT EXISTS mysql.mctech_deny_digest (
-		digest varchar(64) PRIMARY KEY,
-		created_at datetime not null,
-		expired_at datetime,
-		last_request_time datetime NULL,
-    query_sql longtext not null,
-		remark text
-	);`
-	tk.MustExec(createSQL)
-	tk.MustExec(`insert into mysql.mctech_deny_digest
+func initMCTechDenyDigest(tk *testkit.TestKit) {
+	ctx := util.WithInternalSourceType(context.Background(), "initMCTechDenyDigest")
+	args := []any{
+		mysql.SystemDB, mcworker.MCTechDenyDigest,
+	}
+	tk.Session().ExecuteInternal(ctx, mcworker.CreateMCTechDenyDigest, args...)
+	tk.Session().ExecuteInternal(ctx, `insert into %n.%n
 	(digest, created_at, expired_at, last_request_time, query_sql)
 	values
 	('digest-1', '2024-05-01', '2024-06-01', null, 'select 1')
 	, ('digest-2', '2024-05-01', '9999-10-01', null, 'select 2')
-	`)
+	`, args...)
 }
