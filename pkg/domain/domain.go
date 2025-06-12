@@ -182,6 +182,7 @@ type Domain struct {
 
 	// add by zhangbing
 	denyDigestManager atomic.Pointer[denyDigestManager]
+	crossDBManager    atomic.Pointer[crossDBManager]
 	// add end
 
 	serverID             uint64
