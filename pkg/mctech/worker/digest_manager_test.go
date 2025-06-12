@@ -15,23 +15,26 @@ import (
 )
 
 func TestReloadDenyDigests(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/session/mctech-ddl-upgrade", mock.M(t, "false"))
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"SQLChecker.Enabled": true}),
 	)
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/pkg/session/mctech-ddl-upgrade")
 	}()
 	store := testkit.CreateMockStore(t)
 	m := mcworker.NewDigestManager(nil)
 	tk := testkit.NewTestKit(t, store)
 	initMCTechDenyDigest(tk)
-	m.ReloadDenyDigests(tk.Session())
+	err := m.ReloadAll(tk.Session())
+	require.NoError(t, err)
 
 	info1 := m.Get("digest-1")
 	require.Nil(t, info1)
 	info2 := m.Get("digest-2")
 	require.NotNil(t, info2)
-	require.Equal(t, info2.ExpiredAt(), time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local))
+	require.Equal(t, info2.ExpiredAt, time.Date(9999, 10, 1, 0, 0, 0, 0, time.Local))
 }
 
 func initMCTechDenyDigest(tk *testkit.TestKit) {

@@ -3318,6 +3318,9 @@ func bootstrapSessionImpl(store kv.Storage, createSessionsImpl func(store kv.Sto
 			return nil, err
 		}
 	}
+	// add by zhangbing
+	runInBootstrapSession(store, mctechUpgrade) // upgrade to mctech extension version
+	// add end
 
 	// initiate disttask framework components which need a store
 	scheduler.RegisterSchedulerFactory(
