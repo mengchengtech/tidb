@@ -400,7 +400,7 @@ type CrossDBManager struct {
 
 // Get method inplements Scheduler interface
 func (m *CrossDBManager) Get(pattern SQLInvokerPattern) *CrossDBInfo {
-	failpoint.Inject("GetCrossDBInfo", func(val failpoint.Value) {
+	failpoint.Inject("get-cross-db-info", func(val failpoint.Value) {
 		var rules []map[string]any
 		err := json.Unmarshal([]byte(val.(string)), &rules)
 		if err != nil {

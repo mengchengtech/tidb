@@ -156,7 +156,7 @@ func stmtResoverRunTestCase(t *testing.T, i int, c *mctechStmtResolverTestCase, 
 		return err
 	}
 
-	if err = preps.GetDatabaseCheckerForTest().Check(mctechCtx, stmt, schema.Databases); err != nil {
+	if err = preps.GetDatabaseCheckerForTest().Check(mctechCtx, stmt, schema); err != nil {
 		return err
 	}
 	if !skipped {

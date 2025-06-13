@@ -8,6 +8,7 @@ import (
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/pingcap/tidb/pkg/mctech/preps"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,7 +42,7 @@ func TestDWSelectorGetDWIndex(t *testing.T) {
 	doRunTest(t, contextRunTestCase, cases)
 }
 
-func contextRunTestCase(t *testing.T, i int, c *testContextCase) error {
+func contextRunTestCase(t *testing.T, i int, c *testContextCase, sctx sessionctx.Context) error {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
 		mock.M(t, c.response),
 	)
@@ -56,10 +57,14 @@ func contextRunTestCase(t *testing.T, i int, c *testContextCase) error {
 		return err
 	}
 	selector := preps.GetDWSelectorForTest()
-	context := mctech.NewBaseContext(false)
-	context.(mctech.ModifyContext).SetParseResult(result)
-	context.(mctech.ModifyContext).SetDWSelector(selector)
-	index, err := context.SelectDWIndex()
+	mctx, err := mctech.WithNewContext(sctx)
+	if err != nil {
+		return err
+	}
+	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx.SetParseResult(result)
+	modifyCtx.SetDWSelector(selector)
+	index, err := mctx.SelectDWIndex()
 	if err != nil {
 		return err
 	}
