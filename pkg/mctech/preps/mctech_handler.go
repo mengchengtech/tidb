@@ -15,8 +15,8 @@ func init() {
 // Handler enhance tidb features
 type mctechHandler struct{}
 
-// PrepareSQL prepare sql
-func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql string, err error) {
+// ParseSQL parse sql
+func (h *mctechHandler) ParseSQL(mctx mctech.Context, rawSQL string) (sql string, err error) {
 	if rawSQL == "" {
 		return rawSQL, nil
 	}
@@ -26,14 +26,14 @@ func (h *mctechHandler) PrepareSQL(mctx mctech.Context, rawSQL string) (sql stri
 		return rawSQL, nil
 	}
 
-	var result mctech.PrepareResult
-	sql, result, err = preprocessor.PrepareSQL(mctx, rawSQL)
+	var result mctech.ParseResult
+	sql, result, err = preprocessor.ParseSQL(mctx, rawSQL)
 	if err != nil {
 		return "", err
 	}
 
 	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetParseResult(result)
 	// 改写session上的数据库
 	vars := mctx.Session().GetSessionVars()
 	currDb := vars.CurrentDB

@@ -146,7 +146,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 	)
 
 	if mctx != nil {
-		result := mctx.PrepareResult()
+		result := mctx.ParseResult()
 		if result != nil {
 			global = toPtr(result.TenantOmit())
 			params = result.Params()
@@ -240,7 +240,7 @@ func isDefaultValMCSymFunc(expr ast.ExprNode) bool {
 func (e *Execute) getExtensionParams() ([]types.ParamMarkerOffset, int) {
 	prepared := e.PrepStmt
 	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
-		return p.(types.ParamMarkerOffset).GetOffset() == mctech.ExtensionParamMarkerOffset
+		return p.(types.ParamMarkerOffset).GetOffset() == mctech.TenantParamMarkerOffset
 	})
 
 	if index < 0 {
@@ -259,7 +259,7 @@ func appendExtensionArgs[T any](
 	params []types.ParamMarkerOffset, callback extensionArgCreator[T]) ([]T, error) {
 	extensions := []T{}
 	for _, p := range params {
-		if p.GetOffset() == mctech.ExtensionParamMarkerOffset {
+		if p.GetOffset() == mctech.TenantParamMarkerOffset {
 			// 扩展自定义参数
 			item, err := callback()
 			if err != nil {
@@ -287,11 +287,11 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 
 	var (
 		tenantValue expression.Expression
-		result      mctech.PrepareResult
+		result      mctech.ParseResult
 		tenantCode  string
 	)
 	// 优先从sql语句中提取租户信息
-	if result = mctx.PrepareResult(); result != nil {
+	if result = mctx.ParseResult(); result != nil {
 		tenantCode = result.Tenant().Code()
 		if tenantCode != "" {
 			tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)

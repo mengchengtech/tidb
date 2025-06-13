@@ -116,7 +116,7 @@ func (v *databaseNameVisitor) leaveWithScope(node ast.Node) {
 	v.withClauseScope.Pop()
 }
 
-func (v *databaseNameVisitor) resolveDbName(table *ast.TableName) (dbName string, isCteName bool) {
+func (v *databaseNameVisitor) fetchDbName(table *ast.TableName) (dbName string, isCteName bool) {
 	dbName = table.Schema.O
 	isCteName = false
 
@@ -162,7 +162,7 @@ func (v *databaseNameVisitor) enterColumnName(node *ast.ColumnName) error {
 }
 
 func (v *databaseNameVisitor) leaveTableName(node *ast.TableName) error {
-	dbName, isCteName := v.resolveDbName(node)
+	dbName, isCteName := v.fetchDbName(node)
 	if isCteName {
 		// 跳过视图
 		return nil

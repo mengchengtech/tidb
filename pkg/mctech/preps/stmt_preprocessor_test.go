@@ -131,17 +131,17 @@ func stmtResoverRunTestCase(t *testing.T, i int, c *mctechStmtResolverTestCase, 
 	var (
 		sql     = c.sql
 		session = mctechCtx.Session()
-		result  mctech.PrepareResult
+		result  mctech.ParseResult
 		err     error
 	)
 
 	session.GetSessionVars().CurrentDB = db
-	sql, result, err = preps.GetPreprocessorForTest().PrepareSQL(mctechCtx, sql)
+	sql, result, err = preps.GetPreprocessorForTest().ParseSQL(mctechCtx, sql)
 	if err != nil {
 		return err
 	}
 	modifyCtx := mctechCtx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetParseResult(result)
 	ctx := context.Background()
 	stmts, err := session.(parser).Parse(ctx, sql)
 	if err != nil {

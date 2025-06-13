@@ -64,15 +64,15 @@ func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast
 	return err
 }
 
-var ddlResolver *_ddlExtension
-var ddlResolverInitOne sync.Once
+var ddlVisitor *_ddlExtension
+var ddlVisitorInitOne sync.Once
 
 func getDDLExtension() *_ddlExtension {
-	if ddlResolver != nil {
-		return ddlResolver
+	if ddlVisitor != nil {
+		return ddlVisitor
 	}
 
-	ddlResolverInitOne.Do(func() {
+	ddlVisitorInitOne.Do(func() {
 		option := config.GetMCTechConfig()
 		e := &_ddlExtension{
 			versionEnabled: option.DDL.Version.Enabled,
@@ -89,9 +89,9 @@ func getDDLExtension() *_ddlExtension {
 			}
 		}
 
-		ddlResolver = e
+		ddlVisitor = e
 	})
-	return ddlResolver
+	return ddlVisitor
 }
 
 // ApplyExtension apply ddl modify
