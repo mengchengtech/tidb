@@ -24,10 +24,10 @@ type Context interface {
 	// 清除session中添加的自定义变量
 	Clear()
 
-	// @title InPrepareStmt
+	// @title InPrepare
 	// @description 当前请求是否是prepare语句中
 	// @return bool
-	InPrepareStmt() bool
+	InPrepare() bool
 	// @title CurrentDB
 	// @description 当前数据库
 	CurrentDB() string
@@ -43,9 +43,9 @@ type Context interface {
 	// @title ToLogicDbName
 	// @description 把给定的数据库名转换为数据库的逻辑名称。根据传入sql中的dbPrefix，移除前缀，如果前缀不存在则什么也不做
 	ToLogicDbName(db string) string
-	// @title PrepareResult
+	// @title ParseResult
 	// @description 对sql预处理的结果
-	PrepareResult() PrepareResult
+	ParseResult() ParseResult
 	// @title IsGlobalDb
 	// @description 判断给定的库名是否属于global一类的库。（需要考虑是否含有dbPrefix）
 	// @param dbName string
@@ -84,10 +84,10 @@ type ModifyContext interface {
 	// @title Reset
 	// @description 重置是否改写状态，用于支持一次执行多条sql语句时
 	Reset()
-	// @title SetPrepareResult
+	// @title SetParseResult
 	// @description 设置sql预处理的结果
-	// @param result PrepareResult
-	SetPrepareResult(result PrepareResult)
+	// @param result ParseResult
+	SetParseResult(result ParseResult)
 	// @title SetDWSelector
 	// @description 设置DWSelector
 	// @param selector DWSelector
@@ -262,8 +262,8 @@ func (ti *tenantValueInfo) GetInfoForTest() map[string]any {
 	return map[string]any{"code": ti.code, "fromRole": ti.fromRole}
 }
 
-// PrepareResult interface
-type PrepareResult interface {
+// ParseResult interface
+type ParseResult interface {
 	// Tenant current tenant
 	Tenant() TenantInfo
 	// Roles current user has some roles
@@ -276,13 +276,15 @@ type PrepareResult interface {
 	Global() GlobalValueInfo
 	// Params params
 	Params() map[string]any
+	// GetParam get single param by key
+	GetParam(string) (any, bool)
 	// DbPrefix 自定义hint，数据库前缀。'dev', 'test'
 	// Deprecated: 已废弃
 	DbPrefix() string
 	GetInfoForTest() map[string]any
 }
 
-type prepareResult struct {
+type parseResult struct {
 	// Deprecated: 已废弃
 	dbPrefix   string          // 自定义hint，数据库前缀。'dev', 'test'
 	params     map[string]any  // 自定义hint的一般参数
@@ -292,8 +294,8 @@ type prepareResult struct {
 	comments   Comments        // 从特殊注释中提取的一些信息
 }
 
-// NewPrepareResult create PrepareResult
-func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, params map[string]any) (PrepareResult, error) {
+// NewParseResult create ParseResult instance
+func NewParseResult(tenantCode string, roles FlagRoles, comments Comments, params map[string]any) (ParseResult, error) {
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
 		params[ParamMPP] = config.GetMCTechConfig().MPP.DefaultValue
@@ -342,7 +344,7 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 		newParams[k] = v
 	}
 
-	r := &prepareResult{
+	r := &parseResult{
 		comments: comments,
 		roles:    roles,
 		tenant: &tenantValueInfo{
@@ -357,7 +359,7 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 }
 
 // GetInfoForTest get info for test
-func (r *prepareResult) GetInfoForTest() map[string]any {
+func (r *parseResult) GetInfoForTest() map[string]any {
 	info := map[string]any{}
 	if len(r.params) > 0 {
 		info["params"] = maps.Clone(r.params)
@@ -374,46 +376,51 @@ func (r *prepareResult) GetInfoForTest() map[string]any {
 }
 
 // Tenant current tenant
-func (r *prepareResult) Tenant() TenantInfo {
+func (r *parseResult) Tenant() TenantInfo {
 	return r.tenant
 }
 
 // Roles current user has some roles
-func (r *prepareResult) Roles() FlagRoles {
+func (r *parseResult) Roles() FlagRoles {
 	return r.roles
 }
 
 // TenantOmit tenant omit
-func (r *prepareResult) TenantOmit() bool {
+func (r *parseResult) TenantOmit() bool {
 	return r.globalInfo.Global() || r.roles.TenantOmit()
 }
 
 // Comments custom comment
-func (r *prepareResult) Comments() Comments {
+func (r *parseResult) Comments() Comments {
 	return r.comments
 }
 
 // Global global
-func (r *prepareResult) Global() GlobalValueInfo {
+func (r *parseResult) Global() GlobalValueInfo {
 	return r.globalInfo
 }
 
 // Params params
-func (r *prepareResult) Params() map[string]any {
+func (r *parseResult) Params() map[string]any {
 	return r.params
+}
+
+func (r *parseResult) GetParam(key string) (any, bool) {
+	v, exists := r.params[key]
+	return v, exists
 }
 
 // DbPrefix 自定义hint，数据库前缀。'dev', 'test'
 // Deprecated: 已废弃
-func (r *prepareResult) DbPrefix() string {
+func (r *parseResult) DbPrefix() string {
 	return r.dbPrefix
 }
 
 type baseContext struct {
 	startedAt        time.Time
-	inPrepareStmt    bool
+	inPrepare        bool
 	selector         DWSelector
-	prepareResult    PrepareResult
+	parseResult      ParseResult
 	sqlRewrited      bool
 	sqlHasGlobalDB   bool
 	usingTenantParam bool
@@ -509,7 +516,7 @@ func (d *baseContext) SetInExecute(val bool) {
 }
 
 func (d *baseContext) GetInfoForTest() map[string]any {
-	return d.prepareResult.GetInfoForTest()
+	return d.parseResult.GetInfoForTest()
 }
 
 func (d *baseContext) Reset() {
@@ -527,8 +534,8 @@ func (d *baseContext) SetSQLHasGlobalDB(hasGlobalDB bool) {
 	d.sqlHasGlobalDB = hasGlobalDB
 }
 
-func (d *baseContext) SetPrepareResult(result PrepareResult) {
-	d.prepareResult = result
+func (d *baseContext) SetParseResult(result ParseResult) {
+	d.parseResult = result
 }
 
 func (d *baseContext) SetSQLRewrited(sqlRewrited bool) {
@@ -537,8 +544,8 @@ func (d *baseContext) SetSQLRewrited(sqlRewrited bool) {
 
 // ------------------------------------------------
 
-func (d *baseContext) InPrepareStmt() bool {
-	return d.inPrepareStmt
+func (d *baseContext) InPrepare() bool {
+	return d.inPrepare
 }
 
 func (d *baseContext) SQLRewrited() bool {
@@ -549,15 +556,15 @@ func (d *baseContext) SQLHasGlobalDB() bool {
 	return d.sqlHasGlobalDB
 }
 
-func (d *baseContext) PrepareResult() PrepareResult {
-	return d.prepareResult
+func (d *baseContext) ParseResult() ParseResult {
+	return d.parseResult
 }
 
 func (d *baseContext) ToPhysicalDbName(db string) (string, error) {
 	if db == "" {
 		return db, nil
 	}
-	result := d.prepareResult
+	result := d.parseResult
 	if result == nil {
 		return db, nil
 	}
@@ -591,7 +598,7 @@ func (d *baseContext) ToLogicDbName(db string) string {
 		return db
 	}
 
-	result := d.prepareResult
+	result := d.parseResult
 	if result == nil {
 		return db
 	}
@@ -614,7 +621,7 @@ func (d *baseContext) IsGlobalDb(db string) bool {
 	}
 
 	dbPrefix := ""
-	result := d.PrepareResult()
+	result := d.ParseResult()
 	if result != nil {
 		dbPrefix = result.DbPrefix()
 	}
@@ -633,13 +640,12 @@ func (d *baseContext) SelectDWIndex() (*DWIndex, error) {
 		return nil, errors.New("db selector is nil")
 	}
 
-	result := d.prepareResult
-	params := result.Params()
+	result := d.parseResult
 	dbPrefix := result.DbPrefix()
 	var requestID string
-	_, forceBackground := params[paramBackgroundKey]
+	_, forceBackground := result.GetParam(paramBackgroundKey)
 	if !forceBackground {
-		if value, ok := params[paramRequestIDKey]; ok {
+		if value, ok := result.GetParam(paramRequestIDKey); ok {
 			requestID = value.(string)
 		}
 	}
@@ -651,7 +657,7 @@ func (d *baseContext) GetDWIndexInfo() (*DWIndexInfo, error) {
 	if sel == nil {
 		return nil, errors.New("db selector is nil")
 	}
-	return sel.GetIndexInfo(d.prepareResult.DbPrefix())
+	return sel.GetIndexInfo(d.parseResult.DbPrefix())
 }
 
 func (d *baseContext) GetDbs(stmt ast.StmtNode) []string {

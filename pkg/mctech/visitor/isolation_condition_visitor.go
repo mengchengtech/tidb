@@ -58,7 +58,7 @@ func newIsolationConditionVisitor(
 		databaseNameVisitor: newDatabaseNameVisitor(mctx),
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
-	result := mctx.PrepareResult()
+	result := mctx.ParseResult()
 	if result.TenantOmit() {
 		visitor.excludes = toExprList(result.Global().Excludes(), charset, collation)
 		visitor.includes = toExprList(result.Global().Includes(), charset, collation)
@@ -136,7 +136,7 @@ func (v *isolationConditionVisitor) shouldProcess(tableName *ast.TableName) bool
 	}
 
 	// 只处理global_xxxx的表
-	return sd.PrepareResult().TenantOmit() || !sd.IsGlobalDb(dbName)
+	return sd.ParseResult().TenantOmit() || !sd.IsGlobalDb(dbName)
 }
 
 func (v *isolationConditionVisitor) enterImportStatement(node *ast.ImportIntoStmt) {
@@ -341,7 +341,7 @@ func (v *isolationConditionVisitor) processJoinClause(tableRefs *ast.Join) ast.E
 
 func (v *isolationConditionVisitor) createTenantConditionFromTable(
 	table *ast.TableName, alias model.CIStr) ast.ExprNode {
-	dbName, isCteName := v.resolveDbName(table)
+	dbName, isCteName := v.fetchDbName(table)
 	if isCteName {
 		// 视图引用，什么也不做
 		return nil
@@ -364,7 +364,7 @@ func (v *isolationConditionVisitor) createTenantConditionFromTable(
 	}
 
 	var condition ast.ExprNode
-	rt := sd.PrepareResult()
+	rt := sd.ParseResult()
 	if rt.TenantOmit() {
 		var exclude ast.ExprNode
 		var include ast.ExprNode
@@ -499,7 +499,7 @@ func (v *isolationConditionVisitor) processInsertColumns(node *ast.InsertStmt) b
 
 func (v *isolationConditionVisitor) createTenantExpr() (expr ast.ValueExpr) {
 	if v.usingParam {
-		expr = ast.NewParamMarkerExpr(mctech.ExtensionParamMarkerOffset)
+		expr = ast.NewParamMarkerExpr(mctech.TenantParamMarkerOffset)
 	} else {
 		expr = v.tenant
 	}

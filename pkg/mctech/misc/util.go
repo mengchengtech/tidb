@@ -43,19 +43,19 @@ func (r *_miscExtension) changeToPhysicalDb(
 	return oriName, err
 }
 
-var miscResolver *_miscExtension
-var miscResolverInitOne sync.Once
+var miscVisitor *_miscExtension
+var miscVisitorInitOne sync.Once
 
 func getMsicExtension() *_miscExtension {
-	if miscResolver != nil {
-		return miscResolver
+	if miscVisitor != nil {
+		return miscVisitor
 	}
 
-	miscResolverInitOne.Do(func() {
+	miscVisitorInitOne.Do(func() {
 		e := &_miscExtension{}
-		miscResolver = e
+		miscVisitor = e
 	})
-	return miscResolver
+	return miscVisitor
 }
 
 // ApplyExtension apply misc

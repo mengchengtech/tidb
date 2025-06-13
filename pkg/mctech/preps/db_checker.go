@@ -119,7 +119,7 @@ func newMutexDatabaseCheckerWithParams(mutex, exclude, across []string) *mutexDa
 }
 
 func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, dbs []string) error {
-	result := mctx.PrepareResult()
+	result := mctx.ParseResult()
 	if !result.Roles().TenantOnly() {
 		return nil
 	}
@@ -139,9 +139,8 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 	}
 
 	var specialGroup string
-	if result := mctx.PrepareResult(); result != nil {
-		params := result.Params()
-		if v, ok := params[mctech.ParamAcross]; ok {
+	if result := mctx.ParseResult(); result != nil {
+		if v, ok := result.GetParam(mctech.ParamAcross); ok {
 			var across string
 			if across, ok = v.(string); !ok {
 				return errors.New("'across'参数类型必须是字符串")
@@ -198,7 +197,7 @@ func (c *mutexDatabaseChecker) dbPredicate(dbName string) bool {
 	return false
 }
 
-func checkExcepts(result mctech.PrepareResult) bool {
+func checkExcepts(result mctech.ParseResult) bool {
 	excepts := config.GetMCTechConfig().DbChecker.Excepts
 	comments := result.Comments()
 	for _, except := range excepts {

@@ -6,8 +6,8 @@ import (
 
 // Handler mctech enhance interface
 type Handler interface {
-	// PrepareSQL
-	PrepareSQL(ctx Context, rawSQL string) (sql string, err error)
+	// ParseSQL
+	ParseSQL(ctx Context, rawSQL string) (sql string, err error)
 	// ApplyAndCheck
 	ApplyAndCheck(ctx Context, stmt ast.StmtNode) (changed bool, err error)
 }

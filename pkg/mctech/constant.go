@@ -2,8 +2,8 @@ package mctech
 
 import "math"
 
-// ExtensionParamMarkerOffset 添加的租户条件假的文本位置偏移量
-const ExtensionParamMarkerOffset = math.MaxInt - 1
+// TenantParamMarkerOffset 添加的租户条件假的文本位置偏移量
+const TenantParamMarkerOffset = math.MaxInt - 1
 
 // MCExecStmtVarKeyType is a dummy type to avoid naming collision in context.
 type MCExecStmtVarKeyType int
