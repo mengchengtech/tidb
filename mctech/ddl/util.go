@@ -65,8 +65,8 @@ func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast
 	return err
 }
 
-var ddlResolver *_ddlExtension
-var ddlResolverInitOne sync.Once
+var ddlVisitor *_ddlExtension
+var ddlVisitorInitOne sync.Once
 
 func createDDLExtension() *_ddlExtension {
 	option := config.GetMCTechConfig()
@@ -86,19 +86,20 @@ func createDDLExtension() *_ddlExtension {
 	}
 	return e
 }
+
 func getDDLExtension() *_ddlExtension {
 	failpoint.Inject("DDLExtension", func(_ failpoint.Value) {
 		failpoint.Return(createDDLExtension())
 	})
 
-	if ddlResolver != nil {
-		return ddlResolver
+	if ddlVisitor != nil {
+		return ddlVisitor
 	}
 
-	ddlResolverInitOne.Do(func() {
-		ddlResolver = createDDLExtension()
+	ddlVisitorInitOne.Do(func() {
+		ddlVisitor = createDDLExtension()
 	})
-	return ddlResolver
+	return ddlVisitor
 }
 
 // ApplyExtension apply ddl modify

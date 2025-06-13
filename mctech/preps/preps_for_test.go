@@ -31,17 +31,17 @@ func NewActionsForTest(m map[string]string) (result []ActionInfo) {
 }
 
 type SQLPreprocessorTest interface {
-	Prepare(mctx mctech.Context,
-		actions []ActionInfo, comments mctech.Comments, params map[string]any) (mctech.PrepareResult, error)
-	GetPreparedSQL() string
+	Parse(mctx mctech.Context,
+		actions []ActionInfo, comments mctech.Comments, params map[string]any) (mctech.ParseResult, error)
+	GetParsedSQL() string
 }
 
 type sqlPreprocessorForTest struct {
 	sqlPreprocessor
 }
 
-func (p *sqlPreprocessorForTest) GetPreparedSQL() string {
-	return p.preparedSQL
+func (p *sqlPreprocessorForTest) GetParsedSQL() string {
+	return p.sql
 }
 
 func NewSQLPreprocessorForTest(sql string) SQLPreprocessorTest {

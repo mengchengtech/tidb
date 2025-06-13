@@ -66,7 +66,7 @@ func handlerRunTestCase(t *testing.T, i int, c *handlerTestCase, mctechCtx mctec
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	var sql string
-	if sql, err = handler.PrepareSQL(mctechCtx, c.sql); err != nil {
+	if sql, err = handler.ParseSQL(mctechCtx, c.sql); err != nil {
 		return err
 	}
 	session := mctechCtx.Session().(session.Session)

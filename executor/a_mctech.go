@@ -1105,7 +1105,7 @@ func (a *ExecStmt) SaveLargeQuery(mctx mctech.Context, sqlType string, succ bool
 	}
 
 	sql := a.GetTextToLog(true)
-	comments := mctx.PrepareResult().Comments()
+	comments := mctx.ParseResult().Comments()
 	resultRows := GetResultRowsCount(sessVars.StmtCtx, a.Plan)
 	largeItems := CreateLargeQueryItems(a.GoCtx, sql, sqlType, succ, resultRows, sessVars, comments)
 	largeQuery, err := sessVars.LargeQueryFormat(largeItems)

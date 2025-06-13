@@ -98,13 +98,13 @@ func TestProcessor(t *testing.T) {
 func preprocessorRunTestCase(t *testing.T, i int, c *preprocessorTestCase, mctechCtx mctech.Context) error {
 	processor := preps.NewSQLPreprocessorForTest(c.sql)
 	comments := preps.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
-	result, err := processor.Prepare(mctechCtx, c.actions, comments, c.params)
+	result, err := processor.Parse(mctechCtx, c.actions, comments, c.params)
 	if err != nil {
 		return err
 	}
 
 	require.Equal(t, c.resultExpect, result.GetInfoForTest(), c.Source(i))
-	outSQL := processor.GetPreparedSQL()
+	outSQL := processor.GetParsedSQL()
 	require.NotContains(t, outSQL, "{{tenant}}", c.Source(i))
 	if outSQL != c.sql {
 		require.Equal(t, c.sqlExpect, outSQL, c.Source(i))

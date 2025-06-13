@@ -28,7 +28,7 @@ func (s *testDWSelector) SelectIndex(dbPrefix, requestID string, forcebackground
 	return &s.dwIndex, nil
 }
 
-func (s *testDWSelector) SelectIndexByResult(result mctech.PrepareResult) (*mctech.DWIndex, error) {
+func (s *testDWSelector) SelectIndexByResult(result mctech.ParseResult) (*mctech.DWIndex, error) {
 	return &s.dwIndex, nil
 }
 
@@ -112,7 +112,7 @@ func newTestMCTechContext() (mctech.Context, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := mctech.NewPrepareResult("gslq4dev", roles, nil, map[string]any{
+	result, err := mctech.NewParseResult("gslq4dev", roles, nil, map[string]any{
 		"dbPrefix": "mock",
 	})
 
@@ -124,7 +124,7 @@ func newTestMCTechContext() (mctech.Context, error) {
 		Context: mctech.NewBaseContext(false),
 	}
 	modifyCtx := context.Context.(mctech.ModifyContext)
-	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetParseResult(result)
 	modifyCtx.SetDWSelector(&testDWSelector{dwIndex: 1})
 	return context, err
 }
