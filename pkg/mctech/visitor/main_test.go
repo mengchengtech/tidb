@@ -81,7 +81,7 @@ func newTestMCTechContext(currentDb, mock string, global bool, excludes, include
 	if err != nil {
 		return nil, err
 	}
-	result, err := mctech.NewPrepareResult(tenant, roles, nil, map[string]any{
+	result, err := mctech.NewParseResult(tenant, roles, nil, map[string]any{
 		"dbPrefix": mock,
 		"global":   mctech.NewGlobalValue(global, excludes, includes),
 	})
@@ -94,7 +94,7 @@ func newTestMCTechContext(currentDb, mock string, global bool, excludes, include
 		Context: mctech.NewBaseContext(false),
 	}
 	modifyCtx := context.Context.(mctech.ModifyContext)
-	modifyCtx.SetPrepareResult(result)
+	modifyCtx.SetParseResult(result)
 	modifyCtx.SetDWSelector(&testDWSelector{dwIndex: 1})
 
 	context.currentDb, err = context.ToPhysicalDbName(currentDb)

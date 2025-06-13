@@ -51,13 +51,13 @@ func contextRunTestCase(t *testing.T, i int, c *testContextCase) error {
 	if err != nil {
 		return err
 	}
-	result, err := mctech.NewPrepareResult(c.tenant, roles, nil, c.params)
+	result, err := mctech.NewParseResult(c.tenant, roles, nil, c.params)
 	if err != nil {
 		return err
 	}
 	selector := preps.GetDWSelectorForTest()
 	context := mctech.NewBaseContext(false)
-	context.(mctech.ModifyContext).SetPrepareResult(result)
+	context.(mctech.ModifyContext).SetParseResult(result)
 	context.(mctech.ModifyContext).SetDWSelector(selector)
 	index, err := context.SelectDWIndex()
 	if err != nil {

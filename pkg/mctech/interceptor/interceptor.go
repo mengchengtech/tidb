@@ -44,7 +44,7 @@ func (*interceptor) BeforeParseSQL(sctx sessionctx.Context, sql string) (mctech.
 	}
 
 	handler := mctech.GetHandler()
-	if sql, err = handler.PrepareSQL(mctx, sql); err != nil {
+	if sql, err = handler.ParseSQL(mctx, sql); err != nil {
 		mctx.Clear()
 		return nil, "", err
 	}
@@ -75,12 +75,11 @@ func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (e
 	// log.Warn(fmt.Sprintf("queryOnly: %t", queryOnly))
 	if queryOnly {
 		// 只对查询语句处理mpp
-		result := mctx.PrepareResult()
+		result := mctx.ParseResult()
 		// log.Warn(fmt.Sprintf("result is null: %t", result == nil))
 		if result != nil {
-			params := result.Params()
 			var mppValue string
-			if value, ok := params[mctech.ParamMPP]; ok {
+			if value, ok := result.GetParam(mctech.ParamMPP); ok {
 				mppValue = value.(string)
 			}
 
@@ -389,12 +388,10 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 	if len(lst) > 0 {
 		traceLog.dbs = strings.Join(lst, ",")
 	}
-	if result := mctx.PrepareResult(); result != nil {
+	if result := mctx.ParseResult(); result != nil {
 		traceLog.tenant = result.Tenant().Code()
-		if params := result.Params(); params != nil {
-			if v, ok := params[mctech.ParamAcross].(string); ok {
-				traceLog.across = v
-			}
+		if v, ok := result.GetParam(mctech.ParamAcross); ok {
+			traceLog.across, _ = v.(string)
 		}
 
 		comments := result.Comments()

@@ -15,7 +15,7 @@ const acrossDBRole = "across_db"
 
 var tenantCodePattern = regexp.MustCompile(`(?i)^code_(.+)?$`)
 
-func resolveActiveRoles(ctx sessionctx.Context, forceTenantOnly bool) (roles *mctechFlagRoles, tenantCode string, err error) {
+func fetchActiveRoles(ctx sessionctx.Context, forceTenantOnly bool) (roles *mctechFlagRoles, tenantCode string, err error) {
 	vars := ctx.GetSessionVars()
 	var (
 		tenantOnly bool // 角色上是否存在只允许限制在某个租户上执行的角色
@@ -86,17 +86,15 @@ var resolveActions = map[string]action{
 }
 
 type sqlPreprocessor struct {
-	preparedSQL string
+	sql string
 }
 
-func newSQLPreprocessor(stmt string) *sqlPreprocessor {
-	return &sqlPreprocessor{
-		preparedSQL: stmt,
-	}
+func newSQLPreprocessor(sql string) *sqlPreprocessor {
+	return &sqlPreprocessor{sql: sql}
 }
 
-func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
-	comments mctech.Comments, params map[string]any) (mctech.PrepareResult, error) {
+func (p *sqlPreprocessor) Parse(mctx mctech.Context, actions []ActionInfo,
+	comments mctech.Comments, params map[string]any) (mctech.ParseResult, error) {
 	if len(params) > 0 {
 		for name, formatter := range valueFormatters {
 			value := params[name]
@@ -121,11 +119,11 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
 				return nil, fmt.Errorf("不支持的action操作: %s", act.Name())
 			}
 
-			sql, err := action.Resolve(p.preparedSQL, act.Args(), params)
+			sql, err := action.Resolve(p.sql, act.Args(), params)
 			if err != nil {
 				return nil, err
 			}
-			p.preparedSQL = sql
+			p.sql = sql
 		}
 	}
 
@@ -136,12 +134,12 @@ func (p *sqlPreprocessor) Prepare(mctx mctech.Context, actions []ActionInfo,
 		}
 	}
 
-	roles, tenantCode, err := resolveActiveRoles(mctx.Session(), forceTenantOnly)
+	roles, tenantCode, err := fetchActiveRoles(mctx.Session(), forceTenantOnly)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := mctech.NewPrepareResult(tenantCode, roles, comments, params)
+	result, err := mctech.NewParseResult(tenantCode, roles, comments, params)
 	if err != nil {
 		return nil, err
 	}
