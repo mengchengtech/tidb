@@ -79,7 +79,7 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmt ast.StmtNode) (b
 		if schema, skipped, err = preprocessor.ResolveStmt(mctx, stmt, charset, collation); err != nil {
 			return false, err
 		}
-		mctx.SetSchema(stmt, schema)
+		modifyCtx.SetSchema(stmt, schema)
 		if !skipped {
 			changed = true
 		}

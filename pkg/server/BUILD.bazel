@@ -36,6 +36,7 @@ go_library(
         "//pkg/infoschema",
         "//pkg/kv",
         "//pkg/mctech",
+        "//pkg/mctech/prepare",
         "//pkg/mctech/preps",
         "//pkg/metrics",
         "//pkg/param",
