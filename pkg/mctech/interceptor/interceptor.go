@@ -12,6 +12,8 @@ import (
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/executor"
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/prepare"
+	"github.com/pingcap/tidb/pkg/parser"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/planner/core/base"
@@ -149,9 +151,8 @@ func ignoreTrace(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode
 	databases := metrics.Ignore.ByDatabases
 	var dbs []string
 	if stmt != nil {
-		if schema, exists := mctx.GetSchema(stmt); exists {
-			dbs = schema.Databases
-		}
+		schema, _ := getSchemaAndDigest(sctx, mctx, stmt)
+		dbs = schema.Databases
 	} else {
 		dbs = []string{sctx.GetSessionVars().CurrentDB}
 	}
@@ -265,6 +266,9 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		case *ast.ExecuteStmt:
 			// 从对应的prepare语句中提取sql
 			origSQL = fetchFullExecuteSQL(typedStmt, sessVars)
+		case *ast.PrepareStmt, *prepare.BinaryPrepareStmt:
+			// 从对应的prepare语句中提取sql
+			origSQL = fetchFullPrepareSQL(typedStmt, sessVars)
 		default:
 			origSQL = stmt.OriginalText()
 		}
@@ -356,8 +360,6 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 					traceLog.times.tx = &txTimeObject{prewrite: cd.PrewriteTime, commit: cd.CommitTime}
 				}
 			}
-			_, d := stmtCtx.SQLDigest()
-			traceLog.digest = d.String()
 		}
 	}
 
@@ -386,10 +388,11 @@ func traceFullQuery(sctx sessionctx.Context, mctx mctech.Context, sql string, st
 		}
 	}
 
-	if schema, exists := mctx.GetSchema(stmt); exists {
-		traceLog.dbs = strings.Join(schema.Databases, ",")
-		traceLog.tables = schema.Tables
-	}
+	schema, d := getSchemaAndDigest(sctx, mctx, stmt)
+	traceLog.digest = d.String()
+
+	traceLog.dbs = strings.Join(schema.Databases, ",")
+	traceLog.tables = schema.Tables
 	if result := mctx.ParseResult(); result != nil {
 		traceLog.tenant = result.Tenant().Code()
 		if v, ok := result.GetParam(mctech.ParamAcross); ok {
@@ -423,8 +426,9 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 				info = &sqlStmtInfo{"exec", raw.sqlType, raw.modified}
 			}
 		}
-	case *ast.PrepareStmt:
-		info = sqlPrepareInfo
+	// 暂时不记录 prepare 语句和 prepare 命令
+	// case *ast.PrepareStmt, *prepare.BinaryPrepareStmt:
+	// 	info = sqlPrepareInfo
 	case *ast.DeallocateStmt:
 		info = sqlDeallocateInfo
 	case *ast.BeginStmt:
@@ -477,4 +481,39 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		info = nil
 	}
 	return info
+}
+
+func getSchemaAndDigest(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode) (schema mctech.StmtSchemaInfo, digest *parser.Digest) {
+	var (
+		planCacheStmt *core.PlanCacheStmt
+	)
+	switch rawStmt := stmt.(type) {
+	case *ast.PrepareStmt:
+		stmtName := rawStmt.Name
+		vars := sctx.GetSessionVars()
+		prepStmt, err := vars.GetPreparedStmtByName(stmtName)
+		if err != nil {
+			panic(err)
+		}
+		planCacheStmt = prepStmt.(*core.PlanCacheStmt)
+	case *prepare.BinaryPrepareStmt:
+		planCacheStmt = rawStmt.PrepStmt.(*core.PlanCacheStmt)
+	case *ast.ExecuteStmt:
+		planCacheStmt = rawStmt.PrepStmt.(*core.PlanCacheStmt)
+	}
+
+	var targetStmt ast.StmtNode
+	if planCacheStmt != nil {
+		// prepare, execute语句特殊处理
+		targetStmt = planCacheStmt.PreparedAst.Stmt
+		digest = planCacheStmt.SQLDigest
+	} else {
+		targetStmt = stmt
+		if stmtCtx := sctx.GetSessionVars().StmtCtx; stmtCtx != nil {
+			_, digest = stmtCtx.SQLDigest()
+		}
+	}
+
+	schema, _ = mctx.GetSchema(targetStmt)
+	return schema, digest
 }

@@ -205,6 +205,9 @@ func GeneratePlanCacheStmtWithAST(ctx context.Context, sctx sessionctx.Context, 
 	}
 
 	preparedObj := &PlanCacheStmt{
+		// add by zhangbing
+		MCTechExtensions: newMCTechExtensions(sctx, paramStmt),
+		// add end
 		PreparedAst:         prepared,
 		ResolveCtx:          nodeW.GetResolveContext(),
 		StmtDB:              vars.CurrentDB,
@@ -229,6 +232,9 @@ func GeneratePlanCacheStmtWithAST(ctx context.Context, sctx sessionctx.Context, 
 	if err = checkPreparedPriv(ctx, sctx, preparedObj, ret.InfoSchema); err != nil {
 		return nil, nil, 0, err
 	}
+	// add by zhangbing
+	paramCount = fetchMinimumParamCount(extractor.markers)
+	// add end
 	return preparedObj, p, paramCount, nil
 }
 
@@ -544,6 +550,9 @@ type PointGetExecutorCache struct {
 
 // PlanCacheStmt store prepared ast from PrepareExec and other related fields
 type PlanCacheStmt struct {
+	// add by zhangbing
+	MCTechExtensions
+	// add end
 	PreparedAst *ast.Prepared
 	ResolveCtx  *resolve.Context
 	StmtDB      string // which DB the statement will be processed over

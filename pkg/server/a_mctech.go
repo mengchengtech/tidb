@@ -4,6 +4,7 @@ package server
 
 import (
 	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/prepare"
 	_ "github.com/pingcap/tidb/pkg/mctech/preps" // 强制初始化preps
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/sessionctx"
@@ -17,6 +18,25 @@ func (cc *clientConn) onBeforeParseSQL(sql string) (mctech.Context, string, erro
 // onAfterParseSQL 当sql语法解析成功后 执行的方法
 func (cc *clientConn) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 	return mctech.GetInterceptor().AfterParseSQL(cc.getCtx(), stmt)
+}
+
+func (cc *clientConn) onExtensionBinaryPrepareEnd(stmt PreparedStatement, sql string, err error) {
+	var stmtID uint32
+	if stmt != nil {
+		stmtID = uint32(stmt.ID())
+	}
+	prepared, errNotFound := cc.ctx.GetSessionVars().GetPreparedStmtByID(stmtID)
+	it := mctech.GetInterceptor()
+	if err == nil {
+		prepareStmt := &prepare.BinaryPrepareStmt{
+			PrepareStmt: ast.PrepareStmt{SQLText: sql},
+			PrepStmt:    prepared,
+		}
+		it.AfterHandleStmt(cc.getCtx(), prepareStmt, nil)
+	} else if errNotFound == nil {
+		// stmtNode 不存在，sql 解析失败
+		it.ParseSQLFailed(cc.getCtx(), sql, err)
+	}
 }
 
 type mctechStmtEventInfo struct {

@@ -14,6 +14,8 @@ import (
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/pingcap/tidb/pkg/parser/auth"
+	"github.com/pingcap/tidb/pkg/parser/mysql"
+	"github.com/pingcap/tidb/pkg/server"
 	"github.com/pingcap/tidb/pkg/testkit"
 	"github.com/stretchr/testify/require"
 )
@@ -100,7 +102,7 @@ func TestIntegerAutoIncrement(t *testing.T) {
 	)
 }
 
-func TestPrepareByQuery(t *testing.T) {
+func TestPrepareAndExecuteByQuery(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
@@ -135,7 +137,7 @@ func TestPrepareByQuery(t *testing.T) {
 	}
 }
 
-func TestPrepareByCmd(t *testing.T) {
+func TestPrepareAndExecuteByCmd(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
@@ -156,7 +158,85 @@ func TestPrepareByCmd(t *testing.T) {
 	}
 }
 
-func TestPrepareByCmdNoTenant(t *testing.T) {
+func TestPrepareAndExecuteByCmdDispatch(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	}()
+
+	store := testkit.CreateMockStore(t)
+	tk, sql := initDbAndData(t, store)
+	srv := server.CreateMockServer(t, store)
+	cc := server.CreateMockConn(t, srv)
+	cc.Context().Session = tk.Session()
+
+	ctx := context.Background()
+	data := append([]byte{mysql.ComStmtPrepare}, []byte(sql)...)
+	require.NoError(t, cc.Dispatch(ctx, data))
+	data = []byte{
+		mysql.ComStmtExecute, // cmd
+		0x01, 0x0, 0x0, 0x0,  // stmtID little endian
+		0x00,               // useCursor == false
+		0x1, 0x0, 0x0, 0x0, // iteration-count, always 1
+		0x0,      // 表示空值的位信息。一个字节可以表示8个参数的可空信息
+		0x1,      // new-params-bound-flag
+		0xfe, 00, // string type
+		0xfe, 00, // string type
+		0xfe, 00, // string type
+		0xfe, 00, // string type
+		0xfe, 00, // string type
+		0xfe, 00, // string type
+		0xfc, 0xb, 0x0, 't', 'e', 'r', 'm', 'i', 'n', 'a', 't', 'i', 'o', 'n', // string value 'termination'
+		0xfc, 0x8, 0x0, 'f', 'i', 'n', 'i', 's', 'h', 'e', 'd', // string value 'finished'
+		0xfc, 0x4, 0x0, 'n', 'o', 'n', 'e', // string value 'none'
+		0xfc, 0x7, 0x0, 'p', 'r', 'o', 'j', 'e', 'c', 't', // string value 'project'
+		0xfc, 0x7, 0x0, 'p', 'r', 'o', 'j', 'e', 'c', 't', // string value 'project'
+		0xfc, 0x6, 0x0, 'm', 'c', 't', 'e', 's', 't', // string value 'mctest'
+	}
+
+	require.NoError(t, cc.Dispatch(ctx, data))
+}
+
+func TestPrepareAndExecuteByQueryDispatch(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	}()
+
+	store := testkit.CreateMockStore(t)
+	tk, sql := initDbAndData(t, store)
+	tk.MustExecWithContext(
+		context.Background(),
+		fmt.Sprintf(`prepare st from "%s"`, sql),
+	)
+	tk.MustExec("set @p0='termination',@p1='finished',@p2='none',@p3='project',@p4='project',@p5='mctest'")
+	tk.MustQueryWithContext(context.Background(), "execute st using @p0,@p1,@p2,@p3,@p4,@p5")
+}
+
+func TestPrepareAndExecuteByQueryNotPassTenantCode(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	}()
+
+	store := testkit.CreateMockStore(t)
+	tk, sql := initDbAndData(t, store)
+	tk.MustExecWithContext(
+		context.Background(),
+		fmt.Sprintf(`prepare st from "%s"`, sql),
+	)
+	tk.MustExec("set @p0='termination',@p1='finished',@p2='none',@p3='project',@p4='project'")
+	_, err := tk.ExecWithContext(context.Background(), "execute st using @p0,@p1,@p2,@p3,@p4")
+	require.Error(t, err, "当前用户无法确定所属租户信息，请确认在参数列表最后额外添加了一个非空的租户code参数")
+}
+
+func TestPrepareAndExecuteByCmdNoTenant(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false}),
 	)
