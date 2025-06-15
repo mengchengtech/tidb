@@ -152,12 +152,29 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 		}},
 	},
 	{
-		name: "mctech_get_full_sql", shortName: "mc_get_full_sql", mutable: true,
+		hidden: true,
+		name:   "mctech_get_full_sql", shortName: "mc_get_full_sql", mutable: true,
 		signatures: []signatureInfo{{
 			description: "获取sql执行信息中的保存在磁盘上的完整sql。仅限于在导入过sql执行信息的数据库上使用",
 			parameters: []parameterInfo{
 				{name: "at", tp: "datetime|string", description: "sql执行信息中'at'字段的值。"},
-				{name: "txId", tp: "bigint", description: "sql执行信息中tx_id字段的值。"},
+				{name: "txId", tp: "unsignedbigint", description: "sql执行信息中tx_id字段的值。"},
+			},
+			returnType: returnInfo{
+				tp:          "string",
+				description: "从磁盘上加载的完整sql。如果磁盘上找不到，则返回null",
+			},
+		}},
+	},
+	{
+		hidden: true,
+		name:   "mctech_get_full_sql", shortName: "mc_get_full_sql", mutable: true,
+		signatures: []signatureInfo{{
+			description: "获取sql执行信息中的保存在磁盘上的完整sql。仅限于在导入过sql执行信息的数据库上使用",
+			parameters: []parameterInfo{
+				{name: "at", tp: "datetime|string", description: "sql执行信息中'at'字段的值。"},
+				{name: "txId", tp: "unsignedbigint", description: "sql执行信息中tx_id字段的值。"},
+				{name: "group", tp: "string", description: "表示要提取的磁盘上文件的分组目录"},
 			},
 			returnType: returnInfo{
 				tp:          "string",
@@ -186,7 +203,7 @@ func init() {
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
 	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 3}}
 	funcs[ast.MCDWIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
-	funcs[ast.MCHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 0}}
+	funcs[ast.MCHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
 	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 1}}
@@ -195,7 +212,7 @@ func init() {
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
 	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 3}}
 	funcs[ast.MCTechDataWarehouseIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
-	funcs[ast.MCTechHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 0}}
+	funcs[ast.MCTechHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
 	deferredFunctions[ast.MCTechSequence] = struct{}{}
@@ -609,16 +626,18 @@ func (b *builtinMCTechGetFullSQLSig) Clone() builtinFunc {
 func (b *builtinMCTechGetFullSQLSig) evalString(ctx EvalContext, row chunk.Row) (sql string, isNull bool, err error) {
 	var (
 		at   types.Time
-		txID int64
+		txID uint64
 	)
 
 	if at, isNull, err = b.args[0].EvalTime(ctx, row); isNull || err != nil {
 		return "", isNull, err
 	}
 
-	if txID, isNull, err = b.args[1].EvalInt(ctx, row); isNull || err != nil {
-		return "", isNull, err
+	var val types.Datum
+	if val, err = b.args[1].Eval(ctx, row); val.IsNull() || err != nil {
+		return "", val.IsNull(), err
 	}
+	txID = val.GetUint64()
 
 	var group = ""
 	if len(b.args) == 3 {
@@ -688,7 +707,19 @@ func (c *mctechHelpFunctionClass) getFunction(ctx BuildContext, args []Expressio
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString)
+
+	var (
+		argTps []types.EvalType
+	)
+	length := len(args) // 参数个数
+	switch length {
+	case 0:
+	case 1:
+		argTps = append(argTps, types.ETInt)
+	default:
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, argTps...)
 	if err != nil {
 		return nil, err
 	}
@@ -707,10 +738,20 @@ func (b *builtinMCTechHelpSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (*builtinMCTechHelpSig) evalString(_ EvalContext, _ chunk.Row) (string, bool, error) {
+func (b *builtinMCTechHelpSig) evalString(ctx EvalContext, row chunk.Row) (string, bool, error) {
+	// 是否显示隐藏函数
+	var showHidden bool
+	if len(b.args) == 1 {
+		val, isNull, err := b.args[0].EvalInt(ctx, row)
+		if isNull || err != nil {
+			return "", isNull, err
+		}
+		showHidden = val != 0
+	}
+
 	lst := []string{}
 	for i, item := range mctechFunctionHelps {
-		if item.hidden {
+		if item.hidden && !showHidden {
 			continue
 		}
 
