@@ -21,7 +21,7 @@ import (
 const dateFormat = "2006-01-02"
 
 // GetFullSQL get full sql from disk compact file
-func GetFullSQL(at types.Time, txID int64, group string) (sql string, isNull bool, err error) {
+func GetFullSQL(at types.Time, txID uint64, group string) (sql string, isNull bool, err error) {
 	config := config.GetMCTechConfig()
 	fullSQLDir := config.Metrics.SQLTrace.FullSQLDir
 	if fullSQLDir == "" {
@@ -75,7 +75,7 @@ func GetFullSQL(at types.Time, txID int64, group string) (sql string, isNull boo
 	}
 
 	if err != nil {
-		logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+		logutil.BgLogger().Error("get compress sql file error", zap.Time("at", gotime), zap.Uint64("txID", txID), zap.Error(err))
 		return "", true, fmt.Errorf("get compress sql file error, [%s, %d, %s]", at, txID, group)
 	}
 
@@ -85,7 +85,7 @@ func GetFullSQL(at types.Time, txID int64, group string) (sql string, isNull boo
 
 	var fi *os.File
 	if fi, err = os.Open(filepath.Clean(fullPath)); err != nil {
-		logutil.BgLogger().Error("load full sql error", zap.Time("at", gotime), zap.Int64("txID", txID), zap.Error(err))
+		logutil.BgLogger().Error("load full sql error", zap.Time("at", gotime), zap.Uint64("txID", txID), zap.Error(err))
 		return "", true, fmt.Errorf("load full sql error, [%s, %d, %s]", at, txID, group)
 	}
 	defer func() {
