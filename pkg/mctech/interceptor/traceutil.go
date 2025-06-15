@@ -3,15 +3,20 @@ package interceptor
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
 	"github.com/pingcap/failpoint"
+	"github.com/pingcap/tidb/pkg/mctech"
+	"github.com/pingcap/tidb/pkg/mctech/prepare"
 	"github.com/pingcap/tidb/pkg/parser/ast"
 	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/planner/core"
 	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
+	"github.com/pingcap/tidb/pkg/types"
 )
 
 func minInt(a, b int) int {
@@ -58,9 +63,38 @@ func mustCompress(sqlLen int, threshold int) (int, int, bool) {
 	return prefixEnd, suffixStart, true
 }
 
+func fetchFullPrepareSQL(prepareStmt ast.StmtNode, sessVars *variable.SessionVars) (origSQL string) {
+	var (
+		prepStmt *core.PlanCacheStmt
+		sb       strings.Builder
+		err      error
+	)
+	switch t := prepareStmt.(type) {
+	case *prepare.BinaryPrepareStmt:
+		prepStmt = t.PrepStmt.(*core.PlanCacheStmt)
+		sb.WriteString(";Type=Binary")
+	case *ast.PrepareStmt:
+		var prep any
+		if prep, err = sessVars.GetPreparedStmtByName(t.Name); err != nil {
+			panic(err)
+		}
+		prepStmt = prep.(*core.PlanCacheStmt)
+		sb.WriteString(";Type=SQL;Name=" + t.Name)
+	default:
+		panic(fmt.Errorf("not supported type. (%v)", reflect.TypeOf(prepareStmt)))
+	}
+	origSQL = prepStmt.PreparedAst.Stmt.OriginalText()
+
+	if sb.Len() > 0 {
+		origSQL += sb.String()
+	}
+	return origSQL
+}
+
 func fetchFullExecuteSQL(executeStmt *ast.ExecuteStmt, sessVars *variable.SessionVars) (origSQL string) {
 	var (
 		prepStmt *core.PlanCacheStmt
+		sb       strings.Builder
 		err      error
 	)
 	if prepStmt, err = core.GetPreparedStmt(executeStmt, sessVars); err != nil {
@@ -68,14 +102,25 @@ func fetchFullExecuteSQL(executeStmt *ast.ExecuteStmt, sessVars *variable.Sessio
 	}
 	origSQL = prepStmt.PreparedAst.Stmt.OriginalText()
 
-	var sb strings.Builder
 	if executeStmt.Name != "" {
 		sb.WriteString(";Type=SQL;Name=" + executeStmt.Name)
 	} else {
 		sb.WriteString(";Type=Binary")
 	}
 	sb.WriteString(";Params=[")
+	// ast.ExecuteStmt 类型的 UsingVars 和 BinaryArgs 分别表示两种方式执行execute时的参数列表
+	// 在每次执行时会依次赋值到 core.PlanCacheStmt 对象的 Params 列表里。参见 pkg/planner/core.planCachePreprocess(......) 的实现
+	// 此处为了简化实现逻辑，只从 core.PlanCacheStmt 中获取参数列表
+	var tenantMarkerExists = false
 	for i, p := range prepStmt.Params {
+		m := p.(types.ParamMarkerOffset)
+		if m.GetOffset() == mctech.TenantParamMarkerOffset {
+			if tenantMarkerExists {
+				// 租户code参数只输出一次，与传入参数定义保持一致
+				continue
+			}
+			tenantMarkerExists = true
+		}
 		if i > 0 {
 			sb.WriteByte(',')
 		}
