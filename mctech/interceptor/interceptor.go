@@ -458,12 +458,14 @@ func getSQLStmtInfo(stmt ast.StmtNode, sessVars *variable.SessionVars) (info *sq
 		info = sqlLoadInfo
 	case *ast.TruncateTableStmt:
 		info = sqlTruncateInfo
-	case *ast.SetStmt:
-		info = sqlSetInfo
+	// 暂时不记录 set 语句
+	// case *ast.SetStmt: // set
+	// 	info = sqlSetInfo
 	case *ast.LockTablesStmt:
 		info = sqlLockInfo
 	case *ast.UnlockTablesStmt: // lock/unlock table
 		info = sqlUnlockInfo
+	// 暂时不记录 set 语句
 	// case *ast.UseStmt: // use
 	// 	info = sqlUseInfo
 	case *ast.CallStmt: // precedure
