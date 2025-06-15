@@ -140,11 +140,20 @@ func (e *PrepareExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 		return nil
 	}
 
-	value := mctx.UsingTenantParam()
+	usingTenantParam := mctx.UsingTenantParam()
+	inPrepare := mctx.InPrepare()
 	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
-	defer modifyCtx.SetUsingTenantParam(value)
+	defer func() {
+		modifyCtx.SetUsingTenantParam(usingTenantParam)
+		modifyCtx.SetInPrepare(inPrepare)
+	}()
 
-	modifyCtx.SetUsingTenantParam(true)
+	var tenantFromRole = false
+	if result := mctx.ParseResult(); result != nil {
+		tenantFromRole = result.Tenant().FromRole()
+	}
+	modifyCtx.SetUsingTenantParam(!tenantFromRole)
+	modifyCtx.SetInPrepare(true)
 	return mctech.GetInterceptor().AfterParseSQL(e.ctx, stmt)
 }
 
@@ -166,7 +175,11 @@ func (e *ExecuteExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 		modifyCtx.SetInExecute(inExecute)
 	}()
 
-	modifyCtx.SetUsingTenantParam(true)
+	var tenantFromRole = false
+	if result := mctx.ParseResult(); result != nil {
+		tenantFromRole = result.Tenant().FromRole()
+	}
+	modifyCtx.SetUsingTenantParam(!tenantFromRole)
 	modifyCtx.SetInExecute(true)
 	return mctech.GetInterceptor().AfterParseSQL(e.ctx, stmt)
 }

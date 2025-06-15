@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "prepare",
+    srcs = ["mctech_prepare_stmt.go"],
+    importpath = "github.com/pingcap/tidb/mctech/prepare",
+    visibility = ["//visibility:public"],
+    deps = ["//parser/ast"],
+)

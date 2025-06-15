@@ -328,7 +328,7 @@ type sqlStmtInfo struct {
 }
 
 var (
-	sqlPrepareInfo    = &sqlStmtInfo{"exec", "prepare", false}
+	// sqlPrepareInfo    = &sqlStmtInfo{"exec", "prepare", false}
 	sqlDeallocateInfo = &sqlStmtInfo{"exec", "deallocate", false}
 	sqlBeginInfo      = &sqlStmtInfo{"tx", "begin", false}
 	sqlRollbackInfo   = &sqlStmtInfo{"tx", "rollback", true}

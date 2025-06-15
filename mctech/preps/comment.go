@@ -32,6 +32,23 @@ func (c *customComments) ToMap() map[string]any {
 	return result
 }
 
+func (c *customComments) TryMerge(other mctech.Comments) bool {
+	if other == nil {
+		return true
+	}
+
+	if c.service == nil {
+		c.service = other.Service()
+	}
+
+	if c.pkg == nil {
+		c.pkg = other.Package()
+	}
+
+	return other.Service() == nil || c.service.From() == other.Service().From() ||
+		other.Package() == nil || c.pkg.Name() != other.Package().Name()
+}
+
 // serviceComment service comment
 type serviceComment struct {
 	from        string // {appName}[.{productLine}]

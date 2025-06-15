@@ -41,6 +41,7 @@ go_library(
         "//infoschema",
         "//kv",
         "//mctech",
+        "//mctech/prepare",
         "//mctech/preps",
         "//meta",
         "//metrics",

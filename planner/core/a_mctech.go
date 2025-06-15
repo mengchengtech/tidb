@@ -23,9 +23,84 @@ import (
 	"github.com/pingcap/tidb/types"
 	"github.com/pingcap/tidb/util/chunk"
 	"github.com/pingcap/tidb/util/codec"
+	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/rowcodec"
 	"golang.org/x/exp/slices"
 )
+
+// MCTechExtensions mctech extension interface to extend PlanCacheStmt struct
+type MCTechExtensions interface {
+	mctech.ParsedData
+	Schema() *mctech.StmtSchemaInfo
+}
+
+type mctechExtensions struct {
+	parsedResult   mctech.ParseResult
+	schema         *mctech.StmtSchemaInfo
+	sqlRewrited    bool
+	sqlHasGlobalDB bool
+}
+
+var (
+	_ mctech.ParsedData = &mctechExtensions{}
+	_ MCTechExtensions  = &mctechExtensions{}
+)
+
+func (e *mctechExtensions) ParseResult() mctech.ParseResult {
+	return e.parsedResult
+}
+
+func (e *mctechExtensions) Schema() *mctech.StmtSchemaInfo {
+	return e.schema
+}
+
+func (e *mctechExtensions) SQLRewrited() bool {
+	return e.sqlRewrited
+}
+
+func (e *mctechExtensions) SQLHasGlobalDB() bool {
+	return e.sqlHasGlobalDB
+}
+
+// newMCTechExtensions create MCTechExtensions interface instance
+func newMCTechExtensions(sctx sessionctx.Context, stmt ast.StmtNode) MCTechExtensions {
+	mctx := mctech.GetContextStrict(sctx)
+	if mctx == nil && intest.InTest {
+		return &mctechExtensions{}
+	}
+	ext := &mctechExtensions{
+		parsedResult:   mctx.ParseResult(),
+		sqlRewrited:    mctx.SQLRewrited(),
+		sqlHasGlobalDB: mctx.SQLHasGlobalDB(),
+	}
+
+	if schema, exists := mctx.GetSchema(stmt); exists {
+		ext.schema = &schema
+	}
+	return ext
+}
+
+// fetchMinimumParamCount 压缩多个附加的租户code参数对象为1个对象
+// @description 如果存在附加的租户code参数，最终需要调用端提供的参数列表是除了附加的参数外，客外再增加一个租户code参数。如果不存在附加的租户code参数，最终需要调用端提供的参数列表为原始参数列表
+func fetchMinimumParamCount(markers []ast.ParamMarkerExpr) int {
+	rawCount := 0
+	tenantCount := 0
+	for _, m := range markers {
+		p := m.(types.ParamMarkerOffset)
+		if p.GetOffset() == mctech.TenantParamMarkerOffset {
+			tenantCount++
+		} else {
+			rawCount++
+		}
+	}
+
+	if tenantCount > 0 {
+		rawCount++
+	}
+	return rawCount
+}
+
+// ----------------------------------------------------------------------------------------------------
 
 func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan, error) {
 	p := &MCTech{
@@ -311,17 +386,25 @@ func appendExtensionArgs[T any](
 	return extensions, nil
 }
 
-// AppendVarExprs append custom extension parameters
+// AppendVarExprs 扩展租户参数为真实的个数
 func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
+	var mctx mctech.Context
+	if mctx, err = mctech.GetContext(sctx); err != nil || mctx == nil {
+		return err
+	}
+
+	// 替换其中的一部分信息
+	extensions := e.PrepStmt.MCTechExtensions
+	modifyContext := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyContext.SetParsedData(extensions)
+	if schema := extensions.Schema(); schema != nil {
+		modifyContext.SetSchema(e.PrepStmt.PreparedAst.Stmt, *schema)
+	}
+
 	// 获取扩展参数列表
 	extParams, from := e.getExtensionParams()
 	if len(extParams) == 0 {
 		return nil
-	}
-
-	var mctx mctech.Context
-	if mctx, err = mctech.GetContext(sctx); err != nil {
-		return err
 	}
 
 	var (
@@ -329,40 +412,53 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 		result      mctech.ParseResult
 		tenantCode  string
 	)
-	// 优先从sql语句中提取租户信息
+
+	// 只从第一个扩展参数中提取租户变量，忽略后续其它参数
+	if len(e.Params) > from {
+		tenantValue = e.Params[from]
+		if tenantValue != nil {
+			var (
+				code   string
+				isNull bool
+			)
+			if code, isNull, err = tenantValue.EvalString(sctx, chunk.Row{}); err != nil {
+				return err
+			}
+
+			if !isNull {
+				// 提取从参数上获取到的租户code
+				tenantCode = code
+			}
+		}
+		// 暂时先移除参数租户参数
+		e.Params = e.Params[:from]
+	}
+
+	// 与上下文中的租户code比较，判断兼容性
 	if result = mctx.ParseResult(); result != nil {
-		tenantCode = result.Tenant().Code()
-		if tenantCode != "" {
-			tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)
+		codeFromCtx := result.Tenant().Code()
+		if tenantCode == "" {
+			if codeFromCtx != "" {
+				// 参数上没有租户code，从context上提取的租户code，生成调用参数
+				tenantCode = codeFromCtx
+				tenantValue = expression.DatumToConstant(types.NewDatum(tenantCode), mysql.TypeString, 0)
+			}
+			// else tenantCode == "" && codeFromCtx == ""
+		} else {
+			if codeFromCtx == "" {
+				// 从参数上提取的租户code，赋值到context上
+				result.Tenant().(mctech.MutableTenantInfo).SetCode(tenantCode)
+			} else {
+				// tenantCode != "" && codeFromCtx != ""
+				if tenantCode != codeFromCtx {
+					return fmt.Errorf("当前用户所属租户信息与传入参数中提取的租户信息不相同. '%s' <==> '%s'", tenantCode, codeFromCtx)
+				}
+			}
 		}
 	}
 
 	if tenantValue == nil {
-		// 其次从参数中提取租户变量
-		if len(e.Params) > from {
-			tenantValue = e.Params[from]
-			if result != nil && tenantValue != nil {
-				var (
-					code   string
-					isNull bool
-				)
-				if code, isNull, err = tenantValue.EvalString(sctx, chunk.Row{}); err != nil {
-					return err
-				}
-
-				if !isNull {
-					// 提取从参数上获取到的租户code
-					tenantCode = code
-					result.Tenant().(mctech.MutableTenantInfo).SetCode(code)
-				}
-			}
-			// 暂时先移除参数租户参数
-			e.Params = e.Params[:from]
-		}
-	}
-
-	if tenantValue == nil || tenantCode == "" {
-		return errors.New("当前用户无法确定所属租户信息，需要在sql前添加 Hint 提供租户信息。格式为 /*& tenant:'{tenantCode}' */")
+		return errors.New("当前用户无法确定所属租户信息，请确认在参数列表最后额外添加了一个非空的租户code参数")
 	}
 
 	extArgs, err := appendExtensionArgs(extParams, func() (expression.Expression, error) {

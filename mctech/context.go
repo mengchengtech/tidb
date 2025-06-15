@@ -18,6 +18,12 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+var (
+	_ ParseResult   = &parseResult{}
+	_ Context       = &baseContext{}
+	_ ModifyContext = &baseContext{}
+)
+
 // StmtSchemaInfo 从sql解析出的数据库和表信息
 type StmtSchemaInfo struct {
 	// sql中解析出的数据库列表
@@ -73,14 +79,27 @@ func (t *TableName) CompareTo(o TableName) int {
 	return strings.Compare(t.Table, o.Table)
 }
 
+// ParsedData parsed data interface
+type ParsedData interface {
+	// @title ParseResult
+	// @description 对sql预处理的结果
+	ParseResult() ParseResult
+	// @title SQLRewrited
+	// @description 当前请求中的sql是否已被改动
+	SQLRewrited() bool
+	// @title SQLHasGlobalDB
+	// @description sql中是否包含global类的库
+	SQLHasGlobalDB() bool
+}
+
 // Context mctech context interface
 type Context interface {
+	ParsedData
 	StartedAt() time.Time
 	// 获取tidb session
 	Session() sessionctx.Context
 	// 清除session中添加的自定义变量
 	Clear()
-
 	// @title InPrepare
 	// @description 当前请求是否是prepare语句中
 	// @return bool
@@ -100,19 +119,10 @@ type Context interface {
 	// @title ToLogicDbName
 	// @description 把给定的数据库名转换为数据库的逻辑名称。根据传入sql中的dbPrefix，移除前缀，如果前缀不存在则什么也不做
 	ToLogicDbName(db string) string
-	// @title ParseResult
-	// @description 对sql预处理的结果
-	ParseResult() ParseResult
 	// @title IsGlobalDb
 	// @description 判断给定的库名是否属于global一类的库。（需要考虑是否含有dbPrefix）
 	// @param dbName string
 	IsGlobalDb(dbName string) bool
-	// @title SQLRewrited
-	// @description 当前请求中的sql是否已被改动
-	SQLRewrited() bool
-	// @title SQLHasGlobalDB
-	// @description sql中是否包含global类的库
-	SQLHasGlobalDB() bool
 
 	// @title UsingTenantParam
 	// @description 租户过滤条件是否使用参数
@@ -124,8 +134,6 @@ type Context interface {
 	GetSchemas() map[ast.StmtNode]StmtSchemaInfo
 	// 获取给定sql语法树里用到的数据库和物理表
 	GetSchema(stmt ast.StmtNode) (StmtSchemaInfo, bool)
-	// 设置给定sql语法树里用到的数据库里的物理表
-	SetSchema(stmt ast.StmtNode, info StmtSchemaInfo)
 }
 
 // ContextForTest interface
@@ -141,6 +149,8 @@ type ModifyContext interface {
 	SetUsingTenantParam(val bool)
 	// 设置是否是在Execute中运行
 	SetInExecute(val bool)
+	// 设置是否是在Prepare中运行
+	SetInPrepare(val bool)
 	// @title Reset
 	// @description 重置是否改写状态，用于支持一次执行多条sql语句时
 	Reset()
@@ -160,6 +170,15 @@ type ModifyContext interface {
 	// @description 设置sql中是否包含global类的库
 	// @param hasGlobalDB bool
 	SetSQLHasGlobalDB(hasGlobalDB bool)
+	// @title SetSchema
+	// @description 设置给定sql语法树里用到的数据库里的物理表
+	// @param stmt StmtNode
+	// @param info StmtSchemaInfo
+	SetSchema(stmt ast.StmtNode, info StmtSchemaInfo)
+	// @title SetParsedData
+	// @description 设置从SQL中解析到的信息。用于 execute 语句执行时合并之前prepare语句的相关信息
+	// @param data ParsedData
+	SetParsedData(data ParsedData)
 }
 
 // SessionMPPVarsContext interface
@@ -211,6 +230,8 @@ type GlobalValueInfo interface {
 	Excludes() []string
 	// Includes includes
 	Includes() []string
+	// Merge merge two GlobalValueInfo instances
+	Merge(GlobalValueInfo)
 }
 
 // GlobalValueInfoForTest interface
@@ -259,6 +280,16 @@ func (g *globalValueInfo) GetInfoForTest() map[string]any {
 	return info
 }
 
+// Merge merge two GlobalValueInfo instances
+func (g *globalValueInfo) Merge(other GlobalValueInfo) {
+	if !other.Global() {
+		return
+	}
+	g.global = true
+	g.includes = slices.Clone(other.Includes())
+	g.includes = slices.Clone(other.Excludes())
+}
+
 // FlagRoles custom roles
 type FlagRoles interface {
 	TenantOmit() bool // 是否包含tenant_omit角色。跳过租户隔离，用于一些需要同步数据的特殊场景
@@ -271,6 +302,7 @@ type Comments interface {
 	Service() ServiceComment // 执行sql的服务名称
 	Package() PackageComment // 执行sql所属的依赖包名称（公共包中执行的sql）
 	ToMap() map[string]any
+	TryMerge(Comments) bool // Merge try to merge two Comments instances
 }
 
 // ServiceComment service comment
@@ -342,6 +374,8 @@ type ParseResult interface {
 	// Deprecated: 已废弃
 	DbPrefix() string
 	GetInfoForTest() map[string]any
+	// 合并两个ParseResult实例
+	Merge(other ParseResult)
 }
 
 type parseResult struct {
@@ -433,6 +467,31 @@ func (r *parseResult) GetInfoForTest() map[string]any {
 		info["global"] = r.globalInfo.(GlobalValueInfoForTest).GetInfoForTest()
 	}
 	return info
+}
+
+// Merge merge two ParseResult instances
+func (r *parseResult) Merge(other ParseResult) {
+	template := "the parameter named 'other' passed in is not compatible to current. '%s' is not equals. [%v, %v]"
+	if r.dbPrefix != other.DbPrefix() {
+		panic(fmt.Errorf(template, "dbPrefix", r.dbPrefix, other.DbPrefix()))
+	}
+	if r.comments == nil {
+		r.comments = other.Comments()
+	} else if !r.comments.TryMerge(other.Comments()) {
+		panic(fmt.Errorf(template, "comments", r.comments, other.Comments()))
+	}
+	if r.globalInfo == nil {
+		r.globalInfo = other.Global()
+	} else {
+		r.globalInfo.Merge(other.Global())
+	}
+	if len(other.Params()) > 0 {
+		newParams := maps.Clone(other.Params())
+		if len(r.params) > 0 {
+			maps.Copy(newParams, r.params)
+		}
+		r.params = newParams
+	}
 }
 
 // Tenant current tenant
@@ -608,6 +667,10 @@ func (d *baseContext) InPrepare() bool {
 	return d.inPrepare
 }
 
+func (d *baseContext) SetInPrepare(val bool) {
+	d.inPrepare = val
+}
+
 func (d *baseContext) SQLRewrited() bool {
 	return d.sqlRewrited
 }
@@ -731,6 +794,15 @@ func (d *baseContext) GetSchema(stmt ast.StmtNode) (StmtSchemaInfo, bool) {
 
 func (d *baseContext) SetSchema(stmt ast.StmtNode, info StmtSchemaInfo) {
 	d.schemaDict[stmt] = info
+}
+
+func (d *baseContext) SetParsedData(data ParsedData) {
+	pr := data.ParseResult()
+	if pr != nil && d.parseResult != nil {
+		d.parseResult.Merge(pr)
+	}
+	d.sqlRewrited = data.SQLRewrited()
+	d.sqlHasGlobalDB = data.SQLHasGlobalDB()
 }
 
 /**
