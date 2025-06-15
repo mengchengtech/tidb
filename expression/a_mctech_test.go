@@ -321,14 +321,20 @@ func TestDataWarehouseIndexInfo(t *testing.T) {
 func TestMCTechHelp(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechHelp, ast.MCHelp} {
-		fc := funcs[name]
-		f, err := fc.getFunction(ctx, datumsToConstants(nil))
-		require.NoError(t, err)
-		resetStmtContext(ctx)
-		d, err := evalBuiltinFunc(f, chunk.Row{})
-		require.NoError(t, err)
-		content := d.GetString()
-		fmt.Print(content)
+		for _, showHidden := range []bool{false, true} {
+			fc := funcs[name]
+			var args []types.Datum
+			if showHidden {
+				args = types.MakeDatums(true)
+			}
+			f, err := fc.getFunction(ctx, datumsToConstants(args))
+			require.NoError(t, err)
+			resetStmtContext(ctx)
+			d, err := evalBuiltinFunc(f, chunk.Row{})
+			require.NoError(t, err)
+			content := d.GetString()
+			fmt.Print(content)
+		}
 	}
 }
 
