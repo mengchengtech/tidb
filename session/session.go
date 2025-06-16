@@ -3341,6 +3341,9 @@ func BootstrapSession(store kv.Storage) (*domain.Domain, error) {
 			return nil, err
 		}
 	}
+	// add by zhangbing
+	runInBootstrapSession(store, mctechUpgrade) // upgrade to mctech extension version
+	// add end
 
 	analyzeConcurrencyQuota := int(config.GetGlobalConfig().Performance.AnalyzePartitionConcurrencyQuota)
 	concurrency := int(config.GetGlobalConfig().Performance.StatsLoadConcurrency)
