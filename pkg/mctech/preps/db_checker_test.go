@@ -148,7 +148,7 @@ func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase) error {
 	if err != nil {
 		return err
 	}
-	comments := preps.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
+	comments := mctech.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
 	context, _ := newTestMCTechContext(roles, comments, c.across)
 	return checker.Check(context, &mockStmtTextAware{}, c.dbs)
 }

@@ -47,7 +47,7 @@ go_library(
         "//pkg/infoschema/perfschema",
         "//pkg/keyspace",
         "//pkg/kv",
-        "//pkg/mctech/digestworker",
+        "//pkg/mctech/worker",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/meta/model",

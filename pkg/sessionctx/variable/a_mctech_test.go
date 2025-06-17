@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/pingcap/tidb/pkg/executor"
-	"github.com/pingcap/tidb/pkg/mctech/preps"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/sessionctx/variable"
 	"github.com/pingcap/tidb/pkg/testkit"
@@ -103,7 +103,7 @@ func TestLargeQueryFormat(t *testing.T) {
 		})
 		stmtCtx.MemTracker.Consume(c.memMax)
 		stmtCtx.DiskTracker.Consume(c.diskMax)
-		comments := preps.GetCustomCommentFromSQL(c.sql)
+		comments := mctech.GetCustomCommentFromSQL(c.sql)
 		logItems := executor.CreateLargeQueryItems(ctx, c.sql, c.sqlType, c.succ, c.results, seVar, comments)
 		logItems.TimeTotal = time.Second
 
