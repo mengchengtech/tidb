@@ -13,6 +13,7 @@ import (
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/kv"
+	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/parser/terror"
 	"github.com/pingcap/tidb/pkg/types"
@@ -107,6 +108,66 @@ const (
 )
 
 const crossDBManagerLoopTickerInterval = 30 * time.Second
+
+// SQLInvokerPatternContext sql invoker pattern context
+type SQLInvokerPatternContext interface {
+	// GetPatterns returns all patterns
+	GetPatterns() []SQLInvokerPattern
+	// IsSame compare other instance
+	IsSame(other SQLInvokerPatternContext) bool
+}
+
+type sqlInvokerPatternContext struct {
+	svcName string
+	pkgName string
+}
+
+// NewSQLInvokerPatternContext create instance implements SQLInvokerPatternContext interface
+func NewSQLInvokerPatternContext(comments mctech.Comments) SQLInvokerPatternContext {
+	var (
+		svcName string
+		pkgName string
+	)
+	// 通过服务名称获取到的跨库查询的数据库列表信息
+	if svc := comments.Service(); svc != nil {
+		svcName = svc.From()
+		if svcName == "" {
+			svcName = MatchAnyInvoker
+		}
+	}
+	// 通过包名称获取到的跨库查询的数据库列表信息
+	if pkg := comments.Package(); pkg != nil {
+		pkgName = pkg.Name()
+		if pkgName == "" {
+			pkgName = MatchAnyInvoker
+		}
+	}
+	return &sqlInvokerPatternContext{svcName: svcName, pkgName: pkgName}
+}
+
+func (c *sqlInvokerPatternContext) GetPatterns() []SQLInvokerPattern {
+	patterns := make([]SQLInvokerPattern, 0, 10)
+	patterns = append(patterns, &sqlInvokerPattern{name: c.svcName, tp: InvokerTypeService})
+	if c.svcName != MatchAnyInvoker {
+		patterns = append(patterns, &sqlInvokerPattern{name: MatchAnyInvoker, tp: InvokerTypeService})
+	}
+	patterns = append(patterns, &sqlInvokerPattern{name: c.pkgName, tp: InvokerTypePackage})
+	if c.pkgName != MatchAnyInvoker {
+		patterns = append(patterns, &sqlInvokerPattern{name: MatchAnyInvoker, tp: InvokerTypePackage})
+	}
+	return patterns
+}
+
+func (c *sqlInvokerPatternContext) IsSame(other SQLInvokerPatternContext) bool {
+	var (
+		b  *sqlInvokerPatternContext
+		ok bool
+	)
+	if b, ok = other.(*sqlInvokerPatternContext); !ok {
+		return false
+	}
+	return c.svcName == b.svcName && c.pkgName == b.pkgName
+}
 
 // SQLInvokerPattern sql invoker pattern
 type SQLInvokerPattern interface {

@@ -390,6 +390,13 @@ type parseResult struct {
 
 // NewParseResult create ParseResult instance
 func NewParseResult(tenantCode string, roles FlagRoles, comments Comments, params map[string]any) (ParseResult, error) {
+	if roles == nil {
+		return nil, errors.New("roles is nil")
+	}
+	if comments == nil {
+		comments = NewComments("", "")
+	}
+
 	fromRole := tenantCode != ""
 	if _, ok := params[ParamMPP]; !ok {
 		params[ParamMPP] = config.GetMCTechConfig().MPP.DefaultValue
