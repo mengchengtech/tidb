@@ -340,8 +340,8 @@ var (
 	sqlLoadInfo       = &sqlStmtInfo{"load", "file", true}
 	sqlTruncateInfo   = &sqlStmtInfo{"ddl", "truncate", true}
 	// sqlSetInfo        = &sqlStmtInfo{"misc", "set", false}
-	sqlLockInfo       = &sqlStmtInfo{"misc", "lock", false}
-	sqlUnlockInfo     = &sqlStmtInfo{"misc", "unlock", false}
+	sqlLockInfo   = &sqlStmtInfo{"misc", "lock", false}
+	sqlUnlockInfo = &sqlStmtInfo{"misc", "unlock", false}
 	// sqlUseInfo        = &sqlStmtInfo{"misc", "use", false}
 	sqlCallInfo = &sqlStmtInfo{"misc", "call", false}
 	sqlDoInfo   = &sqlStmtInfo{"misc", "do", false}
