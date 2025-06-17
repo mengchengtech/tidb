@@ -1,4 +1,4 @@
-package preps
+package mctech
 
 import (
 	"testing"

@@ -92,7 +92,7 @@ func (r *mctechStatementPreprocessor) ParseSQL(
 
 	preprocessor := newSQLPreprocessor(sql)
 	var parsedSQL string
-	comments := GetCustomCommentFromSQL(sql)
+	comments := mctech.GetCustomCommentFromSQL(sql)
 	result, err := preprocessor.Parse(mctx, actions, comments, params)
 	if err != nil {
 		return parsedSQL, nil, err

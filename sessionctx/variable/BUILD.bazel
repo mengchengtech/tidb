@@ -99,7 +99,7 @@ go_test(
         "//config",
         "//executor",
         "//kv",
-        "//mctech/preps",
+        "//mctech",
         "//parser",
         "//parser/auth",
         "//parser/mysql",

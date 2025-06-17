@@ -96,7 +96,7 @@ func TestProcessor(t *testing.T) {
 
 func preprocessorRunTestCase(t *testing.T, i int, c *preprocessorTestCase, mctechCtx mctech.Context) error {
 	processor := preps.NewSQLPreprocessorForTest(c.sql)
-	comments := preps.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
+	comments := mctech.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
 	result, err := processor.Parse(mctechCtx, c.actions, comments, c.params)
 	if err != nil {
 		return err

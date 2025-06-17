@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/pingcap/tidb/mctech/digestworker"
+	mcworker "github.com/pingcap/tidb/mctech/worker"
 	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/logutil"
 	"go.uber.org/zap"
@@ -27,7 +27,7 @@ type DenyDigestManager interface {
 }
 
 type denyDigestManager struct {
-	mgr *digestworker.DigestManager
+	mgr *mcworker.DigestManager
 }
 
 func (m *denyDigestManager) Get(digest string) (DenyDigestInfo, bool) {
@@ -42,7 +42,7 @@ func (do *Domain) StartDenyDigestManager() {
 			logutil.BgLogger().Info("denyDigestManager exited.")
 		}()
 
-		mgr := digestworker.NewDigestManager(do.sysSessionPool)
+		mgr := mcworker.NewDigestManager(do.sysSessionPool)
 		do.denyDigestManager.Store(&denyDigestManager{mgr: mgr})
 		mgr.Start()
 

@@ -37,6 +37,7 @@ import (
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/kv"
+	mcworker "github.com/pingcap/tidb/mctech/worker"
 	"github.com/pingcap/tidb/meta"
 	"github.com/pingcap/tidb/owner"
 	"github.com/pingcap/tidb/parser"
@@ -2548,7 +2549,7 @@ func upgradeToVer146(s Session, ver int64) {
 	doReentrantDDL(s, "ALTER TABLE mysql.stats_meta_history ADD INDEX idx_create_time (create_time)", dbterror.ErrDupKeyName)
 	doReentrantDDL(s, "ALTER TABLE mysql.stats_history ADD INDEX idx_create_time (create_time)", dbterror.ErrDupKeyName)
 	// add by zhangbing
-	mustExecute(s, createMCTechDenyDigest)
+	mustExecute(s, mcworker.CreateMCTechDenyDigest, mysql.SystemDB, mcworker.MCTechDenyDigest)
 	// add end
 }
 

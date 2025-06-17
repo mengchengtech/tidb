@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "mctech",
     srcs = [
+        "comment.go",
         "constant.go",
         "context.go",
         "extension.go",
@@ -36,9 +37,13 @@ go_library(
 go_test(
     name = "mctech_test",
     timeout = "short",
-    srcs = ["http_rpc_test.go"],
+    srcs = [
+        "comment_test.go",
+        "http_rpc_test.go",
+    ],
     embed = [":mctech"],
     flaky = True,
+    shard_count = 4,
     deps = [
         "//mctech/mock",
         "@com_github_pingcap_failpoint//:failpoint",

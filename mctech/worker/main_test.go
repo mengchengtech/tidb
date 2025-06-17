@@ -1,4 +1,4 @@
-package digestworker
+package worker
 
 import (
 	"context"

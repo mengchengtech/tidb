@@ -41,7 +41,7 @@ go_library(
         "//infoschema/perfschema",
         "//keyspace",
         "//kv",
-        "//mctech/digestworker",
+        "//mctech/worker",
         "//meta",
         "//meta/autoid",
         "//metrics",

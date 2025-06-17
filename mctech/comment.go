@@ -1,23 +1,21 @@
-package preps
+package mctech
 
 import (
 	"regexp"
 	"strings"
-
-	"github.com/pingcap/tidb/mctech"
 )
 
 // customComments sql中特殊的注释信息
 type customComments struct {
-	service mctech.ServiceComment // 执行sql的服务名称
-	pkg     mctech.PackageComment // 执行sql所属的依赖包名称（公共包中执行的sql）
+	service ServiceComment // 执行sql的服务名称
+	pkg     PackageComment // 执行sql所属的依赖包名称（公共包中执行的sql）
 }
 
-func (c *customComments) Service() mctech.ServiceComment {
+func (c *customComments) Service() ServiceComment {
 	return c.service
 }
 
-func (c *customComments) Package() mctech.PackageComment {
+func (c *customComments) Package() PackageComment {
 	return c.pkg
 }
 
@@ -32,7 +30,7 @@ func (c *customComments) ToMap() map[string]any {
 	return result
 }
 
-func (c *customComments) TryMerge(other mctech.Comments) bool {
+func (c *customComments) TryMerge(other Comments) bool {
 	if other == nil {
 		return true
 	}
@@ -78,7 +76,7 @@ func (c *packageComment) Name() string {
 }
 
 // NewComments create new Comments instance
-func NewComments(from, pkg string) mctech.Comments {
+func NewComments(from, pkg string) Comments {
 	comments := &customComments{}
 	if len(pkg) > 0 {
 		comments.pkg = &packageComment{name: pkg}
@@ -99,7 +97,7 @@ func NewComments(from, pkg string) mctech.Comments {
 var customCommentPattern = regexp.MustCompile(`(?i)/\*\s*(from|package):\s*'([^']+)'`)
 
 // GetCustomCommentFromSQL 尝试从sql中提取特殊注释
-func GetCustomCommentFromSQL(sql string) mctech.Comments {
+func GetCustomCommentFromSQL(sql string) Comments {
 	matches := customCommentPattern.FindAllStringSubmatch(sql, -1)
 	var (
 		from string
@@ -109,9 +107,9 @@ func GetCustomCommentFromSQL(sql string) mctech.Comments {
 		name := match[1]
 		value := match[2]
 		switch name {
-		case mctech.CommentFrom:
+		case CommentFrom:
 			from = value
-		case mctech.CommentPackage:
+		case CommentPackage:
 			pkg = value
 		}
 	}
