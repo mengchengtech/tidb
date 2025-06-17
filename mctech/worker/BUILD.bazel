@@ -12,6 +12,7 @@ go_library(
     deps = [
         "//config",
         "//kv",
+        "//mctech",
         "//parser/mysql",
         "//parser/terror",
         "//types",
