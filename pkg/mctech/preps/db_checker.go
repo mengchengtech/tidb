@@ -149,31 +149,31 @@ func (c *mutuallyExclusiveDatabaseChecker) Check(mctx mctech.Context, aware Stmt
 	return errors.New(msg)
 }
 
-func (c *mutuallyExclusiveDatabaseChecker) checkByCrossDBInfo(ctx sessionctx.Context, pattern mcworker.SQLInvokerPattern, checkCb func(*mcworker.CrossDBInfo) bool) (bool, error) {
+func (c *mutuallyExclusiveDatabaseChecker) checkByCrossDBInfo(sctx sessionctx.Context, comments mctech.Comments, checkCb func(*mcworker.CrossDBInfo) bool) (bool, error) {
 	var (
-		info *mcworker.CrossDBInfo
-		err  error
+		mgr domain.CrossDBManager
+		ok  bool
 	)
-
-	if info, err = getCrossDBInfo(ctx, pattern); err != nil {
-		return false, fmt.Errorf("get CrossDBInfo error. type: %s, name: %s. %w", mcworker.AllInvokerTypes[pattern.Type()], pattern.Name(), err)
-	}
-
-	if info != nil {
-		// 找到合适的规则，执行检查回调函数
-		if ok := checkCb(info); ok {
-			return true, nil
+	if mgr, ok = domain.GetDomain(sctx).CrossDBManager(); !ok {
+		if !intest.InTest {
+			return false, errors.New("Domain.crossDBManager is nil")
 		}
-	}
-
-	if pattern.MatchAny() {
 		return false, nil
 	}
 
-	// 传入的精确匹配，并且没有通过检查。此时再转换成通配符匹配模式再检查一次
-	return c.checkByCrossDBInfo(ctx,
-		mcworker.NewSQLInvokerPattern(mcworker.MatchAnyInvoker, pattern.Type()),
-		checkCb)
+	var (
+		pctx = mcworker.NewSQLInvokerPatternContext(comments)
+		info *mcworker.CrossDBInfo
+	)
+	for _, pattern := range pctx.GetPatterns() {
+		if info = mgr.Get(pattern); info != nil {
+			if checkCb(info) {
+				// 找到合适的规则，执行检查回调函数
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
 
 // dbPredicate 判断给定的数据名是否属于需要检查跨库sql的数据库
@@ -241,27 +241,7 @@ func (c *mutuallyExclusiveDatabaseChecker) checkCrossDBs(ctx sessionctx.Context,
 		return c.checkBySingleCrossDBInfo(logicDBNames, info)
 	}
 
-	var (
-		pattern mcworker.SQLInvokerPattern
-		svcName string
-		pkgName string
-	)
-	comments := result.Comments()
-	// 通过服务名称获取到的跨库查询的数据库列表信息
-	if svc := comments.Service(); svc != nil {
-		svcName = svc.From()
-	}
-	pattern = mcworker.NewSQLInvokerPattern(svcName, mcworker.InvokerTypeService)
-	if ok, err := c.checkByCrossDBInfo(ctx, pattern, checkCb); err != nil || ok {
-		return ok, err
-	}
-
-	// 通过包名称获取到的跨库查询的数据库列表信息
-	if pkg := comments.Package(); pkg != nil {
-		pkgName = pkg.Name()
-	}
-	pattern = mcworker.NewSQLInvokerPattern(pkgName, mcworker.InvokerTypePackage)
-	if ok, err := c.checkByCrossDBInfo(ctx, pattern, checkCb); err != nil || ok {
+	if ok, err := c.checkByCrossDBInfo(ctx, result.Comments(), checkCb); err != nil || ok {
 		return ok, err
 	}
 
@@ -288,22 +268,6 @@ func (c *mutuallyExclusiveDatabaseChecker) checkBySingleCrossDBInfo(logicDBNames
 
 	// 没有一条规则能满足传入的库名称列表
 	return false
-}
-
-func getCrossDBInfo(ctx sessionctx.Context, pattern mcworker.SQLInvokerPattern) (*mcworker.CrossDBInfo, error) {
-	dom := domain.GetDomain(ctx)
-	var (
-		mgr domain.CrossDBManager
-		ok  bool
-	)
-	if mgr, ok = dom.CrossDBManager(); !ok {
-		if !intest.InTest {
-			return nil, errors.New("Domain.crossDBManager is nil")
-		}
-		return nil, nil
-	}
-
-	return mgr.Get(pattern), nil
 }
 
 func checkExcepts(result mctech.ParseResult) bool {
