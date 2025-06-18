@@ -160,12 +160,14 @@ func TestDatabaseCheckerFromInternalConfig(t *testing.T) {
 }
 
 func TestDatabaseCheckerUseCustomComment(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
-		mock.M(t, map[string]any{
-			"DbChecker.Excepts": []string{"demo-service", "another-demo-service.pf", "@mctech/dp-impala"},
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info",
+		mock.M(t, []map[string]any{
+			{"Service": "demo-service", "AllowAllDBs": true},
+			{"Service": "another-demo-service.pf", "AllowAllDBs": true},
+			{"Package": "@mctech/dp-impala", "AllowAllDBs": true},
 		}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/worker/get-cross-db-info")
 
 	cases := []*testDatabaseCheckerCase{
 		// custom comment crossdb check pass

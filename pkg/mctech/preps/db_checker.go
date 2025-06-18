@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"sync"
 
 	"github.com/pingcap/failpoint"
@@ -101,10 +100,6 @@ func (c *mutuallyExclusiveDatabaseChecker) getLogicDBNamesForCrossDBCheck(mctx m
 func (c *mutuallyExclusiveDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, schema mctech.StmtSchemaInfo) error {
 	result := mctx.ParseResult()
 	if !result.Roles().TenantOnly() {
-		return nil
-	}
-
-	if checkExcepts(result) {
 		return nil
 	}
 
@@ -239,37 +234,5 @@ func (c *mutuallyExclusiveDatabaseChecker) checkBySingleCrossDBInfo(logicDBNames
 	}
 
 	// 没有一条规则能满足传入的库名称列表
-	return false
-}
-
-func checkExcepts(result mctech.ParseResult) bool {
-	excepts := config.GetMCTechConfig().DbChecker.Excepts
-	comments := result.Comments()
-	for _, except := range excepts {
-		pkg := comments.Package()
-		if pkg != nil {
-			// 依赖包名称
-			if except == pkg.Name() {
-				return true
-			}
-		}
-
-		svc := comments.Service()
-		if svc != nil {
-			// 服务名称比较
-			if strings.Contains(except, ".") {
-				// 包含产品线的服务完整名称
-				if svc.From() == except {
-					return true
-				}
-			} else {
-				// 只包含服务名称
-				if svc.AppName() == except {
-					return true
-				}
-			}
-		}
-	}
-
 	return false
 }
