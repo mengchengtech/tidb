@@ -180,7 +180,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 func init() {
 	// mctech function.
 	funcs[ast.MCSeq] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCSeq, 0, 0}}
-	funcs[ast.MCVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCVersionJustPass, 0, 0}}
+	funcs[ast.MCVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCVersionJustPass, 0, 1}}
 	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 4}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
@@ -189,7 +189,7 @@ func init() {
 	funcs[ast.MCHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 0}}
 
 	funcs[ast.MCTechSequence] = &mctechSequenceFunctionClass{baseFunctionClass{ast.MCTechSequence, 0, 0}}
-	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 0}}
+	funcs[ast.MCTechVersionJustPass] = &mctechVersionJustPassFunctionClass{baseFunctionClass{ast.MCTechVersionJustPass, 0, 1}}
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 4}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
@@ -314,7 +314,17 @@ func (c *mctechVersionJustPassFunctionClass) getFunction(ctx sessionctx.Context,
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETInt)
+
+	var argTps []types.EvalType
+	length := len(args) // 参数个数
+	switch length {
+	case 0:
+	case 1:
+		argTps = append(argTps, types.ETInt)
+	default:
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_version_just_pass")
+	}
+	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETInt, argTps...)
 	if err != nil {
 		return nil, err
 	}
@@ -333,8 +343,16 @@ func (b *builtinMCTechVersionJustPassSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (*builtinMCTechVersionJustPassSig) evalInt(_ chunk.Row) (int64, bool, error) {
-	v, err := udf.GetCache().VersionJustPass()
+func (b *builtinMCTechVersionJustPassSig) evalInt(row chunk.Row) (int64, bool, error) {
+	var delta = int64(-3)
+	if len(b.args) == 1 {
+		val, isNull, err := b.args[0].EvalInt(b.ctx, row)
+		if isNull || err != nil {
+			return 0, isNull, err
+		}
+		delta = val
+	}
+	v, err := udf.GetCache().VersionJustPass(delta)
 	if err != nil {
 		return 0, true, err
 	}

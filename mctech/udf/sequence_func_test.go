@@ -63,7 +63,7 @@ func TestVersionJustPass(t *testing.T) {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 	}()
 	cache := GetCache()
-	version, err := cache.VersionJustPass()
+	version, err := cache.VersionJustPass(3)
 	require.NoError(t, err)
 	require.Equal(t, int64(1310341421945866), version)
 }
