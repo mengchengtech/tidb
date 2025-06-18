@@ -53,13 +53,16 @@ func TestMCTechJustVersionPass(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechVersionJustPass, ast.MCVersionJustPass} {
 		fc := funcs[name]
-		f, err := fc.getFunction(ctx, datumsToConstants(nil))
-		require.NoError(t, err)
-		resetStmtContext(ctx)
-		v, err := evalBuiltinFunc(f, ctx, chunk.Row{})
-		require.NoError(t, err)
-		n := v.GetInt64()
-		require.Greater(t, n, int64(0))
+		argsCases := [][]any{{}, {30}, {-50}}
+		for _, args := range argsCases {
+			f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(args...)))
+			require.NoError(t, err)
+			resetStmtContext(ctx)
+			v, err := evalBuiltinFunc(f, ctx, chunk.Row{})
+			require.NoError(t, err)
+			n := v.GetInt64()
+			require.Greater(t, n, int64(0))
+		}
 	}
 }
 
