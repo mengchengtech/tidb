@@ -6,6 +6,7 @@ import (
 
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/preps"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,7 +46,7 @@ func TestValueConverter(t *testing.T) {
 	doRunTest(t, convertRunTestCase, cases)
 }
 
-func convertRunTestCase(t *testing.T, i int, c *converterTestCase) error {
+func convertRunTestCase(t *testing.T, i int, c *converterTestCase, _ sessionctx.Context) error {
 	gc := preps.NewGlobalValueFormatterForTest()
 	out, err := gc.Format(c.name, c.value)
 	if err != nil {

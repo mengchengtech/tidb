@@ -9,6 +9,8 @@ import (
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
 	"github.com/pingcap/tidb/pkg/mctech/preps"
+	mcworker "github.com/pingcap/tidb/pkg/mctech/worker"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,17 +61,72 @@ func (c *testDatabaseCheckerCase) Source(i int) any {
 	return fmt.Sprintf("(%d) %t -> %v", i, c.tenantOnly, c.dbs)
 }
 
-func newTestMCTechContext(roles mctech.FlagRoles, comments mctech.Comments, across string) (mctech.Context, error) {
-	result, err := mctech.NewParseResult("gslq", roles, comments, map[string]any{
-		"global": mctech.NewGlobalValue(false, nil, nil),
-		"across": across,
+func TestDatabaseCheckerFromCrossDBManager(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info",
+		mock.M(t, []map[string]any{
+			{"Service": "demo-service", "Groups": []any{"global_ec3,global_ma", "global_cq5,global_mtlp"}},
+			{"Package": "demo-package", "Groups": []any{"global_ec3,global_mtlp", "global_ec3,global_ec"}},
+		}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info")
+
+	doRunTest(t, checkRunTestCase, []*testDatabaseCheckerCase{
+		// 指定的服务可以访问给定的数据库列表
+		{true, map[string]string{"from": "demo-service"}, "", []string{"global_cq5", "global_mtlp"}, ""},
+		{true, map[string]string{"from": "demo-service"}, "", []string{"global_ec", "global_mtlp"}, "dbs not allow in the same statement"},
+		{true, map[string]string{"from": "demo-forbidden-service"}, "", []string{"global_cq5", "global_mtlp"}, "dbs not allow in the same statement"},
+		// 指定的包可以访问给定的数据库列表
+		{true, map[string]string{"package": "demo-package"}, "", []string{"global_ec3", "global_mtlp"}, ""},
+		{true, map[string]string{"package": "demo-package"}, "", []string{"global_ec", "global_mtlp"}, "dbs not allow in the same statement"},
+		{true, map[string]string{"package": "demo-forbidden-package"}, "", []string{"global_ec3", "global_mtlp"}, "dbs not allow in the same statement"},
 	})
-	context := mctech.NewBaseContext(false)
-	context.(mctech.ModifyContext).SetParseResult(result)
-	return context, err
 }
 
-func TestDatabaseChecker(t *testing.T) {
+func TestDatabaseCheckerFromCrossDBManagerAnyName(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info",
+		mock.M(t, []map[string]any{
+			{"Service": mcworker.MatchAnyInvoker, "Groups": []any{"global_ec3,global_mtlp", "global_cq5,global_mtlp"}},
+			{"Package": mcworker.MatchAnyInvoker, "Groups": []any{"global_ec3,global_mtlp", "global_ec3,global_ma"}},
+		}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info")
+
+	doRunTest(t, checkRunTestCase, []*testDatabaseCheckerCase{
+		// 没有任何自定义hint信息
+		{true, nil, "", []string{"global_cq5", "global_mtlp"}, ""},
+		// 所有服务可以跨库访问指定的数据库列表
+		{true, map[string]string{"from": "demo-service"}, "", []string{"global_cq5", "global_mtlp"}, ""},
+		{true, map[string]string{"from": "demo-other-service"}, "", []string{"global_cq5", "global_mtlp"}, ""},
+		{true, map[string]string{"from": "demo-forbidden-service"}, "", []string{"global_ec", "global_mtlp"}, "dbs not allow in the same statement"},
+		// 所有包可以跨库访问指定的数据库列表
+		{true, map[string]string{"package": "@mctech/demo-package"}, "", []string{"global_ec3", "global_mtlp"}, ""},
+		{true, map[string]string{"package": "@mctech/demo-other-package"}, "", []string{"global_ec3", "global_mtlp"}, ""},
+		{true, map[string]string{"package": "@mctech/demo-forbidden-package"}, "", []string{"global_ec", "global_mtlp"}, "dbs not allow in the same statement"},
+	})
+}
+
+func TestDatabaseCheckerFromCrossDBManagerAllowAllDBsAndAnyName(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info",
+		mock.M(t, []map[string]any{
+			{"Service": mcworker.MatchAnyInvoker, "AllowAllDBs": true},
+			{"Package": mcworker.MatchAnyInvoker, "AllowAllDBs": true},
+		}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/worker/get-cross-db-info")
+
+	doRunTest(t, checkRunTestCase, []*testDatabaseCheckerCase{
+		// 所有服务或包可以跨库访问所有数据库都
+		{true, map[string]string{"from": "demo-service"}, "", []string{"global_cq5", "global_mtlp"}, ""},
+		{true, map[string]string{"from": "demo-other-service"}, "", []string{"global_cq5", "global_mtlp"}, ""},
+		{true, map[string]string{"from": "demo-third-service"}, "", []string{"global_platform", "global_mtlp"}, ""},
+		// 所有服务或包可以跨库访问所有数据库都
+		{true, map[string]string{"package": "@mctech/demo-package"}, "", []string{"global_ec3", "global_mtlp"}, ""},
+		{true, map[string]string{"package": "@mctech/demo-other-package"}, "", []string{"global_ec3", "global_mtlp"}, ""},
+		{true, map[string]string{"package": "@mctech/demo-third-package"}, "", []string{"global_platform", "global_mtlp"}, ""},
+	})
+}
+
+func TestDatabaseCheckerFromConfig(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
 		mock.M(t, map[string]any{
 			"DbChecker.Across": []string{"global_mtlp|global_ma", "global_cq3|global_qa"},
@@ -137,9 +194,9 @@ func (a *mockStmtTextAware) OriginalText() string {
 	return "mock original text"
 }
 
-func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase) error {
+func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase, sctx sessionctx.Context) error {
 	option := config.GetMCTechConfig()
-	checker := preps.NewMutexDatabaseCheckerWithParamsForTest(
+	checker := preps.NewMutuallyExclusiveDatabaseCheckerWithParamsForTest(
 		option.DbChecker.Mutex,
 		option.DbChecker.Exclude,
 		option.DbChecker.Across)
@@ -149,11 +206,20 @@ func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase) error {
 		return err
 	}
 	comments := mctech.NewComments(c.comments[mctech.CommentFrom], c.comments[mctech.CommentPackage])
-	context, _ := newTestMCTechContext(roles, comments, c.across)
-	return checker.Check(context, &mockStmtTextAware{}, c.dbs)
+	result, err := mctech.NewParseResult("gslq", roles, comments, map[string]any{
+		"global": mctech.NewGlobalValue(false, nil, nil),
+		"across": c.across,
+	})
+	if err != nil {
+		panic(err)
+	}
+	mctx, _ := mctech.WithNewContext(sctx)
+	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
+	modifyCtx.SetParseResult(result)
+	return checker.Check(mctx, &mockStmtTextAware{}, mctech.StmtSchemaInfo{Databases: c.dbs})
 }
 
-func filterRunTestCase(t *testing.T, i int, c *testStringFilterCase) error {
+func filterRunTestCase(t *testing.T, i int, c *testStringFilterCase, _ sessionctx.Context) error {
 	p, ok := mctech.NewStringFilter(c.pattern)
 	require.True(t, ok)
 	success := p.Match(c.target)
