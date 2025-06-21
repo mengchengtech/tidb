@@ -18,22 +18,6 @@ import (
 	"go.uber.org/zap"
 )
 
-func createGlobalList(groups []string) []*mcworker.CrossDBInfo {
-	if len(groups) == 0 {
-		return nil
-	}
-
-	list := make([]*mcworker.CrossDBInfo, 0, len(groups))
-	for _, item := range groups {
-		list = append(list, &mcworker.CrossDBInfo{
-			Groups: []mcworker.CrossDBGroup{
-				{DBList: config.StrToSlice(item, "|")},
-			},
-		})
-	}
-	return list
-}
-
 // StmtTextAware stmt aware
 type StmtTextAware interface {
 	OriginalText() string
@@ -54,7 +38,6 @@ type DatabaseChecker interface {
 type mutuallyExclusiveDatabaseChecker struct {
 	mutexFilters   []mctech.Filter
 	excludeFilters []mctech.Filter
-	globalList     []*mcworker.CrossDBInfo
 }
 
 var dbChecker *mutuallyExclusiveDatabaseChecker
@@ -69,13 +52,12 @@ func getDatabaseChecker() DatabaseChecker {
 		option := config.GetMCTechConfig()
 		dbChecker = newMutuallyExclusiveDatabaseCheckerWithParams(
 			option.DbChecker.Mutex,
-			option.DbChecker.Exclude,
-			option.DbChecker.Across)
+			option.DbChecker.Exclude)
 	})
 	return dbChecker
 }
 
-func newMutuallyExclusiveDatabaseCheckerWithParams(mutex, exclude, across []string) *mutuallyExclusiveDatabaseChecker {
+func newMutuallyExclusiveDatabaseCheckerWithParams(mutex, exclude []string) *mutuallyExclusiveDatabaseChecker {
 	var mutexFilters []mctech.Filter
 	for _, t := range mutex {
 		if filter, ok := mctech.NewStringFilter(t); ok {
@@ -94,7 +76,6 @@ func newMutuallyExclusiveDatabaseCheckerWithParams(mutex, exclude, across []stri
 	return &mutuallyExclusiveDatabaseChecker{
 		mutexFilters:   mutexFilters,
 		excludeFilters: excludeFilters,
-		globalList:     createGlobalList(across),
 	}
 }
 
@@ -219,15 +200,6 @@ func (c *mutuallyExclusiveDatabaseChecker) checkCrossDBs(ctx sessionctx.Context,
 		// sql中显示指定的需要跨库查询的数据库列表
 		if c.checkBySingleCrossDBInfo(logicDBNames, specialInfo) {
 			// 数据库全部属于一个分组
-			return true, nil
-		}
-	}
-
-	// 先匹配公共分组中的数据库组
-	for _, info := range c.globalList {
-		// 配置文件中指定的全局可以跨库查询的数据库列表
-		if c.checkBySingleCrossDBInfo(logicDBNames, info) {
-			// 当前规则能够全部包含所有用到的数据库
 			return true, nil
 		}
 	}
