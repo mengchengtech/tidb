@@ -37,6 +37,12 @@ const (
 		primary key (id)
 	);`
 
+	// InitMCTechCrossDBData init mctech_cross_db table data
+	InitMCTechCrossDBData = `insert into %n.%n
+		(id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, created_at, remark)
+		values (1, '*', 'both', false, 'global_mtlp,global_ma', true, now(), '同一条sql语句中允许同时使用给定的数据库')
+		;`
+
 	selectCrossDBSQL = "SELECT id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, remark from %n.%n"
 )
 

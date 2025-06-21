@@ -44,6 +44,9 @@ func runCrossDBManagerCase(t *testing.T, m domain.CrossDBManager, tp mcworker.In
 	require.Equal(t, &mcworker.CrossDBInfo{true, nil}, info50)
 	infoAny := m.Get(createPattern(mcworker.MatchAnyInvoker, tp))
 	require.Equal(t, &mcworker.CrossDBInfo{false, []mcworker.CrossDBGroup{
+		// internal init global rule
+		{ID: 1, DBList: []string{"global_mtlp", "global_ma"}},
+		// custom rule
 		{ID: 1006, DBList: []string{"global_qa", "global_mp"}},
 	}}, infoAny)
 
@@ -95,6 +98,7 @@ func dotestReloadCrossDBManagerByType(t *testing.T, tp mcworker.InvokerType) {
 	}
 
 	cases := []crossDBManagerCase{
+		{1, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_mtlp", "global_ma"}}, "*", mcworker.InvokerTypeBoth, false)},
 		{1001, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_cq3", "global_ec5"}}, "invoker-1", tp, false)},
 		{1002, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_cq2", "global_ec5", "global_mp"}}, "invoker-2", tp, false)},
 		{1003, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_qa", "global_ec3"}}, "invoker-2", tp, false)},
@@ -132,10 +136,8 @@ func initMCTechCrossDB(ctx context.Context, sctx session.Session, tp mcworker.In
 	args := []any{
 		mysql.SystemDB, mcworker.MCTechCrossDB,
 	}
-	if _, err = sctx.ExecuteInternal(ctx, "truncate table %n.%n", args...); err != nil {
-		return err
-	}
-	_, err = sctx.ExecuteInternal(ctx, strings.ReplaceAll(`insert into %n.%n
+	sctx.ExecuteInternal(ctx, "delete from %n.%n where id > 1000", args...)
+	sctx.ExecuteInternal(ctx, strings.ReplaceAll(`insert into %n.%n
 	(id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, created_at)
 	values
 	(1001, 'invoker-1', '{type}', false, 'global_cq3,global_ec5', true, '2024-05-01')

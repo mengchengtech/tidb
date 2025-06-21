@@ -126,13 +126,9 @@ func TestDatabaseCheckerFromCrossDBManagerAllowAllDBsAndAnyName(t *testing.T) {
 	})
 }
 
-func TestDatabaseCheckerFromConfig(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
-		mock.M(t, map[string]any{
-			"DbChecker.Across": []string{"global_mtlp|global_ma", "global_cq3|global_qa"},
-		}),
-	)
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+func TestDatabaseCheckerFromInternalConfig(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/session/mctech-ddl-upgrade", mock.M(t, "false"))
+	defer failpoint.Disable("github.com/pingcap/tidb/session/mctech-ddl-upgrade")
 
 	cases := []*testDatabaseCheckerCase{
 		// 当前账号不属于tenant_only角色
@@ -198,8 +194,7 @@ func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase, sctx sess
 	option := config.GetMCTechConfig()
 	checker := preps.NewMutuallyExclusiveDatabaseCheckerWithParamsForTest(
 		option.DbChecker.Mutex,
-		option.DbChecker.Exclude,
-		option.DbChecker.Across)
+		option.DbChecker.Exclude)
 
 	roles, err := preps.NewFlagRoles(c.tenantOnly, false, true)
 	if err != nil {
