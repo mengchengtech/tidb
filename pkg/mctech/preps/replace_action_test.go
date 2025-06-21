@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pingcap/tidb/pkg/mctech/preps"
+	"github.com/pingcap/tidb/pkg/sessionctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -37,7 +38,7 @@ func TestReplaceAction(t *testing.T) {
 	doRunTest(t, testReplaceCase, cases)
 }
 
-func testReplaceCase(t *testing.T, i int, c *replaceTestCase) error {
+func testReplaceCase(t *testing.T, i int, c *replaceTestCase, _ sessionctx.Context) error {
 	sql := "select * from {{tenant}}_platform.t1 a inner join {{tenant}}_platform.t2 on t1.id = t2.id"
 	var args = c.format
 	if strings.Contains(c.format, "%") {

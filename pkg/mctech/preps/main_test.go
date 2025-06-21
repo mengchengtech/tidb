@@ -46,8 +46,8 @@ func initSession(s sessionctx.Context, roles []string) {
 	}
 }
 
-type runTestCaseWithSessionType[T mctechSessionTestCase] func(t *testing.T, i int, c T, mctechCtx mctech.Context) error
-type runTestCaseType[T mctechTestCase] func(t *testing.T, i int, c T) error
+type runTestCaseWithMCTechContextType[T mctechSessionTestCase] func(t *testing.T, i int, c T, mctechCtx mctech.Context) error
+type runTestCaseWithSessionType[T mctechTestCase] func(t *testing.T, i int, c T, session sessionctx.Context) error
 
 type parser interface {
 	Parse(ctx context.Context, sql string) ([]ast.StmtNode, error)
@@ -59,9 +59,13 @@ var dbMap = map[string]string{
 	"ac": "asset_component",
 }
 
-func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], cases []T) {
+func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T) {
+	store := testkit.CreateMockStore(t)
+	tk := initMock(t, store)
+
+	session := tk.Session()
 	for i, c := range cases {
-		err := runTestCase(t, i, c)
+		err := runTestCase(t, i, c, session)
 		failure := c.Failure()
 		if err == nil && failure == "" {
 			continue
@@ -75,7 +79,7 @@ func doRunTest[T mctechTestCase](t *testing.T, runTestCase runTestCaseType[T], c
 	}
 }
 
-func doRunWithSessionTest[T mctechSessionTestCase](t *testing.T, runTestCase runTestCaseWithSessionType[T], cases []T) {
+func doRunWithSessionTest[T mctechSessionTestCase](t *testing.T, runTestCase runTestCaseWithMCTechContextType[T], cases []T) {
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 

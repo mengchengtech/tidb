@@ -2,8 +2,8 @@ package preps
 
 import "github.com/pingcap/tidb/pkg/mctech"
 
-func NewMutexDatabaseCheckerWithParamsForTest(mutex, exclude, across []string) *mutexDatabaseChecker {
-	return newMutexDatabaseCheckerWithParams(mutex, exclude, across)
+func NewMutuallyExclusiveDatabaseCheckerWithParamsForTest(mutex, exclude, across []string) *mutuallyExclusiveDatabaseChecker {
+	return newMutuallyExclusiveDatabaseCheckerWithParams(mutex, exclude, across)
 }
 
 func GetDWSelectorForTest() mctech.DWSelector {

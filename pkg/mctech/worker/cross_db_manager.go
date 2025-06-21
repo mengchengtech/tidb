@@ -2,12 +2,15 @@ package worker
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/kv"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
@@ -373,6 +376,46 @@ type CrossDBManager struct {
 
 // Get method inplements Scheduler interface
 func (m *CrossDBManager) Get(pattern SQLInvokerPattern) *CrossDBInfo {
+	failpoint.Inject("get-cross-db-info", func(val failpoint.Value) {
+		var rules []map[string]any
+		err := json.Unmarshal([]byte(val.(string)), &rules)
+		if err != nil {
+			panic(err)
+		}
+		for _, values := range rules {
+			var (
+				name string
+				tp   InvokerType
+			)
+			info := &CrossDBInfo{}
+			for k, v := range values {
+				switch k {
+				case "Service":
+					name = v.(string)
+					tp = InvokerTypeService
+				case "Package":
+					name = v.(string)
+					tp = InvokerTypePackage
+				case "AllowAllDBs":
+					info.AllowAllDBs = v.(bool)
+				case "Groups":
+					for _, item := range v.([]any) {
+						info.Groups = append(info.Groups, CrossDBGroup{
+							ID:     int64(len(info.Groups)),
+							DBList: strings.Split(item.(string), ","),
+						})
+					}
+				}
+			}
+
+			_pattern := NewSQLInvokerPattern(name, tp)
+			if _pattern.IsSame(pattern) {
+				failpoint.Return(info)
+			}
+		}
+		failpoint.Return(nil)
+	})
+
 	key := pattern.CreateKey()
 	return m.Unwrap().Get(key)
 }
