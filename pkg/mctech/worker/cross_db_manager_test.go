@@ -30,23 +30,6 @@ type crossDBManagerCase struct {
 	Detail  *mcworker.CrossDBDetailData
 }
 
-func createCrossDBDetail(crossDBs []string, name string, tp mcworker.InvokerType, allowAllDBs bool) *mcworker.CrossDBDetailData {
-	detail := &mcworker.CrossDBDetailData{CrossDBs: crossDBs}
-	if allowAllDBs {
-		detail.AllowAllDBs = allowAllDBs
-	}
-	switch tp {
-	case mcworker.InvokerTypeService:
-		detail.Service = name
-	case mcworker.InvokerTypePackage:
-		detail.Package = name
-	case mcworker.InvokerTypeBoth:
-		detail.Service = name
-		detail.Package = name
-	}
-	return detail
-}
-
 func runCrossDBManagerCase(t *testing.T, m domain.CrossDBManager, tp mcworker.InvokerType) {
 	info1 := m.Get(createPattern("invoker-1", tp))
 	require.Equal(t, &mcworker.CrossDBInfo{false, []mcworker.CrossDBGroup{
@@ -113,16 +96,16 @@ func dotestReloadCrossDBManagerByType(t *testing.T, tp mcworker.InvokerType) {
 	}
 
 	cases := []crossDBManagerCase{
-		{1001, mcworker.ResultStateTypeSuccess, "Loaded Success", createCrossDBDetail([]string{"global_cq3", "global_ec5"}, "invoker-1", tp, false)},
-		{1002, mcworker.ResultStateTypeSuccess, "Loaded Success", createCrossDBDetail([]string{"global_cq2", "global_ec5", "global_mp"}, "invoker-2", tp, false)},
-		{1003, mcworker.ResultStateTypeSuccess, "Loaded Success", createCrossDBDetail([]string{"global_qa", "global_ec3"}, "invoker-2", tp, false)},
-		{1004, mcworker.ResultStateTypeError, "Ignore. The number of databases is less than 2", nil},
-		{1005, mcworker.ResultStateTypeError, "Ignore. The number of databases is less than 2", nil},
-		{1006, mcworker.ResultStateTypeSuccess, "Loaded Success", createCrossDBDetail([]string{"global_qa", "global_mp"}, mcworker.MatchAnyInvoker, tp, false)},
+		{1001, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_cq3", "global_ec5"}}, "invoker-1", tp, false)},
+		{1002, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_cq2", "global_ec5", "global_mp"}}, "invoker-2", tp, false)},
+		{1003, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_qa", "global_ec3"}}, "invoker-2", tp, false)},
+		{1004, mcworker.ResultStateTypeError, "Ignore. The 'cross_dbs' field is empty.", nil},
+		{1005, mcworker.ResultStateTypeError, "Ignore. The number of databases in group(0) is less than 2.", nil},
+		{1006, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail([][]string{{"global_qa", "global_mp"}}, mcworker.MatchAnyInvoker, tp, false)},
 		{1007, mcworker.ResultStateTypeError, "Ignore. The 'allow_all_dbs' field should not be false, when invoker_name is '*'.", nil},
 		{1008, mcworker.ResultStateTypeError, "Ignore. The 'invoker_name' field is empty.", nil},
 		{1009, mcworker.ResultStateTypeError, "Ignore. The 'invoker_name' field is empty.", nil},
-		{1050, mcworker.ResultStateTypeSuccess, "Loaded Success", createCrossDBDetail(nil, "invoker-allow-all", tp, true)},
+		{1050, mcworker.ResultStateTypeSuccess, "Loaded Success", mcworker.CreateCrossDBDetail(nil, "invoker-allow-all", tp, true)},
 		{1100, mcworker.ResultStateTypeDisabled, "current rule is Disabled", nil},
 		{1101, mcworker.ResultStateTypeDisabled, "current rule is Disabled", nil},
 	}
@@ -141,7 +124,7 @@ func dotestReloadCrossDBManagerByType(t *testing.T, tp mcworker.InvokerType) {
 		require.Equal(t, expected.Detail.Service, actual.Data.Detail.Service, message)
 		require.Equal(t, expected.Detail.Package, actual.Data.Detail.Package, message)
 		require.Equal(t, expected.Detail.AllowAllDBs, actual.Data.Detail.AllowAllDBs, message)
-		require.Equal(t, expected.Detail.CrossDBs, actual.Data.Detail.CrossDBs, message)
+		require.Equal(t, expected.Detail.CrossDBGroups, actual.Data.Detail.CrossDBGroups, message)
 	}
 }
 
