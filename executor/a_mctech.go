@@ -1272,10 +1272,14 @@ func (e *memtableRetriever) setDataFromMCTechCrossDBLoadInfos(sctx sessionctx.Co
 		index := len(cells)
 		cells = append(cells, nil, nil, nil, nil, nil, nil)
 		if detail != nil {
-			cells[index+0] = detail.AllowAllDBs                 // LOADED_DETAIL_ALLOW_ALL_DBS
-			cells[index+1] = detail.Service                     // LOADED_DETAIL_SERVICE
-			cells[index+2] = detail.Package                     // LOADED_DETAIL_PACKAGE
-			cells[index+3] = fmt.Sprintf("%v", detail.CrossDBs) // LOADED_DETAIL_CROSS_DBS
+			crossDBGroups := make([]string, 0, len(detail.CrossDBGroups))
+			for _, gp := range detail.CrossDBGroups {
+				crossDBGroups = append(crossDBGroups, gp.DBList...)
+			}
+			cells[index+0] = detail.AllowAllDBs               // LOADED_DETAIL_ALLOW_ALL_DBS
+			cells[index+1] = detail.Service                   // LOADED_DETAIL_SERVICE
+			cells[index+2] = detail.Package                   // LOADED_DETAIL_PACKAGE
+			cells[index+3] = fmt.Sprintf("%v", crossDBGroups) // LOADED_DETAIL_CROSS_DBS
 		}
 		rows = append(rows, types.MakeDatums(cells...))
 	}

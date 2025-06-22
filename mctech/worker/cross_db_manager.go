@@ -213,12 +213,17 @@ func (d *LoadedRuleResultData) SetState(state ResultStateType, message string) {
 	d.LoadedAt = time.Now()
 }
 
+// CrossDBGroupData cross db group data
+type CrossDBGroupData struct {
+	DBList []string
+}
+
 // CrossDBDetailData cross db detail data struct
 type CrossDBDetailData struct {
-	Service     string
-	Package     string
-	AllowAllDBs bool
-	CrossDBs    []string
+	Service       string
+	Package       string
+	AllowAllDBs   bool
+	CrossDBGroups []CrossDBGroupData
 }
 
 func (c *CrossDBDetailData) init(name string, tp InvokerType) {
@@ -350,7 +355,9 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 					// 当 AllowAllDBs 为true时，不再需要 Groups
 					info.Groups = nil
 				} else {
-					info.Groups = append(info.Groups, CrossDBGroup{ID: result.ID, DBList: result.Data.Detail.CrossDBs})
+					for _, gp := range result.Data.Detail.CrossDBGroups {
+						info.Groups = append(info.Groups, CrossDBGroup{ID: result.ID, DBList: gp.DBList})
+					}
 				}
 			}
 		}
@@ -452,16 +459,26 @@ func NewCrossDBManager(sessPool sessionPool) *CrossDBManager {
 
 func parseDBGroups(r *LoadedRuleResult) bool {
 	data := &r.Data
-	crossDBList := config.StrToSlice(r.CrossDBs, ",")
-	if len(crossDBList) <= 1 {
-		data.SetState(ResultStateTypeError, "Ignore. The number of databases is less than 2")
+	groupList := config.StrToSlice(r.CrossDBs, "|")
+	if len(groupList) == 0 {
+		data.SetState(ResultStateTypeError, "Ignore. The 'cross_dbs' field is empty.")
 		return false
+	}
+
+	crossDBGroups := make([]CrossDBGroupData, 0, len(groupList))
+	for index, group := range groupList {
+		dbList := config.StrToSlice(group, ",")
+		if len(dbList) <= 1 {
+			data.SetState(ResultStateTypeError, fmt.Sprintf("Ignore. The number of databases in group(%d) is less than 2.", index))
+			return false
+		}
+		crossDBGroups = append(crossDBGroups, CrossDBGroupData{DBList: dbList})
 	}
 
 	data.SetState(ResultStateTypeSuccess, "Loaded Success")
 	detail := r.initDetail()
 	if !r.AllowAllDBs {
-		detail.CrossDBs = crossDBList
+		detail.CrossDBGroups = crossDBGroups
 	}
 	return true
 }
