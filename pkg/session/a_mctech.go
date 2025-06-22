@@ -23,6 +23,31 @@ import (
 	"go.uber.org/zap"
 )
 
+var mctechUpgradeForTest = map[string]func(sessiontypes.Session, int64){}
+
+// RegisterMCTechUpgradeForTest register upgrade for system table and data
+func RegisterMCTechUpgradeForTest(name string, fn func(context.Context, sessiontypes.Session) error) {
+	if !intest.InTest {
+		panic(errors.New("only supported in testing"))
+	}
+	mctechUpgradeForTest[name] = func(s sessiontypes.Session, _ int64) {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Duration(internalSQLTimeout)*time.Second)
+		err := fn(ctx, s)
+		defer cancel()
+		if err != nil {
+			logutil.BgLogger().Fatal("mustExecute error", zap.Error(err), zap.Stack("stack"))
+		}
+	}
+}
+
+// UnregisterMCTechUpgradeForTest unregister upgrade for system table and data
+func UnregisterMCTechUpgradeForTest(name string) {
+	if !intest.InTest {
+		panic(errors.New("only supported in testing"))
+	}
+	delete(mctechUpgradeForTest, name)
+}
+
 const (
 	mcVersionKey = "mctech_extension_version"
 
@@ -51,6 +76,11 @@ func mctechUpgrade(s sessiontypes.Session) {
 		logutil.BgLogger().Info("update mctech version. waiting......", zap.Int64("from", ver), zap.Int64("to", currentMCTechVersion))
 		for _, upgrade := range mctechUpgradeVersion {
 			upgrade(s, ver)
+		}
+		if intest.InTest {
+			for _, upgrade := range mctechUpgradeForTest {
+				upgrade(s, ver)
+			}
 		}
 		updateMCTechVersion(s)
 		logutil.BgLogger().Info("update mctech version", zap.String("state", "success"))
@@ -130,15 +160,15 @@ func CheckSQLDigest(sctx sessionctx.Context, digest string) error {
 		return nil
 	}
 
-	var info domain.DenyDigestInfo
-	if info, ok = mgr.Get(digest); !ok {
+	var info *mcworker.DenyDigestInfo
+	if info = mgr.Get(digest); info == nil {
 		return nil
 	}
 
 	now := time.Now()
-	info.SetLastRequestTime(now)
-	if deny := now.Before(info.ExpiredAt()); deny {
-		return fmt.Errorf("current sql is rejected and resumed at '%s' . digest: %s", info.ExpiredAt().Format("2006-01-02 15:04:05.0000"), digest)
+	info.LastRequestTime = &now
+	if deny := now.Before(info.ExpiredAt); deny {
+		return fmt.Errorf("current sql is rejected and resumed at '%s' . digest: %s", info.ExpiredAt.Format("2006-01-02 15:04:05.0000"), digest)
 	}
 	return nil
 }
