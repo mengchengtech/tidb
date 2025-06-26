@@ -215,25 +215,25 @@ func init() {
 	funcs[ast.MCTechHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
-	deferredFunctions[ast.MCTechSequence] = struct{}{}
+	// 可延迟计算函数的前提条件是该函数是可折叠的(foldable)
+	deferredFunctions[ast.MCTechSequence] = struct{}{} // TODO: delete after next version
 	deferredFunctions[ast.MCTechVersionJustPass] = struct{}{}
-	deferredFunctions[ast.MCSeq] = struct{}{}
+	deferredFunctions[ast.MCSeq] = struct{}{} // TODO: delete after next version
 	deferredFunctions[ast.MCVersionJustPass] = struct{}{}
 	deferredFunctions[ast.MCDWIndexInfo] = struct{}{}
 
 	// 不可折叠函数（一般用在projection中表函数表达式中，整个sql中只按sql字面出现次数调用还是返回结果中每一行都调用一次）
 	unFoldableFunctions[ast.MCTechSequence] = struct{}{}
-	unFoldableFunctions[ast.MCTechVersionJustPass] = struct{}{}
+	unFoldableFunctions[ast.MCTechVersionJustPass] = struct{}{} // TODO: delete after next version
 	unFoldableFunctions[ast.MCSeq] = struct{}{}
-	unFoldableFunctions[ast.MCVersionJustPass] = struct{}{}
-	unFoldableFunctions[ast.MCDWIndexInfo] = struct{}{}
+	unFoldableFunctions[ast.MCVersionJustPass] = struct{}{} // TODO: delete after next version
 
 	// mutableEffectsFunctions集合中保存的函数名称sql中不缓存，每次（行）执行的结果可能都不一样
+	// 如果在一条sql里显示调用了多次，每次返回的结果都不一样
 	mutableEffectsFunctions[ast.MCTechSequence] = struct{}{}
-	mutableEffectsFunctions[ast.MCTechVersionJustPass] = struct{}{}
+	mutableEffectsFunctions[ast.MCTechVersionJustPass] = struct{}{} // TODO: delete after next version
 	mutableEffectsFunctions[ast.MCSeq] = struct{}{}
-	mutableEffectsFunctions[ast.MCVersionJustPass] = struct{}{}
-	mutableEffectsFunctions[ast.MCDWIndexInfo] = struct{}{}
+	mutableEffectsFunctions[ast.MCVersionJustPass] = struct{}{} // TODO: delete after next version
 }
 
 type mctechSequenceDecodeFunctionClass struct {
