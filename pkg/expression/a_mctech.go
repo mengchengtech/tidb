@@ -361,7 +361,7 @@ func (b *builtinMCTechVersionJustPassSig) Clone() builtinFunc {
 }
 
 func (b *builtinMCTechVersionJustPassSig) evalInt(ctx EvalContext, row chunk.Row) (int64, bool, error) {
-	var delta = int64(-3)
+	var delta = int64(3)
 	if len(b.args) == 1 {
 		val, isNull, err := b.args[0].EvalInt(ctx, row)
 		if isNull || err != nil {
