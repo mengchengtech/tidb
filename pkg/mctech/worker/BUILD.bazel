@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "worker",
     srcs = [
+        "cross_db_manager.go",
         "digest_manager.go",
         "worker_manager.go",
     ],
@@ -13,6 +14,7 @@ go_library(
         "//pkg/kv",
         "//pkg/parser/mysql",
         "//pkg/parser/terror",
+        "//pkg/types",
         "//pkg/util",
         "//pkg/util/logutil",
         "//pkg/util/sqlexec",
@@ -26,6 +28,7 @@ go_test(
     name = "worker_test",
     timeout = "short",
     srcs = [
+        "cross_db_manager_test.go",
         "digest_manager_test.go",
         "main_test.go",
     ],

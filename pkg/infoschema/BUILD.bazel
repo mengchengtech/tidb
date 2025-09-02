@@ -30,6 +30,7 @@ go_library(
         "//pkg/infoschema/internal",
         "//pkg/infoschema/metrics",
         "//pkg/kv",
+        "//pkg/mctech/worker",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/parser/auth",

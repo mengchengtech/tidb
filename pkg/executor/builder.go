@@ -1979,6 +1979,8 @@ func (b *executorBuilder) buildMemTable(v *plannercore.PhysicalMemTable) exec.Ex
 			strings.ToLower(infoschema.TableTables),
 			// add by zhangbing
 			strings.ToLower(infoschema.TableMCTechTableTTLInfo),
+			strings.ToLower(infoschema.TableMCTechCrossDBLoadInfo),
+			strings.ToLower(infoschema.ClusterTableMCTechCrossDBLoadInfo),
 			// add end
 			strings.ToLower(infoschema.TableReferConst),
 			strings.ToLower(infoschema.TableSequences),
