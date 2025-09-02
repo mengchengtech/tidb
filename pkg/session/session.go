@@ -3751,6 +3751,9 @@ func runInBootstrapSession(store kv.Storage, ver int64) {
 		time.Sleep(owner.WaitTimeOnForceOwner)
 		upgrade(s)
 	}
+	// add by zhangbing
+	mctechUpgrade(s) // upgrade to mctech extension version
+	// add end
 	finishBootstrap(store)
 	s.ClearValue(sessionctx.Initing)
 
