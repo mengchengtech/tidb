@@ -148,7 +148,11 @@ func (e *memtableRetriever) retrieve(ctx context.Context, sctx sessionctx.Contex
 		// add by zhangbing
 		case infoschema.TableMCTechTableTTLInfo:
 			err = e.setDataFromMCTechTableTTLInfos(ctx, sctx)
-			// add end
+		case infoschema.TableMCTechCrossDBLoadInfo:
+			err = e.setDataFromMCTechCrossDBLoadInfos(sctx)
+		case infoschema.ClusterTableMCTechCrossDBLoadInfo:
+			err = e.setDataFromClusterMCTechCrossDBLoadInfos(sctx)
+		// add end
 		case infoschema.TableReferConst:
 			err = e.setDataFromReferConst(ctx, sctx)
 		case infoschema.TableSequences:

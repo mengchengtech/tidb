@@ -414,6 +414,7 @@ go_test(
         "//pkg/infoschema",
         "//pkg/kv",
         "//pkg/mctech/mock",
+        "//pkg/mctech/worker",
         "//pkg/meta",
         "//pkg/meta/autoid",
         "//pkg/meta/model",

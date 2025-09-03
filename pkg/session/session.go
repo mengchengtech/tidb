@@ -3660,6 +3660,7 @@ func bootstrapSessionImpl(ctx context.Context, store kv.Storage, createSessionsI
 	dom.StartTTLJobManager()
 	// add by zhangbing
 	dom.StartDenyDigestManager()
+	dom.StartCrossDBManager()
 	// add end
 
 	dom.LoadSigningCertLoop(cfg.Security.SessionTokenSigningCert, cfg.Security.SessionTokenSigningKey)
