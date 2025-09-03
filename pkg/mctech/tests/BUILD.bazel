@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "tests_test",
+    timeout = "short",
+    srcs = ["compatible_85_test.go"],
+    flaky = True,
+    deps = ["//pkg/testkit"],
+)
