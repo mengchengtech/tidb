@@ -2,6 +2,7 @@ package udf
 
 import (
 	"container/list"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -257,7 +258,7 @@ type sequenceCacheMetrics interface {
 // SequenceCache sequence cache interface
 type SequenceCache interface {
 	// VersionJustPass get version just pass seconds
-	VersionJustPass() (int64, error)
+	VersionJustPass(int64) (int64, error)
 	// Next get next sequence
 	Next() (int64, error)
 }
@@ -274,13 +275,13 @@ func (m *mockSequenceCache) GetMetrics() *sequenceMetrics {
 	return &m.metrics
 }
 
-func (m *mockSequenceCache) VersionJustPass() (int64, error) {
+func (m *mockSequenceCache) VersionJustPass(delta int64) (int64, error) {
 	// 用于调试场景
 	m.mockLock.Lock()
 	defer m.mockLock.Unlock()
 
 	val := m.mockSequence
-	m.mockSequence = m.mockSequence + 1
+	m.mockSequence = m.mockSequence - delta
 	return val, nil
 }
 
@@ -347,13 +348,13 @@ func (s *rpcSequenceCache) GetMetrics() *sequenceMetrics {
 }
 
 // VersionJustPass versionJustPass
-func (s *rpcSequenceCache) VersionJustPass() (int64, error) {
+func (s *rpcSequenceCache) VersionJustPass(delta int64) (int64, error) {
 	url := s.option.Sequence.APIPrefix + "version"
 	if s.option.Sequence.Debug {
 		log.Debug("version just pass url", zap.String("url", url))
 	}
 	post, err := http.NewRequest(
-		"POST", url, strings.NewReader("{ \"diff\": -3 }"))
+		"POST", url, strings.NewReader(fmt.Sprintf("{ \"diff\": %d }", -delta)))
 	if err != nil {
 		return 0, err
 	}
