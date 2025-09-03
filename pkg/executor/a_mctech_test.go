@@ -482,18 +482,23 @@ func TestQueryMCTechCrossDBLoadInfo(t *testing.T) {
 	tk := testkit.NewTestKit(t, store)
 	atValue := at.Format("2006-01-02 15:04:05.000")
 	rows := [][]any{
-		{"1001", "invoker-1", "service", "0", "global_cq3,global_ec5", "1", "", atValue, "success", "Loaded Success", "0", "invoker-1", "", "[global_cq3 global_ec5]"},
-		{"1002", "invoker-2", "service", "0", "global_cq2,global_ec5,global_mp", "1", "", atValue, "success", "Loaded Success", "0", "invoker-2", "", "[global_cq2 global_ec5 global_mp]"},
-		{"1003", "invoker-2", "service", "0", "global_qa,global_ec3", "1", "", atValue, "success", "Loaded Success", "0", "invoker-2", "", "[global_qa global_ec3]"},
-		{"1004", "invoker-empty", "package", "0", "", "1", "", atValue, "error", "Ignore. The 'cross_dbs' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>"},
-		{"1005", "invoker-one-db", "package", "0", "global_qa", "1", "", atValue, "error", "Ignore. The number of databases in group(0) is less than 2.", "<nil>", "<nil>", "<nil>", "<nil>"},
-		{"1006", "*", "both", "0", "global_qa,global_mp", "1", "", atValue, "success", "Loaded Success", "0", "*", "*", "[global_qa global_mp]"},
-		{"1007", "*", "both", "1", "", "1", "", atValue, "error", "Ignore. The 'allow_all_dbs' field should not be false, when invoker_name is '*'.", "<nil>", "<nil>", "<nil>", "<nil>"},
-		{"1008", "", "both", "1", "", "1", "", atValue, "error", "Ignore. The 'invoker_name' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>"},
-		{"1009", "", "both", "0", "", "1", "", atValue, "error", "Ignore. The 'invoker_name' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>"},
-		{"1050", "invoker-allow-all", "both", "1", "", "1", "", atValue, "success", "Loaded Success", "1", "invoker-allow-all", "invoker-allow-all", "[]"},
-		{"1100", "invoker-disable", "package", "0", "global_qa, global_sq", "0", "", atValue, "disabled", "current rule is Disabled", "<nil>", "<nil>", "<nil>", "<nil>"},
-		{"1101", "", "service", "1", "", "0", "", atValue, "disabled", "current rule is Disabled", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1", "*", "both", "0", "global_mtlp,global_ma", "1", "同一条sql语句中允许同时使用给定的数据库", atValue, "success", "Loaded Success", "0", "*", "*", "[global_mtlp global_ma]", "<nil>", "<nil>"},
+		{"2", "*", "both", "0", "global_platform,global_ipm,*", "1", "规则里其中一项为'*'时，其它数据库排除在任意规则检查之外", atValue, "success", "Loaded Success", "0", "*", "*", "[]", "1", "[global_ipm global_platform]"},
+		{"3", "*", "both", "0", "global_dw_*,global_dwb,*", "1", "规则里其中一项为'*'时，其它数据库排除在任意规则检查之外", atValue, "success", "Loaded Success", "0", "*", "*", "[]", "1", "[global_dw_* global_dwb]"},
+		{"4", "@mctech/dp-impala-tidb-enhanced", "package", "1", "", "1", "删除约束检查里跨库约束规则检查，需要允许任意配置的跨库规则", atValue, "success", "Loaded Success", "1", "", "@mctech/dp-impala-tidb-enhanced", "[]", "<nil>", "<nil>"},
+		{"1001", "invoker-1", "service", "0", "global_cq3,global_ec5", "1", "", atValue, "success", "Loaded Success", "0", "invoker-1", "", "[global_cq3 global_ec5]", "<nil>", "<nil>"},
+		{"1002", "invoker-2", "service", "0", "global_cq2,global_ec5,global_mp", "1", "", atValue, "success", "Loaded Success", "0", "invoker-2", "", "[global_cq2 global_ec5 global_mp]", "<nil>", "<nil>"},
+		{"1003", "invoker-2", "service", "0", "global_qa,global_ec3", "1", "", atValue, "success", "Loaded Success", "0", "invoker-2", "", "[global_qa global_ec3]", "<nil>", "<nil>"},
+		{"1004", "invoker-empty", "package", "0", "", "1", "", atValue, "error", "Ignore. The 'cross_dbs' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1005", "invoker-one-db", "package", "0", "global_qa", "1", "", atValue, "error", "Ignore. The number of databases in group(0) is less than 2.", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1006", "*", "both", "0", "global_qa,global_mp", "1", "", atValue, "success", "Loaded Success", "0", "*", "*", "[global_qa global_mp]", "<nil>", "<nil>"},
+		{"1007", "*", "both", "1", "", "1", "", atValue, "error", "Ignore. The 'allow_all_dbs' field should not be false, when invoker_name is '*'.", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1008", "", "both", "1", "", "1", "", atValue, "error", "Ignore. The 'invoker_name' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1009", "", "both", "0", "", "1", "", atValue, "error", "Ignore. The 'invoker_name' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1010", "invoker-exclude", "service", "0", "global_ds,global_bc,*", "1", "", atValue, "success", "Loaded Success", "0", "invoker-exclude", "", "[]", "0", "[global_bc global_ds]"},
+		{"1050", "invoker-allow-all", "both", "1", "", "1", "", atValue, "success", "Loaded Success", "1", "invoker-allow-all", "invoker-allow-all", "[]", "<nil>", "<nil>"},
+		{"1100", "invoker-disable", "package", "0", "global_qa, global_sq", "0", "", atValue, "disabled", "current rule is Disabled", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1101", "", "service", "1", "", "0", "", atValue, "disabled", "current rule is Disabled", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>", "<nil>"},
 	}
 
 	tk.MustQuery("select * from information_schema.mctech_cross_db_load_info").Check(rows)

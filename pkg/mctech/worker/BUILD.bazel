@@ -37,6 +37,7 @@ go_test(
     flaky = True,
     deps = [
         "//pkg/domain",
+        "//pkg/mctech",
         "//pkg/mctech/mock",
         "//pkg/parser/mysql",
         "//pkg/session",

@@ -54,14 +54,16 @@ const (
 	mctechVersion10001 = 10001
 	mctechVersion10002 = 10002
 	mctechVersion10003 = 10003
+	mctechVersion10004 = 10004
 
-	currentMCTechVersion int64 = mctechVersion10003
+	currentMCTechVersion int64 = mctechVersion10004
 )
 
 var mctechUpgradeVersion = []func(sessiontypes.Session, int64){
 	mctechUpgradeToVer10001,
 	mctechUpgradeToVer10002,
 	mctechUpgradeToVer10003,
+	mctechUpgradeToVer10004,
 }
 
 // mctechUpgrade init mctech ddl
@@ -112,7 +114,15 @@ func mctechUpgradeToVer10003(s sessiontypes.Session, ver int64) {
 		return
 	}
 	// Init [mcworker.MCTechCrossDB] data.
-	mustExecute(s, mcworker.InitMCTechCrossDBData, mysql.SystemDB, mcworker.MCTechCrossDB)
+	mustExecute(s, mcworker.InitMCTechCrossDBData0, mysql.SystemDB, mcworker.MCTechCrossDB)
+}
+
+func mctechUpgradeToVer10004(s sessiontypes.Session, ver int64) {
+	if ver >= mctechVersion10004 {
+		return
+	}
+	// Init [mcworker.MCTechCrossDB] data.
+	mustExecute(s, mcworker.InitMCTechCrossDBData1, mysql.SystemDB, mcworker.MCTechCrossDB)
 }
 
 func updateMCTechVersion(s sessiontypes.Session) {

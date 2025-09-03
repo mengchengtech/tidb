@@ -3,9 +3,11 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,10 +39,18 @@ const (
 		primary key (id)
 	);`
 
-	// InitMCTechCrossDBData init mctech_cross_db table data
-	InitMCTechCrossDBData = `insert into %n.%n
+	// InitMCTechCrossDBData0 init mctech_cross_db table data
+	InitMCTechCrossDBData0 = `insert into %n.%n
 		(id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, created_at, remark)
 		values (1, '*', 'both', false, 'global_mtlp,global_ma', true, now(), '同一条sql语句中允许同时使用给定的数据库')
+		;`
+
+	// InitMCTechCrossDBData1 init mctech_cross_db table data
+	InitMCTechCrossDBData1 = `insert into %n.%n
+		(id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, created_at, remark)
+		values (2, '*', 'both', false, 'global_platform,global_ipm,*', true, now(), '规则里其中一项为''*''时，其它数据库排除在任意规则检查之外')
+		,(3, '*', 'both', false, 'global_dw_*,global_dwb,*', true, now(), '规则里其中一项为''*''时，其它数据库排除在任意规则检查之外')
+		,(4, '@mctech/dp-impala-tidb-enhanced', 'package', true, '', true, now(), '删除约束检查里跨库约束规则检查，需要允许任意配置的跨库规则')
 		;`
 
 	selectCrossDBSQL = "SELECT id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, remark from %n.%n"
@@ -237,6 +247,13 @@ type CrossDBInfo struct {
 	AllowAllDBs bool
 	// 允许跨库执行sql的数据库列表分组，检查时每组分别检查，组和组之间不合并
 	Groups []CrossDBGroup
+	// 排除在跨库执行sql检查之外的数据库列表。当 AllowAllDBs 值为 false 时，仍然不受任何跨库检查约束
+	filters []mctech.Filter
+}
+
+// Exclude method filter db that excluded
+func (c *CrossDBInfo) Exclude(dbNames []string) []string {
+	return doFilterDbNames(c.filters, dbNames)
 }
 
 // CrossDBGroup 允许跨库查询的数据库组
@@ -285,11 +302,18 @@ type CrossDBGroupData struct {
 	DBList []string
 }
 
+// FilterData filter data
+type FilterData struct {
+	Global   bool
+	Patterns []string
+}
+
 // CrossDBDetailData cross db detail data struct
 type CrossDBDetailData struct {
 	Service       string
 	Package       string
 	AllowAllDBs   bool
+	Filters       *FilterData
 	CrossDBGroups []CrossDBGroupData
 }
 
@@ -310,8 +334,22 @@ type defaultCrossDBScheduler struct {
 	lck sync.RWMutex
 
 	allowCrossInfos map[string]*CrossDBInfo
+	// 全局排除在外的数据库过滤器（所有的外部调用端都适用）
+	filters []mctech.Filter
 	// 用于状态检查表
 	loadedResults []*LoadedRuleResult
+}
+
+// Exclude method exclude db that matched
+func (m *defaultCrossDBScheduler) Exclude(dbNames []string) []string {
+	m.lck.Lock()
+	defer m.lck.Unlock()
+
+	if len(m.filters) == 0 {
+		return dbNames
+	}
+
+	return doFilterDbNames(m.filters, dbNames)
 }
 
 // Get get CrossDBInfo
@@ -369,6 +407,7 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 
 	var (
 		newnewAllowCrossInfos = map[string]*CrossDBInfo{}
+		newFilters            []mctech.Filter
 		newLoadedResults      = make([]*LoadedRuleResult, 0, len(rows))
 	)
 	for _, row := range rows {
@@ -382,7 +421,10 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 			Remark:      row.GetString(6),
 		}
 
-		var ok bool
+		var (
+			filterMap map[string]mctech.Filter
+			ok        bool
+		)
 		switch {
 		case !result.Enabled:
 			result.Data.SetState(ResultStateTypeDisabled, "current rule is Disabled")
@@ -397,7 +439,28 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 				ok = true
 			}
 		default:
-			ok = parseDBGroups(result)
+			if filterMap, ok = parseDBGroupsAndFilters(result); ok {
+				// 存在有效的过滤器
+				if len(filterMap) > 0 {
+					fd := &FilterData{
+						Global: result.InvokerName == MatchAnyInvoker && result.InvokerType == InvokerTypeBoth,
+					}
+					for pattern, filter := range filterMap {
+						fd.Patterns = append(fd.Patterns, pattern)
+						if fd.Global {
+							newFilters = append(newFilters, filter)
+						}
+					}
+					if len(fd.Patterns) > 1 {
+						sort.Strings(fd.Patterns)
+					}
+					if fd.Global {
+						// 避免后面添加到非全局规则里，此处直接清空
+						filterMap = nil
+					}
+					result.Data.Detail.Filters = fd
+				}
+			}
 		}
 		newLoadedResults = append(newLoadedResults, result)
 
@@ -419,9 +482,13 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 				if result.AllowAllDBs {
 					// 允许全部数据库跨库访问
 					info.AllowAllDBs = true
-					// 当 AllowAllDBs 为true时，不再需要 Groups
+					// 当 AllowAllDBs 为true时，不再需要 Groups 和 filters
 					info.Groups = nil
+					info.filters = nil
 				} else {
+					for _, filter := range filterMap {
+						info.filters = append(info.filters, filter)
+					}
 					for _, gp := range result.Data.Detail.CrossDBGroups {
 						info.Groups = append(info.Groups, CrossDBGroup{ID: result.ID, DBList: gp.DBList})
 					}
@@ -434,6 +501,7 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 	defer m.lck.Unlock()
 
 	m.allowCrossInfos = newnewAllowCrossInfos
+	m.filters = newFilters
 	m.loadedResults = newLoadedResults
 	return nil
 }
@@ -446,6 +514,38 @@ func (m *defaultCrossDBScheduler) UpdateHeartBeat(ctx context.Context, se sqlexe
 // CrossDBManager cross db manager
 type CrossDBManager struct {
 	schedulerWrapper[string, CrossDBInfo]
+}
+
+// Exclude method filter dbs
+func (m *CrossDBManager) Exclude(dbNames []string) []string {
+	failpoint.Inject("get-cross-db-excludes", func(val failpoint.Value) {
+		patterns := strings.Split(val.(string), ",")
+		if len(patterns) == 0 {
+			panic(errors.New("filters is empty"))
+		}
+
+		var remain []string
+		for _, pattern := range patterns {
+			var (
+				exclude mctech.Filter
+				ok      bool
+			)
+			if exclude, ok = mctech.NewStringFilter(pattern); !ok {
+				panic(errors.New("filter format is empty or error"))
+			}
+			for _, dbName := range dbNames {
+				if !exclude.Match(dbName) {
+					remain = append(remain, dbName)
+				}
+			}
+		}
+		failpoint.Return(remain)
+	})
+
+	if d, ok := m.Unwrap().(interface{ Exclude([]string) []string }); ok {
+		return d.Exclude(dbNames)
+	}
+	return dbNames
 }
 
 // Get method inplements Scheduler interface
@@ -472,6 +572,13 @@ func (m *CrossDBManager) Get(pattern SQLInvokerPattern) *CrossDBInfo {
 					tp = InvokerTypePackage
 				case "AllowAllDBs":
 					info.AllowAllDBs = v.(bool)
+				case "Excludes":
+					for _, item := range v.([]any) {
+						db := item.(string)
+						if filter, ok := mctech.NewStringFilter(db); ok {
+							info.filters = append(info.filters, filter)
+						}
+					}
 				case "Groups":
 					for _, item := range v.([]any) {
 						info.Groups = append(info.Groups, CrossDBGroup{
@@ -524,22 +631,68 @@ func NewCrossDBManager(sessPool sessionPool) *CrossDBManager {
 	return &CrossDBManager{scheduler}
 }
 
-func parseDBGroups(r *LoadedRuleResult) bool {
+func doFilterDbNames(filters []mctech.Filter, dbNames []string) []string {
+	var remain []string
+	for _, dbName := range dbNames {
+		var matched bool
+		for _, exclude := range filters {
+			if matched = exclude.Match(dbName); matched {
+				break
+			}
+		}
+		if !matched {
+			remain = append(remain, dbName)
+		}
+	}
+	return remain
+}
+
+func parseDBGroupsAndFilters(r *LoadedRuleResult) (map[string]mctech.Filter, bool) {
 	data := &r.Data
 	groupList := config.StrToSlice(r.CrossDBs, "|")
 	if len(groupList) == 0 {
 		data.SetState(ResultStateTypeError, "Ignore. The 'cross_dbs' field is empty.")
-		return false
+		return nil, false
 	}
 
-	crossDBGroups := make([]CrossDBGroupData, 0, len(groupList))
+	var (
+		crossDBGroups []CrossDBGroupData
+		filterMap     map[string]mctech.Filter
+	)
 	for index, group := range groupList {
 		dbList := config.StrToSlice(group, ",")
 		if len(dbList) <= 1 {
 			data.SetState(ResultStateTypeError, fmt.Sprintf("Ignore. The number of databases in group(%d) is less than 2.", index))
-			return false
+			return nil, false
 		}
-		crossDBGroups = append(crossDBGroups, CrossDBGroupData{DBList: dbList})
+		if slices.Contains(dbList, MatchAnyDB) {
+			// 只要其中包含 [MatchAnyDB]，就认为该组中其它数据库全部不受跨库查询限制
+			// 为了避免引起歧义，这种配置只允许出现在单一的配置规则中，不能在多个数据库分组规则中
+			if len(groupList) > 1 {
+				data.SetState(ResultStateTypeError, "Ignore. The '*' should be in single group, there are more than one db groups in this rule configuration.")
+				return nil, false
+			}
+
+			for _, db := range dbList {
+				if db == MatchAnyDB {
+					continue
+				}
+				if filterMap == nil {
+					filterMap = map[string]mctech.Filter{}
+				}
+				var (
+					filter mctech.Filter
+					ok     bool
+				)
+				if filter, ok = mctech.NewStringFilter(db); !ok {
+					data.SetState(ResultStateTypeError, "Ignore. The db pattern is invalid.")
+					return nil, false
+				}
+				filterMap[db] = filter
+			}
+		} else {
+			crossDBGroups = append(crossDBGroups, CrossDBGroupData{DBList: dbList})
+		}
 	}
 
 	data.SetState(ResultStateTypeSuccess, "Loaded Success")
@@ -547,5 +700,5 @@ func parseDBGroups(r *LoadedRuleResult) bool {
 	if !r.AllowAllDBs {
 		detail.CrossDBGroups = crossDBGroups
 	}
-	return true
+	return filterMap, true
 }
