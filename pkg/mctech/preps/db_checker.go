@@ -12,8 +12,6 @@ import (
 	"github.com/pingcap/tidb/pkg/domain"
 	"github.com/pingcap/tidb/pkg/mctech"
 	mcworker "github.com/pingcap/tidb/pkg/mctech/worker"
-	"github.com/pingcap/tidb/pkg/sessionctx"
-	"github.com/pingcap/tidb/pkg/util/intest"
 	"go.uber.org/zap"
 )
 
@@ -31,12 +29,10 @@ type DatabaseChecker interface {
 /**
  *
  * 检查的逻辑是先根据mutexFilters查询出互斥的数据库范围
- * 再根据excludeFilters查询出需要排除的数据库
  * 最后合并分组，同一分组内的数据库可以互相访问
  */
 type mutuallyExclusiveDatabaseChecker struct {
-	mutexFilters   []mctech.Filter
-	excludeFilters []mctech.Filter
+	mutexFilters []mctech.Filter
 }
 
 var dbChecker *mutuallyExclusiveDatabaseChecker
@@ -49,14 +45,12 @@ func getDatabaseChecker() DatabaseChecker {
 
 	dbCheckerInitOne.Do(func() {
 		option := config.GetMCTechConfig()
-		dbChecker = newMutuallyExclusiveDatabaseCheckerWithParams(
-			option.DbChecker.Mutex,
-			option.DbChecker.Exclude)
+		dbChecker = newMutuallyExclusiveDatabaseCheckerWithParams(option.DbChecker.Mutex)
 	})
 	return dbChecker
 }
 
-func newMutuallyExclusiveDatabaseCheckerWithParams(mutex, exclude []string) *mutuallyExclusiveDatabaseChecker {
+func newMutuallyExclusiveDatabaseCheckerWithParams(mutex []string) *mutuallyExclusiveDatabaseChecker {
 	var mutexFilters []mctech.Filter
 	for _, t := range mutex {
 		if filter, ok := mctech.NewStringFilter(t); ok {
@@ -64,21 +58,12 @@ func newMutuallyExclusiveDatabaseCheckerWithParams(mutex, exclude []string) *mut
 		}
 	}
 
-	// 在mutex filters过滤结果中中可与其它数据库共同查询的表
-	var excludeFilters []mctech.Filter
-	for _, t := range exclude {
-		if filter, ok := mctech.NewStringFilter(t); ok {
-			excludeFilters = append(excludeFilters, filter)
-		}
-	}
-
 	return &mutuallyExclusiveDatabaseChecker{
-		mutexFilters:   mutexFilters,
-		excludeFilters: excludeFilters,
+		mutexFilters: mutexFilters,
 	}
 }
 
-func (c *mutuallyExclusiveDatabaseChecker) getLogicDBNamesForCrossDBCheck(mctx mctech.Context, schema mctech.StmtSchemaInfo) []string {
+func (c *mutuallyExclusiveDatabaseChecker) getLogicDBNamesForCrossDBCheck(mctx mctech.Context, mgr domain.CrossDBManager, schema mctech.StmtSchemaInfo) []string {
 	failpoint.Inject("DbCheckError", func(_ failpoint.Value) {
 		failpoint.Return([]string{"global_ec5", "global_sq"})
 	})
@@ -93,8 +78,8 @@ func (c *mutuallyExclusiveDatabaseChecker) getLogicDBNamesForCrossDBCheck(mctx m
 			logicDBNames = append(logicDBNames, logicDBName)
 		}
 	}
-
-	return logicDBNames
+	// 过滤掉全局不做多库规则检查的数据库
+	return mgr.Exclude(logicDBNames)
 }
 
 func (c *mutuallyExclusiveDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, schema mctech.StmtSchemaInfo) error {
@@ -103,13 +88,20 @@ func (c *mutuallyExclusiveDatabaseChecker) Check(mctx mctech.Context, aware Stmt
 		return nil
 	}
 
-	logicDBNames := c.getLogicDBNamesForCrossDBCheck(mctx, schema)
+	var (
+		mgr domain.CrossDBManager
+		ok  bool
+	)
+	if mgr, ok = domain.GetDomain(mctx.Session()).CrossDBManager(); !ok {
+		panic(errors.New("Domain.crossDBManager is nil"))
+	}
+	logicDBNames := c.getLogicDBNamesForCrossDBCheck(mctx, mgr, schema)
 	if len(logicDBNames) <= 1 {
 		// 数据库只有一个
 		return nil
 	}
 
-	if ok, err := c.checkCrossDBs(mctx.Session(), result, logicDBNames); err != nil || ok {
+	if ok, err := c.checkCrossDBs(mgr, result, logicDBNames); err != nil || ok {
 		// 出现了错识或者通过了检查
 		return err
 	}
@@ -125,18 +117,7 @@ func (c *mutuallyExclusiveDatabaseChecker) Check(mctx mctech.Context, aware Stmt
 	return errors.New(msg)
 }
 
-func (c *mutuallyExclusiveDatabaseChecker) checkByCrossDBInfo(sctx sessionctx.Context, comments mctech.Comments, checkCb func(*mcworker.CrossDBInfo) bool) (bool, error) {
-	var (
-		mgr domain.CrossDBManager
-		ok  bool
-	)
-	if mgr, ok = domain.GetDomain(sctx).CrossDBManager(); !ok {
-		if !intest.InTest {
-			return false, errors.New("Domain.crossDBManager is nil")
-		}
-		return false, nil
-	}
-
+func (c *mutuallyExclusiveDatabaseChecker) checkByCrossDBInfo(mgr domain.CrossDBManager, comments mctech.Comments, checkCb func(*mcworker.CrossDBInfo) bool) (bool, error) {
 	var (
 		pctx = mcworker.NewSQLInvokerPatternContext(comments)
 		info *mcworker.CrossDBInfo
@@ -160,14 +141,6 @@ func (c *mutuallyExclusiveDatabaseChecker) dbPredicate(dbName string) bool {
 			continue
 		}
 
-		for _, f := range c.excludeFilters {
-			matched := f.Match(dbName)
-			if matched {
-				// 需要排除，不当作互斥数据库处理
-				return false
-			}
-		}
-
 		// 符合互斥数据库
 		return true
 	}
@@ -176,20 +149,16 @@ func (c *mutuallyExclusiveDatabaseChecker) dbPredicate(dbName string) bool {
 }
 
 // checkCrossDBs 检查给定的数据库名称是否完全包含于某个分组中
-func (c *mutuallyExclusiveDatabaseChecker) checkCrossDBs(ctx sessionctx.Context, result mctech.ParseResult, logicDBNames []string) (bool, error) {
+func (c *mutuallyExclusiveDatabaseChecker) checkCrossDBs(mgr domain.CrossDBManager, result mctech.ParseResult, logicDBNames []string) (bool, error) {
 	// 额外传入的只对本次生效的分组条件
-	var specialGroup []string
 	if v, ok := result.GetParam(mctech.ParamAcross); ok {
 		var across string
 		if across, ok = v.(string); !ok {
 			return false, errors.New("'across'参数类型必须是'|'分隔的字符串")
 		}
-		specialGroup = config.StrToSlice(across, "|")
-	}
-	if len(specialGroup) > 0 {
 		specialInfo := &mcworker.CrossDBInfo{
 			Groups: []mcworker.CrossDBGroup{
-				{DBList: specialGroup},
+				{DBList: config.StrToSlice(across, "|")},
 			},
 		}
 		// sql中显示指定的需要跨库查询的数据库列表
@@ -208,7 +177,7 @@ func (c *mutuallyExclusiveDatabaseChecker) checkCrossDBs(ctx sessionctx.Context,
 		return c.checkBySingleCrossDBInfo(logicDBNames, info)
 	}
 
-	if ok, err := c.checkByCrossDBInfo(ctx, result.Comments(), checkCb); err != nil || ok {
+	if ok, err := c.checkByCrossDBInfo(mgr, result.Comments(), checkCb); err != nil || ok {
 		return ok, err
 	}
 
@@ -217,6 +186,8 @@ func (c *mutuallyExclusiveDatabaseChecker) checkCrossDBs(ctx sessionctx.Context,
 }
 
 func (c *mutuallyExclusiveDatabaseChecker) checkBySingleCrossDBInfo(logicDBNames []string, info *mcworker.CrossDBInfo) bool {
+	// 过滤掉只对当前服务不做多库规则检查的数据库
+	logicDBNames = info.Exclude(logicDBNames)
 	for _, gp := range info.Groups {
 		allPass := true
 		for _, dbName := range logicDBNames {

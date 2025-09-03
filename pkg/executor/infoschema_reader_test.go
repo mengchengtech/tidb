@@ -662,7 +662,7 @@ func TestColumnTable(t *testing.T) {
 			"test|tbl1|col_2"))
 	tk.MustQuery(`select count(*) from information_schema.columns;`).Check(
 		// modify by zhangbing
-		testkit.RowsWithSep("|", "5078"))
+		testkit.RowsWithSep("|", "5082"))
 	// modify end
 }
 

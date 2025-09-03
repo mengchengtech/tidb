@@ -93,8 +93,7 @@ type Sequence struct {
 type DbChecker struct {
 	Enabled   bool     `toml:"enabled" json:"enabled"`       // 是否开启同一sql语句中引用的数据库共存约束检查
 	APIPrefix string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
-	Mutex     []string `toml:"mutex" json:"mutex"`           //
-	Exclude   []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
+	Mutex     []string `toml:"mutex" json:"mutex"`           // 执行sql中需要检查是否允许跨库规则的数据库匹配模式
 }
 
 // Tenant append tenant condition used
@@ -186,13 +185,6 @@ var (
 
 	// DefaultDbCheckerMutex default value of config.DbChecker.Mutex
 	DefaultDbCheckerMutex = []string{"asset_*", "global_*"}
-	// DefaultDbCheckerExclude default value of config.DbChecker.Exclude
-	DefaultDbCheckerExclude = []string{
-		"global_platform",
-		"global_ipm",
-		"global_dw_*",
-		"global_dwb",
-	}
 
 	// DefaultMetricsIgnoreByDatabases default value of config.Metrics.Ignore.Databases
 	DefaultMetricsIgnoreByDatabases = []string{
@@ -224,7 +216,6 @@ func init() {
 			Enabled:   DefaultDbCheckerEnabled,
 			APIPrefix: "http://node-infra-dim-service.mc/",
 			Mutex:     []string{},
-			Exclude:   []string{},
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
@@ -358,7 +349,6 @@ func storeMCTechConfig(config *Config) {
 	opts.DDL.Version.DbMatches = DistinctSlice(append(opts.DDL.Version.DbMatches, DefaultDDLVersionDbMatches...))
 
 	opts.DbChecker.Mutex = DistinctSlice(append(opts.DbChecker.Mutex, DefaultDbCheckerMutex...))
-	opts.DbChecker.Exclude = DistinctSlice(append(opts.DbChecker.Exclude, DefaultDbCheckerExclude...))
 
 	opts.Metrics.Ignore.ByDatabases = DistinctSlice(append(opts.Metrics.Ignore.ByDatabases, DefaultMetricsIgnoreByDatabases...))
 	opts.Metrics.Ignore.ByRoles = DistinctSlice(append(opts.Metrics.Ignore.ByRoles, DefaultMetricsIgnoreByRoles...))

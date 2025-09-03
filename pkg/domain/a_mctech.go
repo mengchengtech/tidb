@@ -28,6 +28,7 @@ func (m *denyDigestManager) Get(digest string) *mcworker.DenyDigestInfo {
 
 // CrossDBManager CrossDBManager interface
 type CrossDBManager interface {
+	Exclude(dbNames []string) []string
 	Get(pattern mcworker.SQLInvokerPattern) *mcworker.CrossDBInfo
 	GetAll() map[string]*mcworker.CrossDBInfo
 	GetLoadedResults() []*mcworker.LoadedRuleResult
@@ -35,6 +36,10 @@ type CrossDBManager interface {
 
 type crossDBManager struct {
 	mgr *mcworker.CrossDBManager
+}
+
+func (m *crossDBManager) Exclude(dbNames []string) []string {
+	return m.mgr.Exclude(dbNames)
 }
 
 func (m *crossDBManager) Get(pattern mcworker.SQLInvokerPattern) *mcworker.CrossDBInfo {
