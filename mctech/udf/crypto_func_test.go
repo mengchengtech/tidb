@@ -15,7 +15,7 @@ type encryptionTestCases struct {
 	failure string
 }
 
-func TestMCTechCrypto(t *testing.T) {
+func TestMCTechAesCrypto(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Encryption.Mock": false}),
 	)
@@ -27,10 +27,12 @@ func TestMCTechCrypto(t *testing.T) {
 		{false, "{crypto}YEsSIc6gxBu7NJt8De3fxg=", "", "illegal base64 data at input byte"},
 	}
 
-	doRunCryptoTest(t, cases)
+	doRunCryptoTest(t, map[string]any{
+		"Crypto.CRYPTO": map[string]any{"type": "aes", "key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+	}, cases)
 }
 
-func TestMCTechCryptoUnpaddingFail(t *testing.T) {
+func TestMCTechAesCryptoUnpaddingFail(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Encryption.Mock": false}),
 	)
@@ -46,14 +48,53 @@ func TestMCTechCryptoUnpaddingFail(t *testing.T) {
 		{false, "{crypto}XGhHgHevnICYzqxUPS26lw==", "", "mctech decrypt failure. '{crypto}XGhHgHevnICYzqxUPS26lw=='"},
 	}
 
-	doRunCryptoTest(t, cases)
+	doRunCryptoTest(t, map[string]any{
+		"Crypto.AES": map[string]any{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+		"Crypto.OLD": true, // 使用旧的获取密钥的方式
+	}, cases)
 }
 
-func doRunCryptoTest(t *testing.T, cases []*encryptionTestCases) {
+func TestMCTechSM4Crypto(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Encryption.Mock": false}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
+	cases := []*encryptionTestCases{
+		{true, "13511868785", "{crypto}k9hfoqCiRZmZylHOD+b/Wg==", ""},
+		{false, "{crypto}k9hfoqCiRZmZylHOD+b/Wg==", "13511868785", ""},
+		{false, "{crypto}YEsSIc6gxBu7NJt8De3fxg=", "", "illegal base64 data at input byte"},
+	}
+
+	doRunCryptoTest(t, map[string]any{
+		"Crypto.CRYPTO": map[string]string{"type": "sm4", "key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+	}, cases)
+}
+
+func TestMCTechSM4CryptoUnpaddingFail(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"Encryption.Mock": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/udf/pkcs7Unpadding",
+		mock.M(t, "true"),
+	)
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/udf/pkcs7Unpadding")
+	}()
+
+	cases := []*encryptionTestCases{
+		{false, "{crypto}XGhHgHevnICYzqxUPS26lw==", "", "mctech decrypt failure. '{crypto}XGhHgHevnICYzqxUPS26lw=='"},
+	}
+
+	doRunCryptoTest(t, map[string]any{
+		"Crypto.CRYPTO": map[string]string{"type": "sm4", "key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
+	}, cases)
+}
+
+func doRunCryptoTest(t *testing.T, crypto map[string]any, cases []*encryptionTestCases) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
-		mock.M(t, map[string]any{
-			"Crypto.AES": map[string]string{"key": "W1gfHNQTARa7Uxt7wua8Aw==", "iv": "a9Z5R6YCjYx1QmoG5WF9BQ=="},
-		}),
+		mock.M(t, crypto),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
 
