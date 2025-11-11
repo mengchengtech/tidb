@@ -4229,6 +4229,13 @@ def go_deps():
     )
 
     go_repository(
+        name = "com_github_tjfoc_gmsm",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/tjfoc/gmsm",
+        sum = "h1:aMe1GlZb+0bLjn+cKTPEvvn9oUEBlJitaZiiBwsbgho=",
+        version = "v1.4.1",
+    )
+    go_repository(
         name = "com_github_tklauser_go_sysconf",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/tklauser/go-sysconf",
