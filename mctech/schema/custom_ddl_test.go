@@ -38,7 +38,11 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Enable("github.com/pingcap/tidb/mctech/ddl/DDLExtension", mock.M(t, true))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/ddl/DDLExtension")
+	}()
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
@@ -72,6 +76,14 @@ func TestMCTechSequenceDefaultValueSchemaTest(t *testing.T) {
 }
 
 func TestMCTechSequenceDefaultValueAlterSchemaTest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/ddl/DDLExtension", mock.M(t, true))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/ddl/DDLExtension")
+	}()
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -118,7 +130,11 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Enable("github.com/pingcap/tidb/mctech/ddl/DDLExtension", mock.M(t, true))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/ddl/DDLExtension")
+	}()
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
@@ -153,6 +169,15 @@ func TestMCTechSequenceDefaultValueOnInsertTest(t *testing.T) {
 }
 
 func TestMCTechSequenceDefaultValueInitTest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/ddl/DDLExtension", mock.M(t, true))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/ddl/DDLExtension")
+	}()
+
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -179,6 +204,15 @@ func TestMCTechSequenceDefaultValueInitTest(t *testing.T) {
 }
 
 func TestBigintDefaultValueOnInsertTest(t *testing.T) {
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": false}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/mctech/ddl/DDLExtension", mock.M(t, true))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/ddl/DDLExtension")
+	}()
+
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
@@ -191,9 +225,13 @@ func TestBigintDefaultValueOnInsertTest(t *testing.T) {
 
 func TestInsertSelectUseSequenceTest(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
-		mock.M(t, map[string]bool{"Sequence.Mock": false}),
+		mock.M(t, map[string]bool{"DDL.Version.Enabled": true}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	failpoint.Enable("github.com/pingcap/tidb/mctech/ddl/DDLExtension", mock.M(t, true))
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/ddl/DDLExtension")
+	}()
 
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
