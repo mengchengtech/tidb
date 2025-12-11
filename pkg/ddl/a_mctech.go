@@ -116,6 +116,9 @@ func updateNewTiflashTablePartitionsReplacementPolicy(tblInfo *model.TableInfo, 
 			// 分区存在独立的placement，添加新建的分区的placement policy的放置策略
 			rule, err := infosync.NewTiFlashPartitionRule(p.ID, tblInfo, bundle)
 			if err != nil {
+				return err
+			}
+			if err != nil {
 				rules = append(rules, rule)
 			}
 		}
