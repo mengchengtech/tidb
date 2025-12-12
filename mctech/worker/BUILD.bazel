@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "worker",
-    srcs = ["digest_manager.go"],
+    srcs = [
+        "digest_manager.go",
+        "worker_manager.go",
+    ],
     importpath = "github.com/pingcap/tidb/mctech/worker",
     visibility = ["//visibility:public"],
     deps = [
@@ -15,6 +18,7 @@ go_library(
         "//util/sqlexec",
         "@com_github_ngaut_pools//:pools",
         "@com_github_pingcap_failpoint//:failpoint",
+        "@org_golang_x_exp//maps",
         "@org_uber_go_zap//:zap",
     ],
 )
@@ -29,10 +33,11 @@ go_test(
     embed = [":worker"],
     flaky = True,
     deps = [
+        "//domain",
         "//mctech/mock",
         "//parser/mysql",
+        "//session",
         "//testkit",
-        "//util/sqlexec",
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_stretchr_testify//require",
         "@com_github_tikv_client_go_v2//util",

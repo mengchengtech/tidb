@@ -1,30 +1,15 @@
 package worker
 
-import (
-	"context"
-
-	"github.com/pingcap/tidb/util/sqlexec"
+var (
+	_ modifyWorkerScheduler[string, DenyDigestInfo] = &defaultDigestScheduler{}
+	_ modifyWorkerScheduler[string, any]            = &nonWorkerScheduler[string, any]{}
 )
 
-// DenyDigestInfo exports the denyDigestInfo for test
-type DenyDigestInfo = denyDigestInfo
-
-// DenyDigests returns the deny digests
-func (m *DigestManager) DenyDigests() map[string]*DenyDigestInfo {
-	return m.getDenyDigests()
+type modifyWorkerScheduler[TKey, TValue any] interface {
+	SetAll(all map[string]*TValue)
 }
 
-// DenyDigests returns the deny digests
-func (m *DigestManager) SetDenyDigests(denyDigests map[string]*DenyDigestInfo) {
-	m.setDenyDigests(denyDigests)
-}
-
-// RescheduleJobs is an exported version of rescheduleJobs for test
-func (m *DigestManager) ReloadDenyDigests(se sqlexec.SQLExecutor) {
-	m.reloadDenyDigests(se)
-}
-
-// UpdateHeartBeat is an exported version of updateHeartBeat for test
-func (m *DigestManager) UpdateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
-	return m.updateHeartBeat(ctx, se)
+// SetAll returns the deny digests
+func (m *DigestManager) SetAll(denyDigests map[string]*DenyDigestInfo) {
+	m.Unwrap().(modifyWorkerScheduler[string, DenyDigestInfo]).SetAll(denyDigests)
 }
