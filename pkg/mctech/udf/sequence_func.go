@@ -362,7 +362,7 @@ func (s *rpcSequenceCache) VersionJustPass(delta int64) (int64, error) {
 		"Content-Type": {"application/json"},
 	}
 
-	body, err := mctech.DoRequest(post)
+	body, _, err := mctech.DoRequest(post)
 	if err != nil {
 		return 0, err
 	}
@@ -425,7 +425,7 @@ func (s *rpcSequenceCache) loadSequence(count int64) error {
 		return err
 	}
 
-	body, err := mctech.DoRequest(post)
+	body, _, err := mctech.DoRequest(post)
 	if err != nil {
 		return err
 	}

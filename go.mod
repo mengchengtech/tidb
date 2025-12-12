@@ -110,6 +110,7 @@ require (
 	github.com/tikv/client-go/v2 v2.0.8-0.20241212055527-4d50d6744f0c
 	github.com/tikv/pd/client v0.0.0-20240806105739-10ecdbe92b55
 	github.com/timakin/bodyclose v0.0.0-20240125160201-f835fa56326a
+	github.com/tjfoc/gmsm v1.4.1
 	github.com/twmb/murmur3 v1.1.6
 	github.com/uber/jaeger-client-go v2.22.1+incompatible
 	github.com/vbauerster/mpb/v7 v7.5.3
