@@ -199,17 +199,6 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechDbCheckerExcepts, Type: TypeStr, Value: strings.Join(config.DefaultDbCheckerExcepts, ","),
-			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
-				v := atomicLoad(&config.GetMCTechConfig().DbChecker.Excepts)
-				return strings.Join(v, ","), nil
-			},
-			SetGlobal: func(ctx context.Context, s *SessionVars, val string) error {
-				v := config.StrToSlice(val, ",")
-				atomicStore(&config.GetMCTechConfig().DbChecker.Excepts, v)
-				return nil
-			},
-		},
 		{Scope: ScopeGlobal, Name: MCTechMetricsSQLTraceEnabled, Type: TypeBool, Value: BoolToOnOff(config.DefaultMetricsSQLTraceEnabled),
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				v := atomicLoad(&config.GetMCTechConfig().Metrics.SQLTrace.Enabled)
@@ -290,8 +279,6 @@ func LoadMCTechSysVars() {
 		panic(err)
 	}
 	log.Warn("LoadMctechSysVars", zap.ByteString("config", bytes))
-
-	SetSysVar(MCTechDbCheckerExcepts, strings.Join(option.DbChecker.Excepts, ","))
 
 	SetSysVar(MCTechMPPDefaultValue, option.MPP.DefaultValue)
 

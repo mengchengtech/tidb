@@ -95,7 +95,6 @@ type DbChecker struct {
 	APIPrefix string   `toml:"api-prefix" json:"api-prefix"` // 获取global_dw_*的当前索引的服务地址前缀
 	Mutex     []string `toml:"mutex" json:"mutex"`           //
 	Exclude   []string `toml:"exclude" json:"exclude"`       // 被排除在约束检查外的数据库名称
-	Excepts   []string `toml:"excepts" json:"excepts"`       // 排除在跨库约束检查之外的服务或依赖包列表。每一项的格式为: 1. {service}; 2. {service}.{product line}; 3. {package name}
 }
 
 // Tenant append tenant condition used
@@ -187,8 +186,6 @@ var (
 
 	// DefaultDbCheckerMutex default value of config.DbChecker.Mutex
 	DefaultDbCheckerMutex = []string{"asset_*", "global_*"}
-	// DefaultDbCheckerExcepts default value of config.DbChecker.Excepts
-	DefaultDbCheckerExcepts = []string{}
 	// DefaultDbCheckerExclude default value of config.DbChecker.Exclude
 	DefaultDbCheckerExclude = []string{
 		"global_platform",
@@ -228,7 +225,6 @@ func init() {
 			APIPrefix: "http://node-infra-dim-service.mc/",
 			Mutex:     []string{},
 			Exclude:   []string{},
-			Excepts:   []string{},
 		},
 		Tenant: Tenant{
 			Enabled:          DefaultTenantEnabled,
@@ -310,8 +306,6 @@ func GetMCTechConfig() *MCTech {
 			switch k {
 			case "Sequence.Mock":
 				opts.Sequence.Mock = toBool(v)
-			case "DbChecker.Excepts":
-				opts.DbChecker.Excepts = toList(v)
 			case "Encryption.Mock":
 				opts.Encryption.Mock = toBool(v)
 			case "Tenant.Enabled":
@@ -353,15 +347,6 @@ func toString(v any) string {
 	return v.(string)
 }
 
-func toList(v any) []string {
-	lst := v.([]any)
-	strList := make([]string, 0, len(lst))
-	for _, item := range lst {
-		strList = append(strList, item.(string))
-	}
-	return strList
-}
-
 func storeMCTechConfig(config *Config) {
 	mctechConfigLock.Lock()
 	defer mctechConfigLock.Unlock()
@@ -374,7 +359,6 @@ func storeMCTechConfig(config *Config) {
 
 	opts.DbChecker.Mutex = DistinctSlice(append(opts.DbChecker.Mutex, DefaultDbCheckerMutex...))
 	opts.DbChecker.Exclude = DistinctSlice(append(opts.DbChecker.Exclude, DefaultDbCheckerExclude...))
-	opts.DbChecker.Excepts = DistinctSlice(append(opts.DbChecker.Excepts, DefaultDbCheckerExcepts...))
 
 	opts.Metrics.Ignore.ByDatabases = DistinctSlice(append(opts.Metrics.Ignore.ByDatabases, DefaultMetricsIgnoreByDatabases...))
 	opts.Metrics.Ignore.ByRoles = DistinctSlice(append(opts.Metrics.Ignore.ByRoles, DefaultMetricsIgnoreByRoles...))
