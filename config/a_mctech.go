@@ -211,12 +211,12 @@ var (
 	// DefaultMetricsIgnoreByRoles default value of config.Metrics.Ignore.ByRoles
 	DefaultMetricsIgnoreByRoles = []string{"mc_write", "mc_read", "sm_write", "sm_read"}
 
-	// AllAllowMetricsLargeQueryTypes default value of config.Metrics.LargeQuery.Types
-	AllAllowMetricsLargeQueryTypes = []string{"delete", "insert", "update", "select"}
+	// DefaultAllowMetricsLargeQueryTypes default value of config.Metrics.LargeQuery.Types
+	DefaultAllowMetricsLargeQueryTypes = []string{"delete", "insert", "update", "select"}
 )
 
-func newMCTech() MCTech {
-	return MCTech{
+func init() {
+	defaultConf.MCTech = MCTech{
 		Sequence: Sequence{
 			Mock:          false,
 			Debug:         false,
@@ -267,7 +267,7 @@ func newMCTech() MCTech {
 				FileMaxDays: DefaultMetricsLargeQueryFileMaxDays,
 				FileMaxSize: DefaultMetricsLargeQueryFileMaxSize,
 				Threshold:   DefaultMetricsLargeQueryThreshold,
-				Types:       AllAllowMetricsLargeQueryTypes,
+				Types:       DefaultAllowMetricsLargeQueryTypes,
 			},
 			SQLTrace: SQLTrace{
 				Enabled:           DefaultMetricsSQLTraceEnabled,

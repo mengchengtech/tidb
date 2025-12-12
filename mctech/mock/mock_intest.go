@@ -12,7 +12,7 @@ import (
 )
 
 // M check if in testing mode
-func M(t require.TestingT, v interface{}) string {
+func M(t require.TestingT, v any) string {
 	if s, ok := v.(string); ok {
 		return fmt.Sprintf("return(`%s`)", s)
 	}

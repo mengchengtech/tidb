@@ -1,10 +1,12 @@
+// add by zhangbing
+
 package parser_test
 
 import (
 	"testing"
 )
 
-func TestMCTechFunctionDelete(t *testing.T) {
+func TestMCTechFunction(t *testing.T) {
 	cases := []testCase{
 		{"/*& tenant:gslq */ select mctech_sequence() as full_id", true,
 			"SELECT MCTECH_SEQUENCE() AS `full_id`"},

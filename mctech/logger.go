@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	fullQueryLogger,
+	fullQueryLogger  *zap.Logger
 	largeQueryLogger *zap.Logger
-	fqOnce = &sync.Once{}
-	lqOnce = &sync.Once{}
+	fqOnce           = &sync.Once{}
+	lqOnce           = &sync.Once{}
 )
 
 // F Get full sql trace logger
@@ -90,7 +90,7 @@ func (e *largeQueryEncoder) AddUint32(string, uint32)                        {}
 func (e *largeQueryEncoder) AddUint16(string, uint16)                        {}
 func (e *largeQueryEncoder) AddUint8(string, uint8)                          {}
 func (e *largeQueryEncoder) AddUintptr(string, uintptr)                      {}
-func (e *largeQueryEncoder) AddReflected(string, interface{}) error          { return nil }
+func (e *largeQueryEncoder) AddReflected(string, any) error                  { return nil }
 func (e *largeQueryEncoder) OpenNamespace(string)                            {}
 
 func initLargeQueryLogger() *zap.Logger {
@@ -102,10 +102,8 @@ func initLargeQueryLogger() *zap.Logger {
 	sqConfig.Level = ""
 	sqConfig.File.MaxDays = largeQueryConfig.FileMaxDays
 	sqConfig.File.MaxSize = largeQueryConfig.FileMaxSize
-
-	if realFilename, err := config.GetRealLogFile(largeQueryConfig.Filename); err == nil {
-		sqConfig.File.Filename = realFilename
-	} else {
+	var err error
+	if sqConfig.File.Filename, err = config.GetRealLogFile(largeQueryConfig.Filename); err != nil {
 		panic(err)
 	}
 
@@ -136,9 +134,8 @@ func initFullQueryLogger() *zap.Logger {
 	fsConfig.DisableCaller = true
 	fsConfig.File.MaxDays = sqlTraceConfig.FileMaxDays
 	fsConfig.File.MaxSize = sqlTraceConfig.FileMaxSize
-	if realFilename, err := config.GetRealLogFile(sqlTraceConfig.Filename); err == nil {
-		fsConfig.File.Filename = realFilename
-	} else {
+	var err error
+	if fsConfig.File.Filename, err = config.GetRealLogFile(sqlTraceConfig.Filename); err != nil {
 		panic(err)
 	}
 

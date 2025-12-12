@@ -142,11 +142,11 @@ func (c *mutexDatabaseChecker) Check(mctx mctech.Context, aware StmtTextAware, d
 	if result := mctx.PrepareResult(); result != nil {
 		params := result.Params()
 		if v, ok := params[mctech.ParamAcross]; ok {
-			if across, ok := v.(string); ok {
-				specialGroup = across
-			} else {
+			var across string
+			if across, ok = v.(string); !ok {
 				return errors.New("'across'参数类型必须是字符串")
 			}
+			specialGroup = across
 		}
 	}
 

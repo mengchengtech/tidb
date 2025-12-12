@@ -695,7 +695,6 @@ func (e *ShowExec) fetchShowColumns(ctx context.Context) error {
 				defaultValStr = strconv.FormatInt(longValue.GetInt64(), 10)
 			}
 			// add end
-
 			if col.GetType() == mysql.TypeBit {
 				defaultValBinaryLiteral := types.BinaryLiteral(defaultValStr)
 				columnDefault = defaultValBinaryLiteral.ToBitLiteralString(true)
@@ -1098,6 +1097,7 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 			}
 			if mysql.HasOnUpdateNowFlag(col.GetFlag()) {
 				// modify by zhangbing
+				// buf.WriteString(" ON UPDATE CURRENT_TIMESTAMP")
 				if col.FieldType.GetType() == mysql.TypeLonglong {
 					buf.WriteString(" ON UPDATE MCTECH_SEQUENCE")
 				} else {
@@ -1193,6 +1193,7 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 			colNames = append(colNames, stringutil.Escape(col.O, sqlMode))
 		}
 		// modify by zhangbing
+		// buf.WriteString(fmt.Sprintf("(%s)", strings.Join(colNames, ",")))
 		buf.WriteString(fmt.Sprintf("(%s)", strings.Join(colNames, ", ")))
 		// modify end
 		if fk.RefSchema.L != "" {
@@ -1205,6 +1206,7 @@ func ConstructResultOfShowCreateTable(ctx sessionctx.Context, tableInfo *model.T
 			refColNames = append(refColNames, stringutil.Escape(refCol.O, sqlMode))
 		}
 		// modify by zhangbing
+		// buf.WriteString(fmt.Sprintf("(%s)", strings.Join(refColNames, ",")))
 		buf.WriteString(fmt.Sprintf("(%s)", strings.Join(refColNames, ", ")))
 		// modify end
 		if model.ReferOptionType(fk.OnDelete) != 0 {

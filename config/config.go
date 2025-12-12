@@ -305,6 +305,7 @@ type Config struct {
 	TiDBEnableExitCheck bool `toml:"tidb-enable-exit-check" json:"tidb-enable-exit-check"`
 
 	// add by zhangbing
+	// MCTech
 	MCTech MCTech `toml:"mctech" json:"mctech"`
 	// add end
 }
@@ -1058,10 +1059,6 @@ var defaultConf = Config{
 	TiDBMaxReuseChunk:                    64,
 	TiDBMaxReuseColumn:                   256,
 	TiDBEnableExitCheck:                  false,
-
-	// add by zhangbing
-	MCTech: newMCTech(),
-	// add end
 }
 
 var (

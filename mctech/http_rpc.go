@@ -46,9 +46,12 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 func do(request *http.Request) ([]byte, error) {
 	failpoint.Inject("MockMctechHttp", func(val failpoint.Value) {
 		values := make(map[string]any)
-		err := json.Unmarshal([]byte(val.(string)), &values)
-		if err != nil {
-			panic(err)
+		var err error
+		if val != nil {
+			err = json.Unmarshal([]byte(val.(string)), &values)
+			if err != nil {
+				panic(err)
+			}
 		}
 		path := request.URL.Path
 		var (
@@ -81,7 +84,10 @@ func do(request *http.Request) ([]byte, error) {
 			}
 			failpoint.Return(data, nil)
 		}
-		failpoint.Return(nil, nil)
+
+		if !strings.HasPrefix(path, "/rpc-test") {
+			failpoint.Return(nil, nil)
+		}
 	})
 
 	response, err := apiClient.Do(request)

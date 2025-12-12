@@ -2,7 +2,6 @@ package preps
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/pingcap/tidb/mctech"
 	_ "github.com/pingcap/tidb/mctech/interceptor" // 为了解除循环依赖，触发运行期动态函数初始化，在此处强制加载
@@ -41,7 +40,7 @@ type tidbSessionMCTechContext struct {
 // newContext function
 func newContext(session sessionctx.Context, usingTenantParam bool) mctech.Context {
 	baseCtx := mctech.NewBaseContext(usingTenantParam)
-	baseCtx.(mctech.ModifyContext).SetDWSelector(getDWSelector())
+	baseCtx.(mctech.ModifyContext).SetDWSelector(newDWSelector())
 	return &tidbSessionMCTechContext{
 		Context: baseCtx,
 		session: session,
@@ -60,9 +59,13 @@ func (d *tidbSessionMCTechContext) CurrentDB() string {
 	return d.session.GetSessionVars().CurrentDB
 }
 
-func (d *tidbSessionMCTechContext) GetInfoForTest() string {
+func (d *tidbSessionMCTechContext) GetInfoForTest() map[string]any {
 	info := d.Context.(mctech.ContextForTest).GetInfoForTest()
-	return fmt.Sprintf("{%s,%s}", info, d.CurrentDB())
+	db := d.CurrentDB()
+	if len(db) > 0 {
+		info["db"] = db
+	}
+	return info
 }
 
 func (d *tidbSessionMCTechContext) Session() sessionctx.Context {

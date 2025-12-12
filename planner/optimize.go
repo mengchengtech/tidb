@@ -535,13 +535,11 @@ func OptimizeExecStmt(ctx context.Context, sctx sessionctx.Context,
 	if !ok {
 		return nil, nil, errors.Errorf("invalid result plan type, should be Execute")
 	}
-
 	// add by zhangbing
 	if err := exec.AppendVarExprs(sctx); err != nil {
 		return nil, nil, err
 	}
 	// add end
-
 	plan, names, err := core.GetPlanFromSessionPlanCache(ctx, sctx, false, is, exec.PrepStmt, exec.Params)
 	if err != nil {
 		return nil, nil, err

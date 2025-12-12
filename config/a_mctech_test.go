@@ -82,13 +82,13 @@ type getFileNameCase struct {
 }
 
 func TestLogFile(t *testing.T) {
-	failpoint.Enable("github.com/pingcap/tidb/mctech/GetHostName", mock.M(t, "true"))
-	defer failpoint.Disable("github.com/pingcap/tidb/mctech/GetHostName")
+	failpoint.Enable("github.com/pingcap/tidb/config/GetHostName", mock.M(t, "true"))
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetHostName")
 
 	cases := []*getFileNameCase{
-		// {"a/b/c/large-sql.log", "a/b/c/large-sql.log", ""},
-		// {"a/b/c/{hostname}/large-sql.log", "a/b/c/tidb01/large-sql.log", ""},
-		{"a/b/c/{hostname1}/large-sql.log", "a/b/c/tidb01/large-sql.log", "metrics log filename template DO NOT support 'hostname1' only allow 'hostname'"},
+		// {"a/b/c/large-query.log", "a/b/c/large-query.log", ""},
+		// {"a/b/c/{hostname}/large-query.log", "a/b/c/tidb01/large-query.log", ""},
+		{"a/b/c/{hostname1}/large-query.log", "a/b/c/tidb01/large-query.log", "metrics log filename template DO NOT support 'hostname1' only allow 'hostname'"},
 	}
 
 	for _, c := range cases {

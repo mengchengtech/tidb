@@ -14,7 +14,6 @@ import (
 	"github.com/pingcap/tidb/sessionctx"
 	"github.com/pingcap/tidb/util/intest"
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 // Context mctech context interface
@@ -73,7 +72,7 @@ type Context interface {
 type ContextForTest interface {
 	// @title GetInfoForTest
 	// @description 获取用于单元测试的描述信息
-	GetInfoForTest() string
+	GetInfoForTest() map[string]any
 }
 
 // ModifyContext interface
@@ -106,7 +105,9 @@ type ModifyContext interface {
 // SessionMPPVarsContext interface
 type SessionMPPVarsContext interface {
 	StoreSessionMPPVars(mpp string) error
+
 	ReloadSessionMPPVars() error
+
 	SetSessionMPPVars(mpp string) error
 }
 
@@ -152,6 +153,13 @@ type GlobalValueInfo interface {
 	Includes() []string
 }
 
+// GlobalValueInfoForTest interface
+type GlobalValueInfoForTest interface {
+	// @title GetInfoForTest
+	// @description 获取用于单元测试的描述信息
+	GetInfoForTest() map[string]any
+}
+
 // NewGlobalValue create GlobalValueInfo instance
 func NewGlobalValue(global bool, excludes, includes []string) GlobalValueInfo {
 	return &globalValueInfo{
@@ -179,8 +187,16 @@ func (g *globalValueInfo) Includes() []string {
 	return g.includes
 }
 
-func (g *globalValueInfo) String() string {
-	return fmt.Sprintf("{%t,%v,%v}", g.global, g.excludes, g.includes)
+// GetInfoForTest get info for test
+func (g *globalValueInfo) GetInfoForTest() map[string]any {
+	info := map[string]any{"set": g.global}
+	if len(g.excludes) > 0 {
+		info["excludes"] = g.excludes
+	}
+	if len(g.includes) > 0 {
+		info["includes"] = g.includes
+	}
+	return info
 }
 
 // FlagRoles custom roles
@@ -194,7 +210,7 @@ type FlagRoles interface {
 type Comments interface {
 	Service() ServiceComment // 执行sql的服务名称
 	Package() PackageComment // 执行sql所属的依赖包名称（公共包中执行的sql）
-	String() string
+	ToMap() map[string]any
 }
 
 // ServiceComment service comment
@@ -211,9 +227,9 @@ type PackageComment interface {
 
 // TenantInfo tenant info
 type TenantInfo interface {
-	fmt.Stringer
 	Code() string   // 当前租户code
 	FromRole() bool // 租户code是否来自角色
+	GetInfoForTest() map[string]any
 }
 
 // MutableTenantInfo tenant info
@@ -241,13 +257,13 @@ func (ti *tenantValueInfo) FromRole() bool {
 	return ti.fromRole
 }
 
-func (ti *tenantValueInfo) String() string {
-	return fmt.Sprintf("{%s,%t}", ti.code, ti.fromRole)
+// GetInfoForTest get info for test
+func (ti *tenantValueInfo) GetInfoForTest() map[string]any {
+	return map[string]any{"code": ti.code, "fromRole": ti.fromRole}
 }
 
 // PrepareResult interface
 type PrepareResult interface {
-	fmt.Stringer
 	// Tenant current tenant
 	Tenant() TenantInfo
 	// Roles current user has some roles
@@ -263,6 +279,7 @@ type PrepareResult interface {
 	// DbPrefix 自定义hint，数据库前缀。'dev', 'test'
 	// Deprecated: 已废弃
 	DbPrefix() string
+	GetInfoForTest() map[string]any
 }
 
 type prepareResult struct {
@@ -339,18 +356,21 @@ func NewPrepareResult(tenantCode string, roles FlagRoles, comments Comments, par
 	return r, nil
 }
 
-// String to string
-func (r *prepareResult) String() string {
-	var paramList []string
+// GetInfoForTest get info for test
+func (r *prepareResult) GetInfoForTest() map[string]any {
+	info := map[string]any{}
 	if len(r.params) > 0 {
-		paramList = make([]string, 0, len(r.params))
-		keys := maps.Keys(r.params)
-		slices.Sort(keys)
-		for _, k := range keys {
-			paramList = append(paramList, fmt.Sprintf("{%s,%s}", k, r.params[k]))
-		}
+		info["params"] = maps.Clone(r.params)
 	}
-	return fmt.Sprintf("%s{%s,%v,%s,%s}", r.comments, r.dbPrefix, r.tenant, paramList, r.globalInfo)
+	info["comments"] = r.comments.ToMap()
+	if len(r.dbPrefix) > 0 {
+		info["prefix"] = r.dbPrefix
+	}
+	info["tenant"] = r.tenant.GetInfoForTest()
+	if r.globalInfo.Global() {
+		info["global"] = r.globalInfo.(GlobalValueInfoForTest).GetInfoForTest()
+	}
+	return info
 }
 
 // Tenant current tenant
@@ -463,11 +483,11 @@ func (d *baseContext) SetSessionMPPVars(mpp string) error {
 func (d *baseContext) StartedAt() time.Time {
 	failpoint.Inject("StartedAt", func(v failpoint.Value) {
 		str := v.(string)
-		if t, err := time.ParseInLocation("2006-01-02 15:04:05.000", str, time.Local); err == nil {
-			failpoint.Return(t)
-		} else {
+		t, err := time.ParseInLocation("2006-01-02 15:04:05.000", str, time.Local)
+		if err != nil {
 			panic(err)
 		}
+		failpoint.Return(t)
 	})
 	return d.startedAt
 }
@@ -488,8 +508,8 @@ func (d *baseContext) SetInExecute(val bool) {
 	d.usingTenantParam = val
 }
 
-func (d *baseContext) GetInfoForTest() string {
-	return fmt.Sprintf("{%s}", d.prepareResult)
+func (d *baseContext) GetInfoForTest() map[string]any {
+	return d.prepareResult.GetInfoForTest()
 }
 
 func (d *baseContext) Reset() {
@@ -673,6 +693,7 @@ type DWIndexInfo struct {
 	Background DWIndex // 后台库，用于预生成数据
 }
 
+// ToMap convert DWIndexInfo to map
 func (info *DWIndexInfo) ToMap() map[string]any {
 	return map[string]any{
 		"current":    int64(info.Current),
@@ -720,9 +741,9 @@ func GetContext(sctx sessionctx.Context) (Context, error) {
 
 // GetContextStrict get mctech context from session
 func GetContextStrict(sctx sessionctx.Context) Context {
-	if mctx, err := GetContext(sctx); err != nil {
+	mctx, err := GetContext(sctx)
+	if err != nil {
 		panic(err)
-	} else {
-		return mctx
 	}
+	return mctx
 }

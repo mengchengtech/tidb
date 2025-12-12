@@ -61,8 +61,8 @@ func updateExistTiFlashPlacementPolicy(tblInfos []*model.TableInfo, partInfos []
 			continue
 		}
 
-		partRule, err := infosync.NewTiFlashPartitionRule(part.ID, part.tblInfo, bundle)
-		if err != nil {
+		var partRule *placement.TiFlashRule
+		if partRule, err = infosync.NewTiFlashPartitionRule(part.ID, part.tblInfo, bundle); err != nil {
 			return err
 		}
 		rules = append(rules, partRule)
@@ -97,6 +97,7 @@ func updateTiflashTableReplacementPolicy(tblInfo *model.TableInfo, bundle *place
 	if len(rules) > 0 {
 		err = infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules)
 	}
+
 	return err
 }
 
@@ -114,15 +115,17 @@ func updateNewTiflashTablePartitionsReplacementPolicy(tblInfo *model.TableInfo, 
 			// 分区存在独立的placement，添加新建的分区的placement policy的放置策略
 			rule, err := infosync.NewTiFlashPartitionRule(p.ID, tblInfo, bundle)
 			if err != nil {
-				return nil
+				return err
 			}
-
 			if rule != nil {
 				rules = append(rules, rule)
 			}
 		}
 	}
-	return infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules)
+	if len(rules) > 0 {
+		return infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules)
+	}
+	return nil
 }
 
 func updateTiflashTablePartitionReplacementPolicy(partitionID int64, tblInfo *model.TableInfo, bundle *placement.Bundle) error {
@@ -177,7 +180,7 @@ func updateFullTiflashTableReplacementPolicy(tblInfo *model.TableInfo, bundles [
 		}
 	}
 
-	if err == nil && len(rules) > 0 {
+	if len(rules) > 0 {
 		err = infosync.PutTiFlashRulesWithDefaultRetry(context.TODO(), rules)
 	}
 

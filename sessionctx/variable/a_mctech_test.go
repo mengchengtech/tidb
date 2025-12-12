@@ -1,3 +1,5 @@
+// add by zhangbing
+
 package variable_test
 
 import (
@@ -86,11 +88,15 @@ func TestLargeQueryFormat(t *testing.T) {
 		seVar.RewritePhaseInfo = variable.RewritePhaseInfo{DurationRewrite: 3}
 
 		stmtCtx := seVar.StmtCtx
-		stmtCtx.MergeTimeDetail(util.TimeDetail{
-			ProcessTime: time.Second * time.Duration(2),
-			WaitTime:    time.Minute,
-		})
-		stmtCtx.MergeScanDetail(&util.ScanDetail{TotalKeys: 10000})
+		stmtCtx.MergeExecDetails(&execdetails.ExecDetails{
+			DetailsNeedP90: execdetails.DetailsNeedP90{
+				TimeDetail: util.TimeDetail{
+					ProcessTime: time.Second * time.Duration(2),
+					WaitTime:    time.Minute,
+				},
+			},
+			ScanDetail: &util.ScanDetail{TotalKeys: 10000},
+		}, nil)
 		stmtCtx.SetEncodedPlan(c.sql)
 		ctx := context.WithValue(ctx, execdetails.StmtExecDetailKey, &execdetails.StmtExecDetails{
 			WriteSQLRespDuration: c.render,
@@ -98,7 +104,7 @@ func TestLargeQueryFormat(t *testing.T) {
 		stmtCtx.MemTracker.Consume(c.memMax)
 		stmtCtx.DiskTracker.Consume(c.diskMax)
 		comments := preps.GetCustomCommentFromSQL(c.sql)
-		logItems := executor.CreateLargeLogItems(ctx, c.sql, c.sqlType, c.succ, c.results, seVar, comments)
+		logItems := executor.CreateLargeQueryItems(ctx, c.sql, c.sqlType, c.succ, c.results, seVar, comments)
 		logItems.TimeTotal = time.Second
 
 		logString, err := seVar.LargeQueryFormat(logItems)

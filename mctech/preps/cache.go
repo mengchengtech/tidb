@@ -39,10 +39,6 @@ func (goc *goCacheCache) Set(key string, value any) {
 	goc.rawCache.Set(key, value, goCache.DefaultExpiration)
 }
 
-func (goc *goCacheCache) Init(expiration time.Duration, cleanup time.Duration) {
-	goc.rawCache = goCache.New(expiration, cleanup)
-}
-
 // NewCache create Cache instance whitch implements MCTechCache interface.
 func NewCache(expiration time.Duration, cleanup time.Duration) MCTechCache {
 	if intest.InTest {

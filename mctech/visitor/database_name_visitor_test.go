@@ -34,7 +34,7 @@ var dbsCases = []*tenantDatabaseNameVisitorTestCase{
 	{"pf", "select * from component", "global_platform"},
 	{"pf", "with category as (select * from global_sq.material_category) select * from category", "global_sq"},
 	{"pf", "with category as (select * from global_sq.material_category) select * from other_category o inner join category a on o.id = a.id", "global_platform|global_sq"},
-	
+
 	// 同一个with里前面的cte用到的表名与后面的cte名称重名，前一个cte里用到的表需要当作普通表
 	{"pf", "with category as (select * from global_ipm.material_category where creator_id in (select id from user)),user as (select * from awesome_ai.wechat_user) select * from category", "awesome_ai|global_ipm|global_platform"},
 	// 同一个with里后面的cte用到的表名与前面的cte名称重名，后一个cte里用到的表需要当作cte表

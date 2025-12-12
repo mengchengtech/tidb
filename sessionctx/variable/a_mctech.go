@@ -23,62 +23,62 @@ import (
 )
 
 const (
-	// MCTechLargeQueryRowPrefixStr is large log row prefix.
-	MCTechLargeQueryRowPrefixStr = "# "
-	// MCTechLargeQuerySpaceMarkStr is large query log space mark.
-	MCTechLargeQuerySpaceMarkStr = ": "
-	// MCTechLargeQuerySQLSuffixStr is large log suffix.
-	MCTechLargeQuerySQLSuffixStr = ";"
-	// MCTechLargeQueryGzipPrefixStr is compress sql prefix.
-	MCTechLargeQueryGzipPrefixStr = "{gzip}"
-	// MCTechLargeQueryStartPrefixStr is large log start row prefix.
-	MCTechLargeQueryStartPrefixStr = MCTechLargeQueryRowPrefixStr + MCTechLargeQueryTimeStr + MCTechLargeQuerySpaceMarkStr
-	// MCTechLargeQueryUserAndHostStr is the user and host field name, which is compatible with MySQL.
-	MCTechLargeQueryUserAndHostStr = "USER@HOST"
+	// MCLargeQueryRowPrefixStr is large query row prefix.
+	MCLargeQueryRowPrefixStr = "# "
+	// MCLargeQuerySpaceMarkStr is large query log space mark.
+	MCLargeQuerySpaceMarkStr = ": "
+	// MCLargeQuerySQLSuffixStr is large query suffix.
+	MCLargeQuerySQLSuffixStr = ";"
+	// MCLargeQueryGzipPrefixStr is compress sql prefix.
+	MCLargeQueryGzipPrefixStr = "{gzip}"
+	// MCLargeQueryStartPrefixStr is large query start row prefix.
+	MCLargeQueryStartPrefixStr = MCLargeQueryRowPrefixStr + MCLargeQueryTimeStr + MCLargeQuerySpaceMarkStr
+	// MCLargeQueryUserAndHostStr is the user and host field name, which is compatible with MySQL.
+	MCLargeQueryUserAndHostStr = "USER@HOST"
 
-	// MCTechLargeQueryTimeStr is large log field name.
-	MCTechLargeQueryTimeStr = "TIME"
-	// MCTechLargeQueryUserStr is large log field name.
-	MCTechLargeQueryUserStr = "USER"
-	// MCTechLargeQueryHostStr only for large_query table usage.
-	MCTechLargeQueryHostStr = "HOST"
-	// MCTechLargeQueryQueryTimeStr is large log field name.
-	MCTechLargeQueryQueryTimeStr = "QUERY_TIME"
-	// MCTechLargeQueryParseTimeStr is the parse sql time.
-	MCTechLargeQueryParseTimeStr = "PARSE_TIME"
-	// MCTechLargeQueryCompileTimeStr is the compile plan time.
-	MCTechLargeQueryCompileTimeStr = "COMPILE_TIME"
-	// MCTechLargeQueryRewriteTimeStr is the rewrite time.
-	MCTechLargeQueryRewriteTimeStr = "REWRITE_TIME"
-	// MCTechLargeQueryOptimizeTimeStr is the optimization time.
-	MCTechLargeQueryOptimizeTimeStr = "OPTIMIZE_TIME"
+	// MCLargeQueryTimeStr is large query field name.
+	MCLargeQueryTimeStr = "TIME"
+	// MCLargeQueryUserStr is large query field name.
+	MCLargeQueryUserStr = "USER"
+	// MCLargeQueryHostStr only for large query table usage.
+	MCLargeQueryHostStr = "HOST"
+	// MCLargeQueryQueryTimeStr is large query field name.
+	MCLargeQueryQueryTimeStr = "QUERY_TIME"
+	// MCLargeQueryParseTimeStr is the parse sql time.
+	MCLargeQueryParseTimeStr = "PARSE_TIME"
+	// MCLargeQueryCompileTimeStr is the compile plan time.
+	MCLargeQueryCompileTimeStr = "COMPILE_TIME"
+	// MCLargeQueryRewriteTimeStr is the rewrite time.
+	MCLargeQueryRewriteTimeStr = "REWRITE_TIME"
+	// MCLargeQueryOptimizeTimeStr is the optimization time.
+	MCLargeQueryOptimizeTimeStr = "OPTIMIZE_TIME"
 
-	// MCTechLargeQueryDBStr is large log field name.
-	MCTechLargeQueryDBStr = "DB"
-	// MCTechLargeQuerySQLStr is large log field name.
-	MCTechLargeQuerySQLStr = "Query"
-	// MCTechLargeQuerySuccStr is used to indicate whether this sql execute successfully.
-	MCTechLargeQuerySuccStr = "SUCC"
-	// MCTechLargeQueryMemMax is the max number bytes of memory used in this statement.
-	MCTechLargeQueryMemMax = "MEM_MAX"
-	// MCTechLargeQueryDiskMax is the nax number bytes of disk used in this statement.
-	MCTechLargeQueryDiskMax = "DISK_MAX"
-	// MCTechLargeQueryDigestStr is large log field name.
-	MCTechLargeQueryDigestStr = "DIGEST"
-	// MCTechLargeQuerySQLLengthStr is large log length.
-	MCTechLargeQuerySQLLengthStr = "SQL_LENGTH"
-	// MCTechLargeQueryAppNameStr is the service that large log maybe from.
-	MCTechLargeQueryAppNameStr = "APP_NAME"
-	// MCTechLargeQueryProductLineStr is the product-line that large log maybe from.
-	MCTechLargeQueryProductLineStr = "PRODUCT_LINE"
-	// MCTechLargeQueryPackageStr is the package that large log maybe from.
-	MCTechLargeQueryPackageStr = "PACKAGE"
-	// MCTechLargeQueryResultRows is the row count of the SQL result.
-	MCTechLargeQueryResultRows = "RESULT_ROWS"
-	// MCTechLargeQuerySQLTypeStr large sql type. (insert/update/delete/select......)
-	MCTechLargeQuerySQLTypeStr = "SQL_TYPE"
-	// MCTechLargeQueryPlan is used to record the query plan.
-	MCTechLargeQueryPlan = "PLAN"
+	// MCLargeQueryDBStr is large query field name.
+	MCLargeQueryDBStr = "DB"
+	// MCLargeQuerySQLStr is large query field name.
+	MCLargeQuerySQLStr = "Query"
+	// MCLargeQuerySuccStr is used to indicate whether this sql execute successfully.
+	MCLargeQuerySuccStr = "SUCC"
+	// MCLargeQueryMemMax is the max number bytes of memory used in this statement.
+	MCLargeQueryMemMax = "MEM_MAX"
+	// MCLargeQueryDiskMax is the nax number bytes of disk used in this statement.
+	MCLargeQueryDiskMax = "DISK_MAX"
+	// MCLargeQueryDigestStr is large query field name.
+	MCLargeQueryDigestStr = "DIGEST"
+	// MCLargeQuerySQLLengthStr is large query length.
+	MCLargeQuerySQLLengthStr = "SQL_LENGTH"
+	// MCLargeQueryAppNameStr is the service that large query maybe from.
+	MCLargeQueryAppNameStr = "APP_NAME"
+	// MCLargeQueryProductLineStr is the product-line that large query maybe from.
+	MCLargeQueryProductLineStr = "PRODUCT_LINE"
+	// MCLargeQueryPackageStr is the package that large query maybe from.
+	MCLargeQueryPackageStr = "PACKAGE"
+	// MCLargeQueryResultRows is the row count of the SQL result.
+	MCLargeQueryResultRows = "RESULT_ROWS"
+	// MCLargeQuerySQLTypeStr large sql type. (insert/update/delete/select......)
+	MCLargeQuerySQLTypeStr = "SQL_TYPE"
+	// MCLargeQueryPlan is used to record the query plan.
+	MCLargeQueryPlan = "PLAN"
 )
 
 const (
@@ -161,9 +161,9 @@ func init() {
 				return nil
 			},
 		},
-		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, Type: TypeStr, Value: strings.Join(config.AllAllowMetricsLargeQueryTypes, ","),
+		{Scope: ScopeGlobal, Name: MCTechMetricsLargeQueryTypes, Type: TypeStr, Value: strings.Join(config.DefaultAllowMetricsLargeQueryTypes, ","),
 			Validation: func(vars *SessionVars, _ string, original string, scope ScopeFlag) (string, error) {
-				return validateEnumSet(original, ",", config.AllAllowMetricsLargeQueryTypes)
+				return validateEnumSet(original, ",", config.DefaultAllowMetricsLargeQueryTypes)
 			},
 			GetGlobal: func(ctx context.Context, s *SessionVars) (string, error) {
 				v := atomicLoad(&config.GetMCTechConfig().Metrics.LargeQuery.Types)
@@ -321,8 +321,8 @@ func LoadMCTechSysVars() {
 	SetSysVar(MCTechMetricsIgnoreByDatabases, strings.Join(option.Metrics.Ignore.ByDatabases, ","))
 }
 
-// MCTechLargeQueryLogItems is a collection of items that should be included in the
-type MCTechLargeQueryLogItems struct {
+// MCLargeQueryItems is a collection of items that should be included in the
+type MCLargeQueryItems struct {
 	Digest            string
 	TimeTotal         time.Duration
 	TimeParse         time.Duration
@@ -367,7 +367,7 @@ type MCTechLargeQueryLogItems struct {
 // insert into t select * from t;
 
 // LargeQueryFormat uses for formatting large query log.
-func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (string, error) {
+func (s *SessionVars) LargeQueryFormat(logItems *MCLargeQueryItems) (string, error) {
 	var buf bytes.Buffer
 
 	if s.User != nil {
@@ -375,52 +375,52 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (stri
 		if s.ConnectionInfo != nil {
 			hostAddress = s.ConnectionInfo.ClientIP
 		}
-		writeSlowLogItem(&buf, MCTechLargeQueryUserAndHostStr, fmt.Sprintf("%s[%s] @ %s [%s]", s.User.Username, s.User.Username, s.User.Hostname, hostAddress))
+		writeSlowLogItem(&buf, MCLargeQueryUserAndHostStr, fmt.Sprintf("%s[%s] @ %s [%s]", s.User.Username, s.User.Username, s.User.Hostname, hostAddress))
 	}
-	writeSlowLogItem(&buf, MCTechLargeQueryQueryTimeStr, strconv.FormatFloat(logItems.TimeTotal.Seconds(), 'f', -1, 64))
-	writeSlowLogItem(&buf, MCTechLargeQueryParseTimeStr, strconv.FormatFloat(logItems.TimeParse.Seconds(), 'f', -1, 64))
-	writeSlowLogItem(&buf, MCTechLargeQueryCompileTimeStr, strconv.FormatFloat(logItems.TimeCompile.Seconds(), 'f', -1, 64))
+	writeSlowLogItem(&buf, MCLargeQueryQueryTimeStr, strconv.FormatFloat(logItems.TimeTotal.Seconds(), 'f', -1, 64))
+	writeSlowLogItem(&buf, MCLargeQueryParseTimeStr, strconv.FormatFloat(logItems.TimeParse.Seconds(), 'f', -1, 64))
+	writeSlowLogItem(&buf, MCLargeQueryCompileTimeStr, strconv.FormatFloat(logItems.TimeCompile.Seconds(), 'f', -1, 64))
 
-	buf.WriteString(MCTechLargeQueryRowPrefixStr + fmt.Sprintf("%v%v%v", MCTechLargeQueryRewriteTimeStr,
-		MCTechLargeQuerySpaceMarkStr, strconv.FormatFloat(logItems.RewriteInfo.DurationRewrite.Seconds(), 'f', -1, 64)))
+	buf.WriteString(MCLargeQueryRowPrefixStr + fmt.Sprintf("%v%v%v", MCLargeQueryRewriteTimeStr,
+		MCLargeQuerySpaceMarkStr, strconv.FormatFloat(logItems.RewriteInfo.DurationRewrite.Seconds(), 'f', -1, 64)))
 	buf.WriteString("\n")
 
-	writeSlowLogItem(&buf, MCTechLargeQueryOptimizeTimeStr, strconv.FormatFloat(logItems.TimeOptimize.Seconds(), 'f', -1, 64))
+	writeSlowLogItem(&buf, MCLargeQueryOptimizeTimeStr, strconv.FormatFloat(logItems.TimeOptimize.Seconds(), 'f', -1, 64))
 
 	if execDetailStr := logItems.ExecDetail.LargeQueryString(); len(execDetailStr) > 0 {
-		buf.WriteString(MCTechLargeQueryRowPrefixStr + execDetailStr + "\n")
+		buf.WriteString(MCLargeQueryRowPrefixStr + execDetailStr + "\n")
 	}
 
 	if len(s.CurrentDB) > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryDBStr, strings.ToLower(s.CurrentDB))
+		writeSlowLogItem(&buf, MCLargeQueryDBStr, strings.ToLower(s.CurrentDB))
 	}
 
 	if len(logItems.Digest) > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryDigestStr, logItems.Digest)
+		writeSlowLogItem(&buf, MCLargeQueryDigestStr, logItems.Digest)
 	}
 	if logItems.MemMax > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryMemMax, strconv.FormatInt(logItems.MemMax, 10))
+		writeSlowLogItem(&buf, MCLargeQueryMemMax, strconv.FormatInt(logItems.MemMax, 10))
 	}
 	if logItems.DiskMax > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryDiskMax, strconv.FormatInt(logItems.DiskMax, 10))
+		writeSlowLogItem(&buf, MCLargeQueryDiskMax, strconv.FormatInt(logItems.DiskMax, 10))
 	}
 
-	writeSlowLogItem(&buf, MCTechLargeQueryResultRows, strconv.FormatInt(logItems.ResultRows, 10))
-	writeSlowLogItem(&buf, MCTechLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
-	writeSlowLogItem(&buf, MCTechLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
-	writeSlowLogItem(&buf, MCTechLargeQuerySQLTypeStr, logItems.SQLType)
+	writeSlowLogItem(&buf, MCLargeQueryResultRows, strconv.FormatInt(logItems.ResultRows, 10))
+	writeSlowLogItem(&buf, MCLargeQuerySuccStr, strconv.FormatBool(logItems.Succ))
+	writeSlowLogItem(&buf, MCLargeQuerySQLLengthStr, strconv.Itoa(len(logItems.SQL)))
+	writeSlowLogItem(&buf, MCLargeQuerySQLTypeStr, logItems.SQLType)
 	if len(logItems.AppName) > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryAppNameStr, logItems.AppName)
+		writeSlowLogItem(&buf, MCLargeQueryAppNameStr, logItems.AppName)
 	}
 	if len(logItems.ProductLine) > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryProductLineStr, logItems.ProductLine)
+		writeSlowLogItem(&buf, MCLargeQueryProductLineStr, logItems.ProductLine)
 	}
 	if len(logItems.Package) > 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryPackageStr, logItems.Package)
+		writeSlowLogItem(&buf, MCLargeQueryPackageStr, logItems.Package)
 	}
 
 	if len(logItems.Plan) != 0 {
-		writeSlowLogItem(&buf, MCTechLargeQueryPlan, logItems.Plan)
+		writeSlowLogItem(&buf, MCLargeQueryPlan, logItems.Plan)
 	}
 
 	if s.CurrentDBChanged {
@@ -442,8 +442,8 @@ func (s *SessionVars) LargeQueryFormat(logItems *MCTechLargeQueryLogItems) (stri
 
 	encoder.Close()
 
-	buf.WriteString(MCTechLargeQueryGzipPrefixStr)
+	buf.WriteString(MCLargeQueryGzipPrefixStr)
 	buf.Write(b.Bytes())
-	buf.WriteString(MCTechLargeQuerySQLSuffixStr)
+	buf.WriteString(MCLargeQuerySQLSuffixStr)
 	return buf.String(), nil
 }

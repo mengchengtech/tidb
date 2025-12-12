@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -79,7 +78,7 @@ type MCTechExec struct {
 }
 
 // Open implements the Executor Open interface.
-func (e *MCTechExec) Open(ctx context.Context) error {
+func (*MCTechExec) Open(_ context.Context) error {
 	// MCTECH语句不需要做额外的事情
 	return nil
 }
@@ -124,7 +123,7 @@ func (e *MCTechExec) Next(ctx context.Context, req *chunk.Chunk) error {
 // 等到对应的 Execute 语句执行时，才考虑租户，考虑这些参数的实际值
 //
 
-func (e *PrepareExec) onCheckPrepare() error {
+func (*PrepareExec) onCheckPrepare() error {
 	if config.GetMCTechConfig().Tenant.ForbiddenPrepare {
 		return errors.New("[mctech] PREPARE not allowed")
 	}
@@ -174,7 +173,7 @@ func (e *ExecuteExec) onAfterParseSQL(stmt ast.StmtNode) (err error) {
 
 // ---------------------------------------------- large sql query -----------------------------------------------
 
-// ParseLargeQueryBatchSize is the batch size of large-query-log lines for a worker to parse, exported for testing.
+// ParseLargeQueryBatchSize is the batch size of large-query lines for a worker to parse, exported for testing.
 var ParseLargeQueryBatchSize = 64
 
 // mctechLargeQueryRetriever is used to read large query log data.
@@ -207,7 +206,7 @@ func (e *mctechLargeQueryRetriever) retrieve(ctx context.Context, sctx sessionct
 		ctx, e.cancel = context.WithCancel(ctx)
 		e.initializeAsyncParsing(ctx, sctx)
 	}
-	return e.dataForLargeQuery(ctx, sctx)
+	return e.dataForLargeQuery(ctx)
 }
 
 func (e *mctechLargeQueryRetriever) initialize(ctx context.Context, sctx sessionctx.Context) error {
@@ -279,7 +278,7 @@ func (e *mctechLargeQueryRetriever) close() error {
 	for _, f := range e.files {
 		err := f.file.Close()
 		if err != nil {
-			logutil.BgLogger().Error("close large query log file failed.", zap.Error(err))
+			logutil.BgLogger().Error("close large query file failed.", zap.Error(err))
 		}
 	}
 	if e.cancel != nil {
@@ -338,7 +337,7 @@ func (e *mctechLargeQueryRetriever) parseDataForLargeQuery(ctx context.Context, 
 	e.parseLargeQuery(ctx, sctx, reader, ParseLargeQueryBatchSize)
 }
 
-func (e *mctechLargeQueryRetriever) dataForLargeQuery(ctx context.Context, sctx sessionctx.Context) ([][]types.Datum, error) {
+func (e *mctechLargeQueryRetriever) dataForLargeQuery(ctx context.Context) ([][]types.Datum, error) {
 	var (
 		task mctechLargeQueryTask
 		ok   bool
@@ -376,7 +375,7 @@ type mctechLargeQueryChecker struct {
 	// Below fields is used to check privilege.
 	hasProcessPriv bool
 	user           *auth.UserIdentity
-	// Below fields is used to check large query log time valid.
+	// Below fields is used to check large query time valid.
 	enableTimeCheck bool
 	timeRanges      []*timeRange
 }
@@ -426,8 +425,8 @@ func (e *mctechLargeQueryRetriever) getBatchLog(ctx context.Context, reader *buf
 			}
 			line = string(hack.String(lineByte))
 			log = append(log, line)
-			if strings.HasSuffix(line, variable.MCTechLargeQuerySQLSuffixStr) {
-				if strings.HasPrefix(line, "use") || strings.HasPrefix(line, variable.MCTechLargeQueryRowPrefixStr) {
+			if strings.HasSuffix(line, variable.MCLargeQuerySQLSuffixStr) {
+				if strings.HasPrefix(line, "use") || strings.HasPrefix(line, variable.MCLargeQueryRowPrefixStr) {
 					continue
 				}
 				break
@@ -477,13 +476,13 @@ func (e *mctechLargeQueryRetriever) getBatchLogForReversedScan(ctx context.Conte
 			return nil, err
 		}
 		line = string(hack.String(lineByte))
-		if !hasStartFlag && strings.HasPrefix(line, variable.MCTechLargeQueryStartPrefixStr) {
+		if !hasStartFlag && strings.HasPrefix(line, variable.MCLargeQueryStartPrefixStr) {
 			hasStartFlag = true
 		}
 		if hasStartFlag {
 			log = append(log, line)
-			if strings.HasSuffix(line, variable.MCTechLargeQuerySQLSuffixStr) {
-				if strings.HasPrefix(line, "use") || strings.HasPrefix(line, variable.MCTechLargeQueryRowPrefixStr) {
+			if strings.HasSuffix(line, variable.MCLargeQuerySQLSuffixStr) {
+				if strings.HasPrefix(line, "use") || strings.HasPrefix(line, variable.MCLargeQueryRowPrefixStr) {
 					continue
 				}
 				queries = append(queries, log)
@@ -595,7 +594,7 @@ func (e *mctechLargeQueryRetriever) parseLargeQuery(ctx context.Context, sctx se
 	}
 }
 
-func (e *mctechLargeQueryRetriever) sendParsedLargeQueryCh(t mctechLargeQueryTask, re parsedLargeQuery) {
+func (*mctechLargeQueryRetriever) sendParsedLargeQueryCh(t mctechLargeQueryTask, re parsedLargeQuery) {
 	select {
 	case t.resultCh <- re:
 	default:
@@ -613,7 +612,7 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 			buf := make([]byte, 4096)
 			stackSize := runtime.Stack(buf, false)
 			buf = buf[:stackSize]
-			logutil.BgLogger().Warn("large sql query parse large query log panic", zap.Error(err), zap.String("stack", string(buf)))
+			logutil.BgLogger().Warn("large query parse large query panic", zap.Error(err), zap.String("stack", string(buf)))
 		}
 		if e.stats != nil {
 			atomic.AddInt64(&e.stats.parseLog, int64(time.Since(start)))
@@ -634,21 +633,21 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 			return nil, ctx.Err()
 		}
 		fileLine := getLineIndex(offset, index)
-		if !startFlag && strings.HasPrefix(line, variable.MCTechLargeQueryStartPrefixStr) {
+		if !startFlag && strings.HasPrefix(line, variable.MCLargeQueryStartPrefixStr) {
 			row = make([]types.Datum, len(e.outputCols))
 			user = ""
-			valid := e.setColumnValue(sctx, row, tz, variable.MCTechLargeQueryTimeStr, line[len(variable.MCTechLargeQueryStartPrefixStr):], e.checker, fileLine)
+			valid := e.setColumnValue(sctx, row, tz, variable.MCLargeQueryTimeStr, line[len(variable.MCLargeQueryStartPrefixStr):], e.checker, fileLine)
 			if valid {
 				startFlag = true
 			}
 			continue
 		}
 		if startFlag {
-			if strings.HasPrefix(line, variable.MCTechLargeQueryRowPrefixStr) {
-				line = line[len(variable.MCTechLargeQueryRowPrefixStr):]
+			if strings.HasPrefix(line, variable.MCLargeQueryRowPrefixStr) {
+				line = line[len(variable.MCLargeQueryRowPrefixStr):]
 				valid := true
-				if strings.HasPrefix(line, variable.MCTechLargeQueryUserAndHostStr+variable.MCTechLargeQuerySpaceMarkStr) {
-					value := line[len(variable.MCTechLargeQueryUserAndHostStr+variable.MCTechLargeQuerySpaceMarkStr):]
+				if strings.HasPrefix(line, variable.MCLargeQueryUserAndHostStr+variable.MCLargeQuerySpaceMarkStr) {
+					value := line[len(variable.MCLargeQueryUserAndHostStr+variable.MCLargeQuerySpaceMarkStr):]
 					fields := strings.SplitN(value, "@", 2)
 					if len(fields) < 2 {
 						continue
@@ -658,13 +657,13 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 						startFlag = false
 						continue
 					}
-					valid = e.setColumnValue(sctx, row, tz, variable.MCTechLargeQueryUserStr, user, e.checker, fileLine)
+					valid = e.setColumnValue(sctx, row, tz, variable.MCLargeQueryUserStr, user, e.checker, fileLine)
 					if !valid {
 						startFlag = false
 						continue
 					}
 					host := parseUserOrHostValue(fields[1])
-					valid = e.setColumnValue(sctx, row, tz, variable.MCTechLargeQueryHostStr, host, e.checker, fileLine)
+					valid = e.setColumnValue(sctx, row, tz, variable.MCLargeQueryHostStr, host, e.checker, fileLine)
 				} else {
 					fields, values := splitByColon(line)
 					for i := 0; i < len(fields); i++ {
@@ -678,9 +677,9 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 				if !valid {
 					startFlag = false
 				}
-			} else if strings.HasSuffix(line, variable.MCTechLargeQuerySQLSuffixStr) {
+			} else if strings.HasSuffix(line, variable.MCLargeQuerySQLSuffixStr) {
 				if strings.HasPrefix(line, "use") {
-					// `use DB` statements in the large log is used to keep it be compatible with MySQL,
+					// `use DB` statements in the large query is used to keep it be compatible with MySQL,
 					// since we already get the current DB from the `# DB` field, we can ignore it here,
 					// please see https://github.com/pingcap/tidb/issues/17846 for more details.
 					continue
@@ -690,7 +689,7 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 					continue
 				}
 
-				if strings.HasPrefix(line, variable.MCTechLargeQueryGzipPrefixStr) {
+				if strings.HasPrefix(line, variable.MCLargeQueryGzipPrefixStr) {
 					// 解压缩
 					if line, err = uncompress(ctx, line); err != nil {
 						return nil, err
@@ -698,7 +697,7 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 				}
 
 				// Get the sql string, and mark the start flag to false.
-				_ = e.setColumnValue(sctx, row, tz, variable.MCTechLargeQuerySQLStr, string(hack.Slice(line)), e.checker, fileLine)
+				_ = e.setColumnValue(sctx, row, tz, variable.MCLargeQuerySQLStr, string(hack.Slice(line)), e.checker, fileLine)
 				e.setDefaultValue(row)
 				e.memConsume(types.EstimatedMemUsage(row, 1))
 				data = append(data, row)
@@ -714,11 +713,11 @@ func (e *mctechLargeQueryRetriever) parseLog(ctx context.Context, sctx sessionct
 func (e *mctechLargeQueryRetriever) setColumnValue(sctx sessionctx.Context, row []types.Datum, tz *time.Location, field, value string, checker *mctechLargeQueryChecker, lineNum int) bool {
 	factory := e.columnValueFactoryMap[field]
 	if factory == nil {
-		// Fix issue 34320, when large log time is not in the output columns, the time filter condition is mistakenly discard.
-		if field == variable.MCTechLargeQueryTimeStr && checker != nil {
+		// Fix issue 34320, when large query time is not in the output columns, the time filter condition is mistakenly discard.
+		if field == variable.MCLargeQueryTimeStr && checker != nil {
 			t, err := ParseTime(value)
 			if err != nil {
-				err = fmt.Errorf("Parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
+				err = fmt.Errorf("parse large query at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
 				sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 				return false
 			}
@@ -729,7 +728,7 @@ func (e *mctechLargeQueryRetriever) setColumnValue(sctx sessionctx.Context, row 
 	}
 	valid, err := factory(row, value, tz, checker)
 	if err != nil {
-		err = fmt.Errorf("Parse large log at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
+		err = fmt.Errorf("parse large query at line %v, failed field is %v, failed value is %v, error is %v", lineNum, field, value, err)
 		sctx.GetSessionVars().StmtCtx.AppendWarning(err)
 		return true
 	}
@@ -745,7 +744,7 @@ func (e *mctechLargeQueryRetriever) setDefaultValue(row []types.Datum) {
 	}
 }
 
-// getAllFiles is used to get all large-log needed to parse, it is exported for test.
+// getAllFiles is used to get all large-query needed to parse, it is exported for test.
 func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessionctx.Context, logFilePath string) ([]logFile, error) {
 	totalFileNum := 0
 	if e.stats != nil {
@@ -861,7 +860,7 @@ func (e *mctechLargeQueryRetriever) getAllFiles(ctx context.Context, sctx sessio
 	return logFiles, err
 }
 
-func (e *mctechLargeQueryRetriever) getFileStartTime(ctx context.Context, file *os.File) (time.Time, error) {
+func (*mctechLargeQueryRetriever) getFileStartTime(ctx context.Context, file *os.File) (time.Time, error) {
 	var t time.Time
 	_, err := file.Seek(0, io.SeekStart)
 	if err != nil {
@@ -875,10 +874,10 @@ func (e *mctechLargeQueryRetriever) getFileStartTime(ctx context.Context, file *
 			return t, err
 		}
 		line := string(lineByte)
-		if strings.HasPrefix(line, variable.MCTechLargeQueryStartPrefixStr) {
-			return ParseTime(line[len(variable.MCTechLargeQueryStartPrefixStr):])
+		if strings.HasPrefix(line, variable.MCLargeQueryStartPrefixStr) {
+			return ParseTime(line[len(variable.MCLargeQueryStartPrefixStr):])
 		}
-		maxNum -= 1
+		maxNum--
 		if maxNum <= 0 {
 			break
 		}
@@ -932,11 +931,11 @@ func (s *mctechLargeQueryRuntimeStats) Clone() execdetails.RuntimeStats {
 }
 
 // Tp implements the RuntimeStats interface.
-func (s *mctechLargeQueryRuntimeStats) Tp() int {
+func (*mctechLargeQueryRuntimeStats) Tp() int {
 	return execdetails.TpMCTechLargeQueryRuntimeStat
 }
 
-func (e *mctechLargeQueryRetriever) getFileEndTime(ctx context.Context, file *os.File) (time.Time, error) {
+func (*mctechLargeQueryRetriever) getFileEndTime(ctx context.Context, file *os.File) (time.Time, error) {
 	var t time.Time
 	var tried int
 	stat, err := file.Stat()
@@ -956,8 +955,8 @@ func (e *mctechLargeQueryRetriever) getFileEndTime(ctx context.Context, file *os
 		}
 		endCursor -= int64(readBytes)
 		for i := len(lines) - 1; i >= 0; i-- {
-			if strings.HasPrefix(lines[i], variable.MCTechLargeQueryStartPrefixStr) {
-				return ParseTime(lines[i][len(variable.MCTechLargeQueryStartPrefixStr):])
+			if strings.HasPrefix(lines[i], variable.MCLargeQueryStartPrefixStr) {
+				return ParseTime(lines[i][len(variable.MCLargeQueryStartPrefixStr):])
 			}
 		}
 		tried += len(lines)
@@ -991,27 +990,30 @@ func uncompress(ctx context.Context, line string) (string, error) {
 	}()
 
 	// 去掉前面的'{gzip}'和末尾的';'
-	zip := line[len(variable.MCTechLargeQueryGzipPrefixStr) : len(line)-len(variable.MCTechLargeQuerySQLSuffixStr)]
+	zip := line[len(variable.MCLargeQueryGzipPrefixStr) : len(line)-len(variable.MCLargeQuerySQLSuffixStr)]
 	decoder := base64.NewDecoder(base64.StdEncoding, strings.NewReader(zip))
 
-	if gz, err := gzip.NewReader(decoder); err == nil {
-		if raw, err := ioutil.ReadAll(gz); err == nil {
-			line = string(raw)
-		} else {
-			return line, err
-		}
-	} else {
-		return line, err
+	var (
+		gz  *gzip.Reader
+		err error
+	)
+	if gz, err = gzip.NewReader(decoder); err != nil {
+		return "", err
 	}
 
-	return line, nil
+	var raw []byte
+	if raw, err = io.ReadAll(gz); err != nil {
+		return "", err
+	}
+
+	return string(raw), nil
 }
 
 type mctechLargeQueryColumnValueFactory func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error)
 
 func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string, columnIdx int) (mctechLargeQueryColumnValueFactory, error) {
 	switch colName {
-	case variable.MCTechLargeQueryTimeStr:
+	case variable.MCLargeQueryTimeStr:
 		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (bool, error) {
 			t, err := ParseTime(value)
 			if err != nil {
@@ -1031,14 +1033,14 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 			row[columnIdx] = types.NewTimeDatum(timeValue)
 			return true, nil
 		}, nil
-	case variable.MCTechLargeQueryPlan:
-		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (bool, error) {
+	case variable.MCLargeQueryPlan:
+		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (bool, error) {
 			plan := parsePlan(value)
 			row[columnIdx] = types.NewStringDatum(plan)
 			return true, nil
 		}, nil
-	case execdetails.MCTechWriteKeysStr, execdetails.MCTechWriteSizeStr, execdetails.MCTechTotalKeysStr:
-		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error) {
+	case execdetails.MCLargeQueryWriteKeysStr, execdetails.MCLargeQueryWriteSizeStr, execdetails.MCLargeQueryTotalKeysStr:
+		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			v, err := strconv.ParseUint(value, 10, 64)
 			if err != nil {
 				return false, err
@@ -1046,11 +1048,11 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 			row[columnIdx] = types.NewUintDatum(v)
 			return true, nil
 		}, nil
-	case variable.MCTechLargeQueryQueryTimeStr, variable.MCTechLargeQueryParseTimeStr,
-		variable.MCTechLargeQueryCompileTimeStr, variable.MCTechLargeQueryRewriteTimeStr,
-		variable.MCTechLargeQueryOptimizeTimeStr, execdetails.MCTechCopTimeStr,
-		execdetails.MCTechProcessTimeStr, execdetails.MCTechWaitTimeStr:
-		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error) {
+	case variable.MCLargeQueryQueryTimeStr, variable.MCLargeQueryParseTimeStr,
+		variable.MCLargeQueryCompileTimeStr, variable.MCLargeQueryRewriteTimeStr,
+		variable.MCLargeQueryOptimizeTimeStr, execdetails.MCLargeQueryCopTimeStr,
+		execdetails.MCLargeQueryProcessTimeStr, execdetails.MCLargeQueryWaitTimeStr:
+		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			v, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return false, err
@@ -1058,18 +1060,18 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 			row[columnIdx] = types.NewFloat64Datum(v)
 			return true, nil
 		}, nil
-	case variable.MCTechLargeQueryUserStr, variable.MCTechLargeQueryHostStr,
-		variable.MCTechLargeQueryDBStr, variable.MCTechLargeQueryDigestStr,
-		variable.MCTechLargeQueryAppNameStr, variable.MCTechLargeQueryProductLineStr,
-		variable.MCTechLargeQueryPackageStr, variable.MCTechLargeQuerySQLTypeStr,
-		variable.MCTechLargeQuerySQLStr:
-		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error) {
+	case variable.MCLargeQueryUserStr, variable.MCLargeQueryHostStr,
+		variable.MCLargeQueryDBStr, variable.MCLargeQueryDigestStr,
+		variable.MCLargeQueryAppNameStr, variable.MCLargeQueryProductLineStr,
+		variable.MCLargeQueryPackageStr, variable.MCLargeQuerySQLTypeStr,
+		variable.MCLargeQuerySQLStr:
+		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			row[columnIdx] = types.NewStringDatum(value)
 			return true, nil
 		}, nil
-	case variable.MCTechLargeQueryMemMax, variable.MCTechLargeQueryDiskMax,
-		variable.MCTechLargeQuerySQLLengthStr, variable.MCTechLargeQueryResultRows:
-		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error) {
+	case variable.MCLargeQueryMemMax, variable.MCLargeQueryDiskMax,
+		variable.MCLargeQuerySQLLengthStr, variable.MCLargeQueryResultRows:
+		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			v, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
 				return false, err
@@ -1077,8 +1079,8 @@ func getLargeQueryColumnValueFactoryByName(_ sessionctx.Context, colName string,
 			row[columnIdx] = types.NewIntDatum(v)
 			return true, nil
 		}, nil
-	case variable.MCTechLargeQuerySuccStr:
-		return func(row []types.Datum, value string, tz *time.Location, checker *mctechLargeQueryChecker) (valid bool, err error) {
+	case variable.MCLargeQuerySuccStr:
+		return func(row []types.Datum, value string, _ *time.Location, _ *mctechLargeQueryChecker) (valid bool, err error) {
 			v, err := strconv.ParseBool(value)
 			if err != nil {
 				return false, err
@@ -1105,20 +1107,20 @@ func (a *ExecStmt) SaveLargeQuery(mctx mctech.Context, sqlType string, succ bool
 	sql := a.GetTextToLog(true)
 	comments := mctx.PrepareResult().Comments()
 	resultRows := GetResultRowsCount(sessVars.StmtCtx, a.Plan)
-	largeItems := CreateLargeLogItems(a.GoCtx, sql, sqlType, succ, resultRows, sessVars, comments)
-	largeLog, err := sessVars.LargeQueryFormat(largeItems)
+	largeItems := CreateLargeQueryItems(a.GoCtx, sql, sqlType, succ, resultRows, sessVars, comments)
+	largeQuery, err := sessVars.LargeQueryFormat(largeItems)
 	if err != nil {
 		logutil.BgLogger().Error("record large query error", zap.Error(err), zap.Stack("stack"))
 		return
 	}
 
 	// 只在没有发生错误的时候才记录大SQL日志
-	mctech.L().Warn(largeLog)
+	mctech.L().Warn(largeQuery)
 }
 
-// CreateLargeLogItems create large log items
-func CreateLargeLogItems(ctx context.Context, sql string, sqlType string, succ bool, resultRows int64,
-	sessVars *variable.SessionVars, comments mctech.Comments) *variable.MCTechLargeQueryLogItems {
+// CreateLargeQueryItems create large query items
+func CreateLargeQueryItems(ctx context.Context, sql string, sqlType string, succ bool, resultRows int64,
+	sessVars *variable.SessionVars, comments mctech.Comments) *variable.MCLargeQueryItems {
 	stmtCtx := sessVars.StmtCtx
 	_, digest := stmtCtx.SQLDigest()
 	execDetail := stmtCtx.GetExecDetails()
@@ -1146,7 +1148,7 @@ func CreateLargeLogItems(ctx context.Context, sql string, sqlType string, succ b
 		appName = svc.AppName()
 		productLine = svc.ProductLine()
 	}
-	return &variable.MCTechLargeQueryLogItems{
+	return &variable.MCLargeQueryItems{
 		SQL:               sql,
 		SQLType:           sqlType,
 		AppName:           appName,
@@ -1174,21 +1176,21 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sc
 	checker := privilege.GetPrivilegeManager(sctx)
 	var rows [][]types.Datum
 	for _, schema := range schemas {
-		for _, table := range schema.Tables {
-			if table.TTLInfo == nil {
+		for _, tbl := range schema.Tables {
+			if tbl.TTLInfo == nil {
 				continue
 			}
 
-			if checker != nil && !checker.RequestVerification(sctx.GetSessionVars().ActiveRoles, schema.Name.L, table.Name.L, "", mysql.AllPrivMask) {
+			if checker != nil && !checker.RequestVerification(sctx.GetSessionVars().ActiveRoles, schema.Name.L, tbl.Name.L, "", mysql.AllPrivMask) {
 				continue
 			}
 
-			if !table.IsView() {
-				ttlInfo := table.TTLInfo
+			if !tbl.IsView() {
+				ttlInfo := tbl.TTLInfo
 				ttlUnit := ast.TimeUnitType(ttlInfo.IntervalTimeUnit).String()
 				var colExpr string
 				var columnType string
-				for _, c := range table.Columns {
+				for _, c := range tbl.Columns {
 					if c.Name.L == ttlInfo.ColumnName.L {
 						colExpr = c.GeneratedExprString
 						columnType = c.FieldType.InfoSchemaStr()
@@ -1196,8 +1198,8 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sc
 				}
 				record := types.MakeDatums(
 					schema.Name.O,                        // TABLE_SCHEMA
-					table.Name.O,                         // TABLE_NAME
-					table.ID,                             // TIDB_TABLE_ID
+					tbl.Name.O,                           // TABLE_NAME
+					tbl.ID,                               // TIDB_TABLE_ID
 					ttlInfo.ColumnName.O,                 // TTL_COLUMN_NAME
 					columnType,                           // TTL_COLUMN_TYPE
 					colExpr,                              // TTL_COLUMN_GENERATED_EXPR
@@ -1225,7 +1227,7 @@ func GetFlatPlan(stmtCtx *stmtctx.StatementContext) *plannercore.FlatPhysicalPla
 
 // Collect collect cpu time
 func (e *HashAggRuntimeStats) Collect() *mctech.CPUTimeStats {
-	var cpuTime int64 = 0
+	var cpuTime int64
 	for _, partial := range e.PartialStats {
 		cpuTime = cpuTime + partial.ExecTime
 	}
@@ -1242,7 +1244,7 @@ func (e *HashAggRuntimeStats) Collect() *mctech.CPUTimeStats {
 
 // Collect collect cpu time
 func (e *hashJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
-	var cpuTime time.Duration = 0
+	var cpuTime time.Duration
 	if e.hashStat.buildTableElapse > 0 {
 		cpuTime = e.hashStat.buildTableElapse
 	}
@@ -1258,7 +1260,7 @@ func (e *hashJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
 
 // Collect collect cpu time
 func (e *IndexLookUpRunTimeStats) Collect() *mctech.CPUTimeStats {
-	var cpuTime time.Duration = 0
+	var cpuTime time.Duration
 	if e.FetchHandleTotal > 0 {
 		cpuTime = cpuTime + time.Duration(e.FetchHandleTotal)
 	}
@@ -1271,7 +1273,7 @@ func (e *IndexLookUpRunTimeStats) Collect() *mctech.CPUTimeStats {
 
 // Collect collect cpu time
 func (e *indexLookUpJoinRuntimeStats) Collect() *mctech.CPUTimeStats {
-	var cpuTime int64 = 0
+	var cpuTime int64
 	if e.innerWorker.totalTime > 0 {
 		cpuTime = e.innerWorker.totalTime
 	}

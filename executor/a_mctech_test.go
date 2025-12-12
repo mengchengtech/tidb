@@ -34,7 +34,7 @@ func TestMCTechStatementsSummary(t *testing.T) {
 	tk.MustExec("use test")
 
 	cases := []*mctechStmtCases{
-		{"mctech select * from information_schema.statements_summary", "<nil>|||{}|<nil>|<nil>|test|<nil>|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
+		{"mctech select * from information_schema.statements_summary", "<nil>|||{}|<nil>|<nil>|test||<nil>|{}|SELECT * FROM `information_schema`.`statements_summary`", ""},
 	}
 
 	for _, c := range cases {
@@ -48,7 +48,6 @@ func TestForbiddenPrepare(t *testing.T) {
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": true}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-
 	store := testkit.CreateMockStore(t)
 	tk := testkit.NewTestKit(t, store)
 	tk.MustExec("use test")
@@ -88,8 +87,10 @@ func TestPrepareByQuery(t *testing.T) {
 		mock.M(t, map[string]bool{"Tenant.ForbiddenPrepare": false, "Tenant.Enabled": true}),
 	)
 	failpoint.Enable("github.com/pingcap/tidb/mctech/EnsureContext", mock.M(t, "true"))
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-	defer failpoint.Disable("github.com/pingcap/tidb/mctech/EnsureContext")
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/EnsureContext")
+	}()
 
 	store := testkit.CreateMockStore(t)
 	tk, sql := initDbAndData(t, store)
@@ -294,12 +295,9 @@ func TestLargeQueryWithoutLogFile(t *testing.T) {
 		mock.M(t, map[string]any{"Metrics.LargeQuery.Filename": "mctech-large-query-exist.log"}),
 	)
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-
 	store := testkit.CreateMockStore(t)
-
 	// cfg := config.GetMCTechConfig()
 	tk := testkit.NewTestKit(t, store)
-
 	// tk.MustExec(fmt.Sprintf("set @@mctech_metrics_large_query_file='%v'", cfg.Metrics.LargeQuery.Filename))
 	tk.MustQuery("select query from information_schema.mctech_large_query").Check(testkit.Rows())
 	tk.MustQuery("select query from information_schema.mctech_large_query where time > '2020-09-15 12:16:39' and time < now()").Check(testkit.Rows())

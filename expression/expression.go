@@ -1115,7 +1115,6 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 			return false
 		}
 		return true
-
 		// add by zhangbing
 		// mctech functions
 	case

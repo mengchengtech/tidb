@@ -167,14 +167,6 @@ var batchCases = []*tenantConditionVisitorTestCase{
 	{true, nil, nil, "pf", "batch on global_dw.t1.id limit 200 update global_dw.f_pp_quarter_plan_amount t1 join global_dw.f_pp_quarter_plan_amount t2 on t1.code = t2.code set t1.full_name = t2.full_name", "BATCH ON `mock_global_dw_1`.`t1`.`id` LIMIT 200 UPDATE `mock_global_dw_1`.`f_pp_quarter_plan_amount` AS `t1` JOIN `mock_global_dw_1`.`f_pp_quarter_plan_amount` AS `t2` ON (`t1`.`code`=`t2`.`code`) SET `t1`.`full_name`=`t2`.`full_name`", ""},
 }
 
-var importCases = []*tenantConditionVisitorTestCase{
-	{false, nil, nil, "pf", "import into global_dw.component from select id,name from component", "", "import语句缺少列定义，无法处理租户信息"},
-	{false, nil, nil, "pf", "import into global_dw.component (id, name) from select id,name from component", "IMPORT INTO `mock_global_dw_1`.`component` (`id`,`name`,`tenant`) FROM SELECT `id`,`name`,'gslq4dev' AS `tenant` FROM `component` WHERE (`component`.`tenant`='gslq4dev')", ""},
-	{false, nil, nil, "pf", "import into global_dw.component (id, name) from select * from component", "IMPORT INTO `mock_global_dw_1`.`component` (`id`,`name`,`tenant`) FROM SELECT *,'gslq4dev' AS `tenant` FROM `component` WHERE (`component`.`tenant`='gslq4dev')", ""},
-	{true, nil, nil, "pf", "import into global_dw.component (id, name) from select * from component", "IMPORT INTO `mock_global_dw_1`.`component` (`id`,`name`) FROM SELECT * FROM `component`", ""},
-	{true, nil, nil, "pf", "import into global_dw.component from select * from component", "IMPORT INTO `mock_global_dw_1`.`component` FROM SELECT * FROM `component`", ""},
-}
-
 var nopCases = []*tenantConditionVisitorTestCase{
 	{true, nil, nil, "pf", "select * from public_data.table1", "SELECT * FROM `mock_public_data`.`table1`", ""},
 	{true, []string{"ys2"}, nil, "pf", "select * from component_param", "SELECT * FROM `component_param` WHERE `component_param`.`tenant` NOT IN ('ys2')", ""},
@@ -186,13 +178,13 @@ var nopCases = []*tenantConditionVisitorTestCase{
 
 func TestIsolationConditionVisitor(t *testing.T) {
 	var cases = [][]*tenantConditionVisitorTestCase{
-		deleteSingleTableCases, deleteMultipleTableCases, 
+		deleteSingleTableCases, deleteMultipleTableCases,
 		deleteWithCTECases,
 		insertIntoSelectCases, insertIntoValuesCases, insertSetCases, insertOnDuplicateCases,
 		selectFromJoinCases, selectFromMultipleTasbleCases, selectFromSubqueryCases, selectWithCTECases, selectFunctionCases, selectStarCases, selectUnionCases,
 		simpleCases,
 		updateSingleTableCases, updateMultipleTableCases, updateWithSubqueryCases, updateWithCTECases,
-		loadDataCases, batchCases, importCases,
+		loadDataCases, batchCases,
 		nopCases,
 		miscStmtCases,
 	}

@@ -34,9 +34,6 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
-	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
-		mock.M(t, "true"),
-	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
 		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
@@ -46,7 +43,6 @@ func TestSelectStmtFullSQLLog(t *testing.T) {
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
@@ -89,9 +85,6 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
-	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
-		mock.M(t, "true"),
-	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
 		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
@@ -100,7 +93,6 @@ func TestSelectStmtFullSQLLogInTX(t *testing.T) {
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
@@ -144,9 +136,6 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
-	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
-		mock.M(t, "true"),
-	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
 		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
@@ -155,7 +144,6 @@ func TestUpdateStmtFullSQLLog(t *testing.T) {
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
@@ -196,9 +184,6 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
-	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
-		mock.M(t, "true"),
-	)
 	now := time.Now().Format("2006-01-02 15:04:05.000")
 	failpoint.Enable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData", mock.M(t, map[string]any{
 		"maxCop":    map[string]any{"procAddr": "tikv01:21060", "procTime": "128ms", "tasks": int(8)},
@@ -207,7 +192,6 @@ func TestUpdateStmtFullSQLLogInTx(t *testing.T) {
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()
 	store := testkit.CreateMockStore(t)
@@ -249,9 +233,6 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
 		mock.M(t, map[string]bool{"Metrics.SqlTrace.Enabled": true, "Tenant.Enabled": true}),
 	)
-	failpoint.Enable("github.com/pingcap/tidb/executor/CreateRUStats",
-		mock.M(t, "true"),
-	)
 	failpoint.Enable("github.com/pingcap/tidb/executor/CreateeWarnings",
 		mock.M(t, "true"),
 	)
@@ -263,7 +244,6 @@ func TestCommitStmtFullSQLLogInTx(t *testing.T) {
 	}))
 	defer func() {
 		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-		failpoint.Disable("github.com/pingcap/tidb/executor/CreateRUStats")
 		failpoint.Disable("github.com/pingcap/tidb/executor/CreateeWarnings")
 		failpoint.Disable("github.com/pingcap/tidb/mctech/interceptor/MockTraceLogData")
 	}()

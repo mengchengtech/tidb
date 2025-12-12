@@ -2331,9 +2331,9 @@ func (e *memtableRetriever) dataForTableTiFlashReplica(ctx sessionctx.Context, s
 			progressString := types.TruncateFloatToString(progress, 2)
 			progress, _ = strconv.ParseFloat(progressString, 64)
 			// add by zhangbing
-			var policyName interface{}
-			if schema.PlacementPolicyRef != nil {
-				policyName = schema.PlacementPolicyRef.Name.O
+			var policyName string
+			if tbl.PlacementPolicyRef != nil {
+				policyName = tbl.PlacementPolicyRef.Name.O
 			}
 			// add end
 			record := types.MakeDatums(

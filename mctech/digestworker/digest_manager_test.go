@@ -45,7 +45,7 @@ func initDbAndData(tk *testkit.TestKit) {
 	);`
 	tk.MustExec(createSQL)
 	tk.MustExec(`insert into mysql.mctech_deny_digest
-	(digest, create_at, expired_at, last_request_time, query_sql)
+	(digest, created_at, expired_at, last_request_time, query_sql)
 	values
 	('digest-1', '2024-05-01', '2024-06-01', null, 'select 1')
 	, ('digest-2', '2024-05-01', '9999-10-01', null, 'select 2')

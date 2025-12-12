@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/pingcap/tidb/config"
@@ -22,14 +21,8 @@ type dwSelector struct {
 	dwIndex *mctech.DWIndex
 }
 
-var selector *dwSelector
-var selectorInitOnce sync.Once
-
-func getDWSelector() mctech.DWSelector {
-	selectorInitOnce.Do(func() {
-		selector = &dwSelector{}
-	})
-	return selector
+func newDWSelector() mctech.DWSelector {
+	return &dwSelector{}
 }
 
 func (d *dwSelector) SelectIndex(dbPrefix, requestID string, forceBackground bool) (*mctech.DWIndex, error) {

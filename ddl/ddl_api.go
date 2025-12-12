@@ -1130,19 +1130,23 @@ func columnDefToCol(ctx sessionctx.Context, offset int, colDef *ast.ColumnDef, o
 				removeOnUpdateNowFlag(col)
 			case ast.ColumnOptionOnUpdate:
 				// TODO: Support other time functions.
+				// add by zhangbing
+				if col.GetType() == mysql.TypeLonglong {
+					if !expression.IsValidMCTechSequenceExpr(v.Expr, colDef.Tp) {
+						return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
+					}
+					goto finish // 为了减少对原代码行数过多的改动，此处用了goto
+				}
+				// add end
 				if col.GetType() == mysql.TypeTimestamp || col.GetType() == mysql.TypeDatetime {
 					if !expression.IsValidCurrentTimestampExpr(v.Expr, colDef.Tp) {
 						return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 					}
-					// add by zhangbing
-				} else if col.GetType() == mysql.TypeLonglong {
-					if !expression.IsValidMCTechSequenceExpr(v.Expr, colDef.Tp) {
-						return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
-					}
-					// add end
 				} else {
 					return nil, nil, dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 				}
+
+			finish: // add by zhangbing
 				col.AddFlag(mysql.OnUpdateNowFlag)
 				setOnUpdateNow = true
 			case ast.ColumnOptionComment:
@@ -4931,19 +4935,22 @@ func processColumnOptions(ctx sessionctx.Context, col *table.Column, options []*
 			return errors.Trace(dbterror.ErrUnsupportedModifyColumn.GenWithStack("can't change column constraint (UNIQUE KEY)"))
 		case ast.ColumnOptionOnUpdate:
 			// TODO: Support other time functions.
+			// add by zhangbing
+			if col.GetType() == mysql.TypeLonglong {
+				if !expression.IsValidMCTechSequenceExpr(opt.Expr, &col.FieldType) {
+					return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
+				}
+				goto finish // 为了减少对原代码行数过多的改动，此处用了goto
+			}
+			// add end
 			if col.GetType() == mysql.TypeTimestamp || col.GetType() == mysql.TypeDatetime {
 				if !expression.IsValidCurrentTimestampExpr(opt.Expr, &col.FieldType) {
 					return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 				}
-				// add by zhangbing
-			} else if col.GetType() == mysql.TypeLonglong {
-				if !expression.IsValidMCTechSequenceExpr(opt.Expr, &col.FieldType) {
-					return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
-				}
-				// add end
 			} else {
 				return dbterror.ErrInvalidOnUpdate.GenWithStackByArgs(col.Name)
 			}
+		finish: // add by zhangbing
 			col.AddFlag(mysql.OnUpdateNowFlag)
 			setOnUpdateNow = true
 		case ast.ColumnOptionGenerated:

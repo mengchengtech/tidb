@@ -330,11 +330,12 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 			var err error
 			stmts, err = tk.session.Parse(ctx, sql)
 			if err != nil {
+				// add by zhangbing
 				tk.onParseSQLFailed(sql, err)
+				// add end
 				return nil, errors.Trace(err)
 			}
 		}
-
 		// add by zhangbing
 		for _, stmt := range stmts {
 			switch stmt.(type) {
@@ -347,7 +348,6 @@ func (tk *TestKit) ExecWithContext(ctx context.Context, sql string, args ...inte
 			}
 		}
 		// add end
-
 		warns := sc.GetWarnings()
 		parserWarns := warns[len(prevWarns):]
 		tk.Session().GetSessionVars().SetAlloc(tk.alloc)

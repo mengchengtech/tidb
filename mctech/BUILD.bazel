@@ -26,7 +26,6 @@ go_library(
         "@com_github_pingcap_failpoint//:failpoint",
         "@com_github_pingcap_log//:log",
         "@org_golang_x_exp//maps",
-        "@org_golang_x_exp//slices",
         "@org_uber_go_zap//:zap",
         "@org_uber_go_zap//buffer",
         "@org_uber_go_zap//zapcore",
@@ -39,5 +38,9 @@ go_test(
     srcs = ["http_rpc_test.go"],
     embed = [":mctech"],
     flaky = True,
-    deps = ["@com_github_stretchr_testify//require"],
+    deps = [
+        "//mctech/mock",
+        "@com_github_pingcap_failpoint//:failpoint",
+        "@com_github_stretchr_testify//require",
+    ],
 )

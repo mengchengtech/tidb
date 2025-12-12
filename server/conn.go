@@ -1376,11 +1376,11 @@ func (cc *clientConn) dispatch(ctx context.Context, data []byte) error {
 		return io.EOF
 	case mysql.ComInitDB:
 		// add by zhangbing
-		if mctx, _, err := cc.onBeforeParseSQL(""); err == nil {
-			defer mctx.Clear()
-		} else {
+		mctx, _, err := cc.onBeforeParseSQL("")
+		if err != nil {
 			return err
 		}
+		defer mctx.Clear()
 		// add end
 		node, err := cc.useDB(ctx, dataStr)
 		cc.onExtensionStmtEnd(node, false, err)
@@ -1840,7 +1840,6 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	sessVars := cc.ctx.GetSessionVars()
 	sc := sessVars.StmtCtx
 	prevWarns := sc.GetWarnings()
-
 	// add by zhangbing
 	var mctx mctech.Context
 	if mctx, sql, err = cc.onBeforeParseSQL(sql); err != nil {
@@ -1859,7 +1858,6 @@ func (cc *clientConn) handleQuery(ctx context.Context, sql string) (err error) {
 	if len(stmts) == 0 {
 		return cc.writeOK(ctx)
 	}
-
 	// add by zhangbing
 	for _, stmt := range stmts {
 		switch stmt.(type) {

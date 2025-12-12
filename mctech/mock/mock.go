@@ -11,6 +11,6 @@ import (
 )
 
 // M check if in testing mode
-func M(t require.TestingT, v interface{}) string {
+func M(t require.TestingT, v any) string {
 	panic(errors.New("SHOULD NOT call out of test"))
 }

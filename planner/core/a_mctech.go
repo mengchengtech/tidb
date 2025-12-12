@@ -61,7 +61,7 @@ var columnDefs = []*columnDef{
 	{"global", mysql.TypeTiny, 1},
 	{"excludes", mysql.TypeVarchar, 1024},
 	{"includes", mysql.TypeVarchar, 1024},
-	{"comments", mysql.TypeVarchar, getDefaultFieldLength(mysql.TypeVarchar)},
+	{"comments", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
 	{"tenant", mysql.TypeVarchar, 50},
 	{"tenant_from", mysql.TypeVarchar, 10},
 	{"db", mysql.TypeVarchar, 50},
@@ -78,8 +78,8 @@ func (e *MCTech) prepareSchema() error {
 		format = types.ExplainFormatROW
 		e.Format = types.ExplainFormatROW
 	}
-	switch {
-	case format == types.ExplainFormatROW:
+	switch format {
+	case types.ExplainFormatROW:
 		length := len(columnDefs)
 		cwn := &columnsWithNames{
 			cols:  make([]*expression.Column, 0, length),
@@ -99,7 +99,7 @@ func (e *MCTech) prepareSchema() error {
 }
 
 // RenderResult renders the mctech result as specified format.
-func (e *MCTech) RenderResult(ctx context.Context) error {
+func (e *MCTech) RenderResult(_ context.Context) error {
 	switch strings.ToLower(e.Format) {
 	case types.ExplainFormatROW:
 		if err := e.mctechPlanInRowFormat(); err != nil {
@@ -130,7 +130,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		global     *bool
 		excludes   []string
 		includes   []string
-		comments   = "{}"
+		comments   = map[string]any{}
 		tenant     *string
 		tenantFrom *string
 		params     = map[string]any{}
@@ -147,7 +147,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 			params = result.Params()
 			excludes = result.Global().Excludes()
 			includes = result.Global().Includes()
-			comments = result.Comments().String()
+			comments = result.Comments().ToMap()
 			tenantCode := result.Tenant().Code()
 			if tenantCode != "" {
 				tenant = toPtr(tenantCode)
@@ -171,7 +171,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		createDatumByPrimitivePt(global),
 		createDatum(strings.Join(excludes, ",")),
 		createDatum(strings.Join(includes, ",")),
-		createDatum(comments),
+		createDatum(types.CreateBinaryJSON(comments)),
 		createDatumByPrimitivePt(tenant),
 		createDatumByPrimitivePt(tenantFrom),
 		createDatum(db),
@@ -232,31 +232,35 @@ func isDefaultValMCSymFunc(expr ast.ExprNode) bool {
 
 // ----------------------------------------------------------------
 
-func (e *Execute) getExtensionParams() ([]ast.ParamMarkerExpr, int) {
+func (e *Execute) getExtensionParams() ([]types.ParamMarkerOffset, int) {
 	prepared := e.PrepStmt.PreparedAst
 	index := slices.IndexFunc(prepared.Params, func(p ast.ParamMarkerExpr) bool {
-		return p.GetOffset() == mctech.ExtensionParamMarkerOffset
+		return p.(types.ParamMarkerOffset).GetOffset() == mctech.ExtensionParamMarkerOffset
 	})
 
 	if index < 0 {
 		return nil, -1
 	}
-	return prepared.Params[index:], index
+	extParams := make([]types.ParamMarkerOffset, 0, len(prepared.Params)-index)
+	for _, v := range prepared.Params[index:] {
+		extParams = append(extParams, v.(types.ParamMarkerOffset))
+	}
+	return extParams, index
 }
 
 type extensionArgCreator[T any] func() (T, error)
 
 func appendExtensionArgs[T any](
-	params []ast.ParamMarkerExpr, callback extensionArgCreator[T]) ([]T, error) {
+	params []types.ParamMarkerOffset, callback extensionArgCreator[T]) ([]T, error) {
 	extensions := []T{}
 	for _, p := range params {
 		if p.GetOffset() == mctech.ExtensionParamMarkerOffset {
 			// 扩展自定义参数
-			if item, err := callback(); err == nil {
-				extensions = append(extensions, item)
-			} else {
+			item, err := callback()
+			if err != nil {
 				return nil, err
 			}
+			extensions = append(extensions, item)
 		}
 	}
 
@@ -298,14 +302,14 @@ func (e *Execute) AppendVarExprs(sctx sessionctx.Context) (err error) {
 					code   string
 					isNull bool
 				)
-				if code, isNull, err = tenantValue.EvalString(sctx, chunk.Row{}); err == nil {
-					if !isNull {
-						// 提取从参数上获取到的租户code
-						tenantCode = code
-						result.Tenant().(mctech.MutableTenantInfo).SetCode(code)
-					}
-				} else {
+				if code, isNull, err = tenantValue.EvalString(sctx, chunk.Row{}); err != nil {
 					return err
+				}
+
+				if !isNull {
+					// 提取从参数上获取到的租户code
+					tenantCode = code
+					result.Tenant().(mctech.MutableTenantInfo).SetCode(code)
 				}
 			}
 			// 暂时先移除参数租户参数
@@ -335,9 +339,9 @@ type MCTechLargeQueryExtractor struct {
 
 	SkipRequest bool
 	TimeRanges  []*TimeRange
-	// Enable is true means the executor should use the time range to locate the large-sql-log file that need to be parsed.
+	// Enable is true means the executor should use the time range to locate the large-query-log file that need to be parsed.
 	// Enable is false, means the executor should keep the behavior compatible with before, which is only parse the
-	// current large-sql-log file.
+	// current large-query-log file.
 	Enable bool
 	Desc   bool
 }
@@ -424,9 +428,9 @@ func (e *MCTechLargeQueryExtractor) decodeBytesToTime(bs []byte) (int64, error) 
 	return 0, nil
 }
 
-func (e *MCTechLargeQueryExtractor) decodeToTime(handle kv.Handle) (int64, error) {
+func (*MCTechLargeQueryExtractor) decodeToTime(handle kv.Handle) (int64, error) {
 	tp := types.NewFieldType(mysql.TypeDatetime)
-	col := rowcodec.ColInfo{ID: 0, Ft: tp}
+	col := rowcodec.ColInfo{Ft: tp}
 	chk := chunk.NewChunkWithCapacity([]*types.FieldType{tp}, 1)
 	coder := codec.NewDecoder(chk, nil)
 	_, err := coder.DecodeOne(handle.EncodedCol(0), 0, col.Ft)

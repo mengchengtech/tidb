@@ -1,7 +1,6 @@
 package preps
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -22,19 +21,15 @@ func (c *customComments) Package() mctech.PackageComment {
 	return c.pkg
 }
 
-func (c *customComments) String() string {
-	var (
-		service string
-		pkg     string
-	)
-
+func (c *customComments) ToMap() map[string]any {
+	result := map[string]any{}
 	if c.service != nil {
-		service = c.service.From()
+		result["service"] = c.service.From()
 	}
 	if c.pkg != nil {
-		pkg = c.pkg.Name()
+		result["pkg"] = c.pkg.Name()
 	}
-	return fmt.Sprintf("{%s,%s}", service, pkg)
+	return result
 }
 
 // serviceComment service comment
@@ -56,20 +51,12 @@ func (c *serviceComment) ProductLine() string {
 	return c.productLine
 }
 
-func (c *serviceComment) String() string {
-	return c.from
-}
-
 // packageComment package comment
 type packageComment struct {
 	name string
 }
 
 func (c *packageComment) Name() string {
-	return c.name
-}
-
-func (c *packageComment) String() string {
 	return c.name
 }
 

@@ -19,10 +19,11 @@ func TestSequence(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
 		mock.M(t, map[string]any{"Sequence.Nexts": "1310341421945856,1310341421945866"}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
-	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	}()
 	now := time.Now().UnixNano()
 	cache := GetCache()
 	id, err := cache.Next()
@@ -56,10 +57,11 @@ func TestVersionJustPass(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/mctech/MockMctechHttp",
 		mock.M(t, map[string]any{"Sequence.Version": "1310341421945866"}),
 	)
-	defer failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
-	defer failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
-	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
-
+	defer func() {
+		failpoint.Disable("github.com/pingcap/tidb/mctech/udf/ResetSequenceCache")
+		failpoint.Disable("github.com/pingcap/tidb/mctech/MockMctechHttp")
+		failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+	}()
 	cache := GetCache()
 	version, err := cache.VersionJustPass()
 	require.NoError(t, err)

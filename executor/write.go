@@ -157,6 +157,7 @@ func updateRecord(
 	for i, col := range t.Cols() {
 		if mysql.HasOnUpdateNowFlag(col.GetFlag()) && !modified[i] && !onUpdateSpecified[i] {
 			// modify by zhangbing
+			// v, err := expression.GetTimeValue(sctx, strings.ToUpper(ast.CurrentTimestamp), col.GetType(), col.GetDecimal(), nil)
 			var v types.Datum
 			var err error
 			if col.GetType() == mysql.TypeLonglong {

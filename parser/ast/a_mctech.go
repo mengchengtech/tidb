@@ -35,7 +35,7 @@ const (
 	MCTechGetFullSql      = "mctech_get_full_sql"
 	MCTechHelp            = "mctech_help"
 	// 获取数仓库的索引信息
-	MCTechDataWarehouseIndexInfo = "mctech_data_warehouse_index_info"
+	MCTechDataWarehouseIndexInfo = "mctech_get_data_warehouse_index_info"
 )
 
 type MCTechStmt struct {

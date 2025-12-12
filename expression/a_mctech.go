@@ -296,7 +296,7 @@ func (b *builtinMCTechSequenceSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (b *builtinMCTechSequenceSig) evalInt(row chunk.Row) (int64, bool, error) {
+func (*builtinMCTechSequenceSig) evalInt(_ chunk.Row) (int64, bool, error) {
 	v, err := udf.GetCache().Next()
 	if err != nil {
 		return 0, true, err
@@ -333,7 +333,7 @@ func (b *builtinMCTechVersionJustPassSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (b *builtinMCTechVersionJustPassSig) evalInt(row chunk.Row) (int64, bool, error) {
+func (*builtinMCTechVersionJustPassSig) evalInt(_ chunk.Row) (int64, bool, error) {
 	v, err := udf.GetCache().VersionJustPass()
 	if err != nil {
 		return 0, true, err
@@ -351,17 +351,18 @@ func (c *mctechDecryptFunctionClass) getFunction(ctx sessionctx.Context, args []
 	if err := c.verifyArgs(args); err != nil {
 		return nil, err
 	}
-	argTps := []types.EvalType{types.ETString}
-	var sig builtinFunc
-
-	length := len(args)
+	var (
+		argTps []types.EvalType
+		sig    builtinFunc
+	)
+	length := len(args) // 参数个数
 	switch length {
 	case 1:
-		break
+		argTps = append(argTps, types.ETString)
 	case 3:
-		argTps = append(argTps, types.ETInt, types.ETInt)
+		argTps = append(argTps, types.ETString, types.ETInt, types.ETInt)
 	case 4:
-		argTps = append(argTps, types.ETInt, types.ETInt, types.ETString)
+		argTps = append(argTps, types.ETString, types.ETInt, types.ETInt, types.ETString)
 	default:
 		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
 	}
@@ -647,7 +648,7 @@ func (b *builtinMCTechDataWarehouseIndexInfoSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (b *builtinMCTechDataWarehouseIndexInfoSig) evalJSON(row chunk.Row) (types.BinaryJSON, bool, error) {
+func (b *builtinMCTechDataWarehouseIndexInfoSig) evalJSON(_ chunk.Row) (types.BinaryJSON, bool, error) {
 	mctx, err := mctech.GetContext(b.ctx)
 	if err != nil {
 		return types.CreateBinaryJSON(nil), true, err
@@ -688,7 +689,7 @@ func (b *builtinMCTechHelpSig) Clone() builtinFunc {
 	return newSig
 }
 
-func (b *builtinMCTechHelpSig) evalString(row chunk.Row) (string, bool, error) {
+func (b *builtinMCTechHelpSig) evalString(_ chunk.Row) (string, bool, error) {
 	lst := []string{}
 	for i, item := range mctechFunctionHelps {
 		if item.hidden {
@@ -731,7 +732,7 @@ func (b *builtinMCTechHelpSig) evalString(row chunk.Row) (string, bool, error) {
 
 // IsValidMCTechSequenceExpr returns true if exprNode is a valid MCTechSequence expression.
 // Here `valid` means it is consistent with the given fieldType's decimal.
-func IsValidMCTechSequenceExpr(exprNode ast.ExprNode, fieldType *types.FieldType) bool {
+func IsValidMCTechSequenceExpr(exprNode ast.ExprNode, _ *types.FieldType) bool {
 	fn, isFuncCall := exprNode.(*ast.FuncCallExpr)
 	if !isFuncCall || fn.FnName.L != ast.MCTechSequence {
 		return false
@@ -745,7 +746,7 @@ func GetNextSequence() (int64, error) {
 }
 
 // GetBigIntValue gets the time value with type tp.
-func GetBigIntValue(ctx sessionctx.Context, v interface{}, tp byte, fsp int) (d types.Datum, err error) {
+func GetBigIntValue(ctx sessionctx.Context, v any, _ byte, _ int) (d types.Datum, err error) {
 	var value int64
 	switch x := v.(type) {
 	case string:

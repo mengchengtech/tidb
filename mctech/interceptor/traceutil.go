@@ -14,14 +14,14 @@ import (
 	"github.com/pingcap/tidb/sessionctx/variable"
 )
 
-func min(a, b int) int {
+func minInt(a, b int) int {
 	if a > b {
 		return b
 	}
 	return a
 }
 
-func max(a, b int) int {
+func maxInt(a, b int) int {
 	if a > b {
 		return a
 	}
@@ -52,9 +52,9 @@ func mustCompress(sqlLen int, threshold int) (int, int, bool) {
 	// * prefixEnd=threshold, suffixStart=sqlLen
 
 	// 截取sql最前面字符串的结束位置
-	prefixEnd := min(threshold, max(sqlPrefixLen, threshold-sqlSuffixLen))
+	prefixEnd := minInt(threshold, maxInt(sqlPrefixLen, threshold-sqlSuffixLen))
 	// 截取sql最后字符串的起始位置
-	suffixStart := sqlLen - max(0, min(sqlSuffixLen, threshold-sqlPrefixLen))
+	suffixStart := sqlLen - maxInt(0, minInt(sqlSuffixLen, threshold-sqlPrefixLen))
 	return prefixEnd, suffixStart, true
 }
 
