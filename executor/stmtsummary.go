@@ -343,6 +343,11 @@ func (r *rowsReader) close() error {
 
 func isClusterTable(originalTableName string) bool {
 	switch originalTableName {
+	// add by zhangbing
+	case infoschema.ClusterTableMCTechLargeQuery:
+	case infoschema.ClusterTableMCTechCrossDBLoadInfo:
+		return true
+	// add end
 	case infoschema.ClusterTableStatementsSummary,
 		infoschema.ClusterTableStatementsSummaryHistory,
 		infoschema.ClusterTableStatementsSummaryEvicted:

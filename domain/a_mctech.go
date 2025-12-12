@@ -26,6 +26,29 @@ func (m *denyDigestManager) Get(digest string) *mcworker.DenyDigestInfo {
 	return m.mgr.Get(digest)
 }
 
+// CrossDBManager CrossDBManager interface
+type CrossDBManager interface {
+	Get(pattern mcworker.SQLInvokerPattern) *mcworker.CrossDBInfo
+	GetAll() map[string]*mcworker.CrossDBInfo
+	GetLoadedResults() []*mcworker.LoadedRuleResult
+}
+
+type crossDBManager struct {
+	mgr *mcworker.CrossDBManager
+}
+
+func (m *crossDBManager) Get(pattern mcworker.SQLInvokerPattern) *mcworker.CrossDBInfo {
+	return m.mgr.Get(pattern)
+}
+
+func (m *crossDBManager) GetAll() map[string]*mcworker.CrossDBInfo {
+	return m.mgr.GetAll()
+}
+
+func (m *crossDBManager) GetLoadedResults() []*mcworker.LoadedRuleResult {
+	return m.mgr.GetLoadedResults()
+}
+
 // StartDenyDigestManager creates and starts the deny digest manager
 func (do *Domain) StartDenyDigestManager() {
 	do.wg.Run(func() {
@@ -55,5 +78,37 @@ func (do *Domain) StartDenyDigestManager() {
 // DenyDigestManager returns the deny digest manager on this domain
 func (do *Domain) DenyDigestManager() (DenyDigestManager, bool) {
 	mgr := do.denyDigestManager.Load()
+	return mgr, mgr != nil
+}
+
+// StartCrossDBManager creates and starts the cross db manager
+func (do *Domain) StartCrossDBManager() {
+	do.wg.Run(func() {
+		defer func() {
+			logutil.BgLogger().Info("crossDBManager exited.")
+		}()
+
+		mgr := mcworker.NewCrossDBManager(do.sysSessionPool)
+		do.crossDBManager.Store(&crossDBManager{mgr: mgr})
+		mgr.Start()
+
+		<-do.exit
+
+		mgr.Stop()
+		err := mgr.WaitStopped(context.Background(), func() time.Duration {
+			if intest.InTest {
+				return 10 * time.Second
+			}
+			return 30 * time.Second
+		}())
+		if err != nil {
+			logutil.BgLogger().Warn("fail to wait until the cross db manager stop", zap.Error(err))
+		}
+	}, "crossDBManager")
+}
+
+// CrossDBManager returns the cross db manager on this domain
+func (do *Domain) CrossDBManager() (CrossDBManager, bool) {
+	mgr := do.crossDBManager.Load()
 	return mgr, mgr != nil
 }

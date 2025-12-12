@@ -397,6 +397,8 @@ func (p *LogicalMemTable) PruneColumns(parentUsedCols []*expression.Column, opt 
 		// add by zhangbing
 		infoschema.TableMCTechLargeQuery,
 		infoschema.ClusterTableMCTechLargeQuery,
+		infoschema.TableMCTechCrossDBLoadInfo,
+		infoschema.ClusterTableMCTechCrossDBLoadInfo,
 		// add end
 		infoschema.ClusterTableStatementsSummary,
 		infoschema.ClusterTableStatementsSummaryHistory,

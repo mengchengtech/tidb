@@ -23,6 +23,7 @@ go_library(
         "//errno",
         "//infoschema/metrics",
         "//kv",
+        "//mctech/worker",
         "//meta",
         "//meta/autoid",
         "//parser/charset",

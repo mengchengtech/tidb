@@ -3,6 +3,7 @@
 package infoschema
 
 import (
+	mcworker "github.com/pingcap/tidb/mctech/worker"
 	"github.com/pingcap/tidb/meta/autoid"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/sessionctx/variable"
@@ -19,6 +20,12 @@ const (
 
 	// TableMCTechTableTTLInfo is the string constant of mctech table ttl info
 	TableMCTechTableTTLInfo = "MCTECH_TABLE_TTL_INFO"
+
+	// TableMCTechCrossDBLoadInfo is the string constant of mctech table cross db loaded info
+	TableMCTechCrossDBLoadInfo = "MCTECH_CROSS_DB_LOAD_INFO"
+
+	// ClusterTableMCTechCrossDBLoadInfo is the string constant of cluster mctech table cross db loaded info
+	ClusterTableMCTechCrossDBLoadInfo = "CLUSTER_MCTECH_CROSS_DB_LOAD_INFO"
 )
 
 var mctechLargeQueryCols = []columnInfo{
@@ -66,14 +73,35 @@ var mcTechTableTTLInfoCols = []columnInfo{
 	{name: "TTL_JOB_INTERVAL", tp: mysql.TypeVarchar, size: 64},
 }
 
+var mctechCrossDBLoadInfo = []columnInfo{
+	{name: "RULE_ID", tp: mysql.TypeLonglong, size: 21},
+	{name: "INVOKER_NAME", tp: mysql.TypeVarchar, size: 128},
+	{name: "INVOKER_TYPE", tp: mysql.TypeEnum, size: 26, enumElems: mcworker.AllInvokerTypes},
+	{name: "ALLOW_ALL_DBS", tp: mysql.TypeTiny, size: 1},
+	{name: "CROSS_DBS", tp: mysql.TypeVarchar, size: 1024},
+	{name: "ENABLED", tp: mysql.TypeTiny, size: 1},
+	{name: "REMARK", tp: mysql.TypeVarchar, size: 512},
+	{name: "LOADED_AT", tp: mysql.TypeDatetime, size: 19},
+	{name: "LOADED_STATE", tp: mysql.TypeEnum, size: 26, enumElems: mcworker.AllResultStateTypes},
+	{name: "LOADED_MESSAGE", tp: mysql.TypeVarchar, size: 512},
+	{name: "LOADED_DETAIL_ALLOW_ALL_DBS", tp: mysql.TypeTiny, size: 1},
+	{name: "LOADED_DETAIL_SERVICE", tp: mysql.TypeVarchar, size: 512},
+	{name: "LOADED_DETAIL_PACKAGE", tp: mysql.TypeVarchar, size: 512},
+	{name: "LOADED_DETAIL_CROSS_DBS", tp: mysql.TypeVarchar, size: 1024},
+}
+
 func init() {
 	const mctechInformationSchemaDBID = autoid.InformationSchemaDBID + 9900
 	memTableToAllTiDBClusterTables[TableMCTechLargeQuery] = ClusterTableMCTechLargeQuery
+	memTableToAllTiDBClusterTables[TableMCTechCrossDBLoadInfo] = ClusterTableMCTechCrossDBLoadInfo
 
 	tableIDMap[TableMCTechLargeQuery] = mctechInformationSchemaDBID + 1
 	tableIDMap[ClusterTableMCTechLargeQuery] = mctechInformationSchemaDBID + 2
 	tableIDMap[TableMCTechTableTTLInfo] = mctechInformationSchemaDBID + 3
+	tableIDMap[TableMCTechCrossDBLoadInfo] = mctechInformationSchemaDBID + 4
+	tableIDMap[ClusterTableMCTechCrossDBLoadInfo] = mctechInformationSchemaDBID + 5
 
 	tableNameToColumns[TableMCTechLargeQuery] = mctechLargeQueryCols
 	tableNameToColumns[TableMCTechTableTTLInfo] = mcTechTableTTLInfoCols
+	tableNameToColumns[TableMCTechCrossDBLoadInfo] = mctechCrossDBLoadInfo
 }

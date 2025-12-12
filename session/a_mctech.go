@@ -51,12 +51,14 @@ const (
 	mcVersionKey = "mctech_extension_version"
 
 	mctechVersion10001 = 10001
+	mctechVersion10002 = 10002
 
-	currentMCTechVersion int64 = mctechVersion10001
+	currentMCTechVersion int64 = mctechVersion10002
 )
 
 var mctechUpgradeVersion = []func(Session, int64){
 	mctechUpgradeToVer10001,
+	mctechUpgradeToVer10002,
 }
 
 // mctechUpgrade init mctech ddl
@@ -92,6 +94,14 @@ func mctechUpgradeToVer10001(s Session, ver int64) {
 	}
 	// Create [mcworker.MCTechDenyDigest] table.
 	mustExecute(s, mcworker.CreateMCTechDenyDigest, mysql.SystemDB, mcworker.MCTechDenyDigest)
+}
+
+func mctechUpgradeToVer10002(s Session, ver int64) {
+	if ver >= mctechVersion10002 {
+		return
+	}
+	// Create [mcworker.MCTechCrossDB] table.
+	mustExecute(s, mcworker.CreateMCTechCrossDB, mysql.SystemDB, mcworker.MCTechCrossDB)
 }
 
 func updateMCTechVersion(s Session) {

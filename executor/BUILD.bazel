@@ -381,6 +381,7 @@ go_test(
         "//infoschema",
         "//kv",
         "//mctech/mock",
+        "//mctech/worker",
         "//meta",
         "//meta/autoid",
         "//metrics",

@@ -22,6 +22,7 @@ import (
 	"github.com/pingcap/errors"
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/infoschema"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/parser/ast"
@@ -1185,7 +1186,7 @@ func CreateLargeQueryItems(ctx context.Context, sql string, sqlType string, succ
 
 // --------------------------------------------------------------------------------
 
-func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sctx sessionctx.Context, schemas []*model.DBInfo) error {
+func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(sctx sessionctx.Context, schemas []*model.DBInfo) error {
 	checker := privilege.GetPrivilegeManager(sctx)
 	var rows [][]types.Datum
 	for _, schema := range schemas {
@@ -1227,6 +1228,67 @@ func (e *memtableRetriever) setDataFromMCTechTableTTLInfos(_ context.Context, sc
 	}
 	e.rows = rows
 	return nil
+}
+
+func (e *memtableRetriever) setDataFromMCTechCrossDBLoadInfos(sctx sessionctx.Context) error {
+	var (
+		mgr domain.CrossDBManager
+		ok  bool
+	)
+	if mgr, ok = domain.GetDomain(sctx).CrossDBManager(); !ok {
+		return errors.New("crossDBManager is nil")
+	}
+
+	results := mgr.GetLoadedResults()
+	if len(results) == 0 {
+		return nil
+	}
+
+	failpoint.Inject("inject-loaded-at", func(v failpoint.Value) {
+		at := time.UnixMilli(int64(v.(int)))
+		for _, result := range results {
+			if !at.After(result.Data.LoadedAt) {
+				result.Data.LoadedAt = at
+			}
+		}
+	})
+	rows := make([][]types.Datum, 0, len(results))
+	for _, result := range results {
+		cells := []any{
+			result.ID,                   // RULE_ID
+			result.InvokerName,          // INVOKER_NAME
+			result.InvokerType.ToEnum(), // INVOKER_TYPE
+			result.AllowAllDBs,          // ALLOW_ALL_DBS
+			result.CrossDBs,             // CROSS_DBS
+			result.Enabled,              // ENABLED
+			result.Remark,               // REMARK
+
+			types.NewTime(types.FromGoTime(result.Data.LoadedAt), mysql.TypeDatetime, 3), // LOADED_AT
+			result.Data.State.ToEnum(), // LOADED_STATE
+			result.Data.Message,        // LOADED_MESSAGE
+		}
+
+		detail := result.Data.Detail
+		index := len(cells)
+		cells = append(cells, nil, nil, nil, nil, nil, nil)
+		if detail != nil {
+			cells[index+0] = detail.AllowAllDBs                 // LOADED_DETAIL_ALLOW_ALL_DBS
+			cells[index+1] = detail.Service                     // LOADED_DETAIL_SERVICE
+			cells[index+2] = detail.Package                     // LOADED_DETAIL_PACKAGE
+			cells[index+3] = fmt.Sprintf("%v", detail.CrossDBs) // LOADED_DETAIL_CROSS_DBS
+		}
+		rows = append(rows, types.MakeDatums(cells...))
+	}
+	e.rows = rows
+	return nil
+}
+
+func (e *memtableRetriever) setDataFromClusterMCTechCrossDBLoadInfos(sctx sessionctx.Context) (err error) {
+	if err = e.setDataFromMCTechCrossDBLoadInfos(sctx); err != nil {
+		return err
+	}
+	e.rows, err = infoschema.AppendHostInfoToRows(sctx, e.rows)
+	return err
 }
 
 // ----------------------------------------------------------------------------------------

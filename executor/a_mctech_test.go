@@ -8,16 +8,20 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/executor"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech/mock"
+	mcworker "github.com/pingcap/tidb/mctech/worker"
 	"github.com/pingcap/tidb/parser/auth"
 	"github.com/pingcap/tidb/parser/mysql"
 	"github.com/pingcap/tidb/server"
+	"github.com/pingcap/tidb/session"
 	"github.com/pingcap/tidb/testkit"
 	"github.com/stretchr/testify/require"
+	"github.com/tikv/client-go/v2/util"
 )
 
 type mctechStmtCases struct {
@@ -461,4 +465,61 @@ func TestLargeQuery(t *testing.T) {
 			"select * from t2;",
 			"select * from t;",
 		))
+}
+
+func TestQueryMCTechCrossDBLoadInfo(t *testing.T) {
+	at := time.Now()
+	failpoint.Enable("github.com/pingcap/tidb/executor/inject-loaded-at", fmt.Sprintf("return(%d)", at.UnixMilli()))
+	failpoint.Enable("github.com/pingcap/tidb/session/mctech-ddl-upgrade", mock.M(t, "false"))
+	defer failpoint.Disable("github.com/pingcap/tidb/session/inject-loaded-at")
+	defer failpoint.Disable("github.com/pingcap/tidb/session/mctech-ddl-upgrade")
+
+	session.RegisterMCTechUpgradeForTest("cross-db", initMCTechCrossDB)
+	defer session.UnregisterMCTechUpgradeForTest("cross-db")
+
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+	atValue := at.Format("2006-01-02 15:04:05.000")
+	rows := [][]any{
+		{"1001", "invoker-1", "service", "0", "global_cq3,global_ec5", "1", "", atValue, "success", "Loaded Success", "0", "invoker-1", "", "[global_cq3 global_ec5]"},
+		{"1002", "invoker-2", "service", "0", "global_cq2,global_ec5,global_mp", "1", "", atValue, "success", "Loaded Success", "0", "invoker-2", "", "[global_cq2 global_ec5 global_mp]"},
+		{"1003", "invoker-2", "service", "0", "global_qa,global_ec3", "1", "", atValue, "success", "Loaded Success", "0", "invoker-2", "", "[global_qa global_ec3]"},
+		{"1004", "invoker-empty", "package", "0", "", "1", "", atValue, "error", "Ignore. The number of databases is less than 2", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1005", "invoker-one-db", "package", "0", "global_qa", "1", "", atValue, "error", "Ignore. The number of databases is less than 2", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1006", "*", "both", "0", "global_qa,global_mp", "1", "", atValue, "success", "Loaded Success", "0", "*", "*", "[global_qa global_mp]"},
+		{"1007", "*", "both", "1", "", "1", "", atValue, "error", "Ignore. The 'allow_all_dbs' field should not be false, when invoker_name is '*'.", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1008", "", "both", "1", "", "1", "", atValue, "error", "Ignore. The 'invoker_name' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1009", "", "both", "0", "", "1", "", atValue, "error", "Ignore. The 'invoker_name' field is empty.", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1050", "invoker-allow-all", "both", "1", "", "1", "", atValue, "success", "Loaded Success", "1", "invoker-allow-all", "invoker-allow-all", "[]"},
+		{"1100", "invoker-disable", "package", "0", "global_qa, global_sq", "0", "", atValue, "disabled", "current rule is Disabled", "<nil>", "<nil>", "<nil>", "<nil>"},
+		{"1101", "", "service", "1", "", "0", "", atValue, "disabled", "current rule is Disabled", "<nil>", "<nil>", "<nil>", "<nil>"},
+	}
+
+	tk.MustQuery("select * from information_schema.mctech_cross_db_load_info").Check(rows)
+}
+
+func initMCTechCrossDB(ctx context.Context, sctx session.Session) error {
+	ctx = util.WithInternalSourceType(ctx, "initMCTechCrossDB")
+	args := []any{
+		mysql.SystemDB, mcworker.MCTechCrossDB,
+	}
+	_, err := sctx.ExecuteInternal(ctx, `insert into %n.%n
+	(id, invoker_name, invoker_type, allow_all_dbs, cross_dbs, enabled, created_at)
+	values
+	(1001, 'invoker-1', 'service', false, 'global_cq3,global_ec5', true, '2024-05-01')
+	, (1002, 'invoker-2', 'service', false, 'global_cq2,global_ec5,global_mp',true, '2024-05-01')
+	, (1003, 'invoker-2', 'service', false, 'global_qa,global_ec3', true, '2024-05-01')
+	, (1004, 'invoker-empty', 'package', false, '', true, '2024-05-01')
+	, (1005, 'invoker-one-db', 'package', false, 'global_qa', true, '2024-05-01')
+	, (1006, '*', 'both', false, 'global_qa,global_mp', true, '2024-05-01')
+	, (1007, '*', 'both', true, '', true, '2024-05-01')
+	, (1008, '', 'both', true, '', true, '2024-05-01')
+	, (1009, '', 'both', false, '', true, '2024-05-01')
+	, (1010, 'invoker-exclude', 'service', false, 'global_ds,global_bc,*', true, '2024-05-01')
+	, (1050, 'invoker-allow-all', 'both', true, '', true, '2024-05-01')
+	, (1100, 'invoker-disable', 'package', false, 'global_qa, global_sq', false, '2024-05-01')
+	, (1101, '', 'service', true, '', false, '2024-05-01')
+	`,
+		args...)
+	return err
 }

@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "worker",
     srcs = [
+        "cross_db_manager.go",
         "digest_manager.go",
         "worker_manager.go",
     ],
@@ -13,12 +14,14 @@ go_library(
         "//kv",
         "//parser/mysql",
         "//parser/terror",
+        "//types",
         "//util",
         "//util/logutil",
         "//util/sqlexec",
         "@com_github_ngaut_pools//:pools",
         "@com_github_pingcap_failpoint//:failpoint",
         "@org_golang_x_exp//maps",
+        "@org_golang_x_exp//slices",
         "@org_uber_go_zap//:zap",
     ],
 )
@@ -27,6 +30,7 @@ go_test(
     name = "worker_test",
     timeout = "short",
     srcs = [
+        "cross_db_manager_test.go",
         "digest_manager_test.go",
         "main_test.go",
     ],
