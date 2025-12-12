@@ -111,7 +111,7 @@ func (d *dwSelector) getIndexFromService(dbPrefix string) (*mctech.DWIndexInfo, 
 		return nil, err
 	}
 
-	body, err := mctech.DoRequest(get)
+	body, _, err := mctech.DoRequest(get)
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +143,7 @@ func (d *dwSelector) getIndexByRequestIDFromService(dbPrefix string, requestID s
 		return nil, err
 	}
 
-	body, err := mctech.DoRequest(get)
+	body, _, err := mctech.DoRequest(get)
 	if err != nil {
 		return nil, err
 	}

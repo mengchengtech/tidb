@@ -6869,6 +6869,19 @@ def go_deps():
         ],
     )
     go_repository(
+        name = "com_github_tjfoc_gmsm",
+        build_file_proto_mode = "disable_global",
+        importpath = "github.com/tjfoc/gmsm",
+        sha256 = "ba1f3ccf698a62bcb28c594d995f21587021ad759e777aa64367c8a7332cc10b",
+        strip_prefix = "github.com/tjfoc/gmsm@v1.4.1",
+        urls = [
+            "http://bazel-cache.pingcap.net:8080/gomod/github.com/tjfoc/gmsm/com_github_tjfoc_gmsm-v1.4.1.zip",
+            "http://ats.apps.svc/gomod/github.com/tjfoc/gmsm/com_github_tjfoc_gmsm-v1.4.1.zip",
+            "https://cache.hawkingrei.com/gomod/github.com/tjfoc/gmsm/com_github_tjfoc_gmsm-v1.4.1.zip",
+            "https://storage.googleapis.com/pingcapmirror/gomod/github.com/tjfoc/gmsm/com_github_tjfoc_gmsm-v1.4.1.zip",
+        ],
+    )
+    go_repository(
         name = "com_github_tklauser_go_sysconf",
         build_file_proto_mode = "disable_global",
         importpath = "github.com/tklauser/go-sysconf",

@@ -22,12 +22,12 @@ var apiClient = &http.Client{
 }
 
 // DoRequest invoke rpc api
-func DoRequest(request *http.Request) (body []byte, err error) {
+func DoRequest(request *http.Request) (body []byte, statusCode int, err error) {
 	retryCount := 3
 	for retryCount > 0 {
-		body, err = do(request)
+		body, statusCode, err = do(request)
 		if err == nil {
-			return body, nil
+			return body, statusCode, nil
 		}
 		retryCount--
 	}
@@ -40,10 +40,10 @@ func DoRequest(request *http.Request) (body []byte, err error) {
 			zap.Stack("stack"),
 		)
 	}
-	return nil, errors.New("rpc调用发生错误。详情请查询tidb服务日志")
+	return nil, statusCode, errors.New("rpc调用发生错误。详情请查询tidb服务日志")
 }
 
-func do(request *http.Request) ([]byte, error) {
+func do(request *http.Request) ([]byte, int, error) {
 	failpoint.Inject("MockMctechHttp", func(val failpoint.Value) {
 		values := make(map[string]any)
 		var err error
@@ -55,12 +55,19 @@ func do(request *http.Request) ([]byte, error) {
 		}
 		path := request.URL.Path
 		var (
-			res any
-			ok  bool
+			res        any
+			ok         bool
+			statusCode = 200
 		)
 		switch {
 		case strings.HasSuffix(path, "/db/aes"):
 			res, ok = values["Crypto.AES"]
+		case strings.HasSuffix(path, "/crypto"):
+			// 使用旧的获取方式 '/db/aes'
+			if old, ok := values["Crypto.OLD"]; ok && old.(bool) {
+				failpoint.Return(nil, 404, err)
+			}
+			res, ok = values["Crypto.CRYPTO"]
 		case strings.HasSuffix(path, "/version"):
 			res, ok = values["Sequence.Version"]
 		case strings.HasSuffix(path, "/nexts"):
@@ -82,25 +89,29 @@ func do(request *http.Request) ([]byte, error) {
 					panic(err)
 				}
 			}
-			failpoint.Return(data, nil)
+			failpoint.Return(data, statusCode, err)
 		}
 
 		if !strings.HasPrefix(path, "/rpc-test") {
-			failpoint.Return(nil, nil)
+			failpoint.Return(nil, statusCode, err)
 		}
 	})
 
 	response, err := apiClient.Do(request)
 	if err != nil {
 		// 网络问题或者是服务器不定时出的502错误，重试几次
-		return nil, err
+		var statusCode = 0
+		if response != nil {
+			statusCode = response.StatusCode
+		}
+		return nil, statusCode, err
 	}
 
 	defer response.Body.Close()
 
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
-		return nil, err
+		return nil, response.StatusCode, err
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
@@ -108,7 +119,7 @@ func do(request *http.Request) ([]byte, error) {
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, response.StatusCode, err
 	}
-	return body, err
+	return body, response.StatusCode, err
 }

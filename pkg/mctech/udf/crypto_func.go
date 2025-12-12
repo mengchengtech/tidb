@@ -17,6 +17,7 @@ import (
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/util/logutil"
+	"github.com/tjfoc/gmsm/sm4"
 	"go.uber.org/zap"
 )
 
@@ -47,10 +48,12 @@ func (p *mockCryptoClient) Decrypt(content string) (string, error) {
 	return content, nil
 }
 
-type aesCryptoClient struct {
+type cryptoClient struct {
 	option *config.MCTech
 	key    []byte
 	iv     []byte
+	// 加密算法类型
+	_type string
 }
 
 func newAesCryptoClientFromService() CryptoClient {
@@ -59,33 +62,35 @@ func newAesCryptoClientFromService() CryptoClient {
 		return &mockCryptoClient{}
 	}
 
-	c := new(aesCryptoClient)
+	c := new(cryptoClient)
 	c.option = option
 
-	key, iv, err := loadCryptoParams(option)
+	_type, key, iv, err := loadCryptoParams(option)
 	if err == nil {
-		log.Info("GET mctech aes crypto KEY/IV SUCCESS. ")
+		log.Info("GET mctech crypto KEY/IV SUCCESS. ", zap.String("type", _type))
 		c.key = key
 		c.iv = iv
+		c._type = _type
 		return c
 	}
 
 	// 记录错误信息
-	log.Error("Get mctech aes crypto KEY/IV FAILURE.", zap.Error(err))
+	log.Error("Get mctech crypto KEY/IV FAILURE.", zap.Error(err))
 
 	// 转成后台定时加载
 	go func() {
 		for {
-			key, iv, err = loadCryptoParams(option)
-			log.Info("GET mctech aes crypto KEY/IV SUCCESS. ")
+			_type, key, iv, err = loadCryptoParams(option)
+			log.Info("GET mctech crypto KEY/IV SUCCESS. ", zap.String("type", _type))
 			// 加载成功退出后台执行
 			if err == nil {
 				c.key = key
 				c.iv = iv
+				c._type = _type
 				break
 			}
 			// 记录错误信息
-			log.Error("Get mctech aes crypto KEY/IV FAILURE.", zap.Error(err))
+			log.Error("Get mctech crypto KEY/IV FAILURE.", zap.Error(err))
 			// 间隔10秒
 			time.Sleep(10 * time.Second)
 		}
@@ -93,10 +98,20 @@ func newAesCryptoClientFromService() CryptoClient {
 	return c
 }
 
+func (c *cryptoClient) getCipher() (block cipher.Block, err error) {
+	switch c._type {
+	case "aes":
+		block, err = aes.NewCipher(c.key)
+	case "sm4":
+		block, err = sm4.NewCipher(c.key)
+	}
+	return block, err
+}
+
 // Encrypt encrypt plain text
-func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
+func (c *cryptoClient) Encrypt(plainText string) (string, error) {
 	var cypher string
-	block, err := aes.NewCipher(c.key)
+	block, err := c.getCipher()
 	if err != nil {
 		return cypher, err
 	}
@@ -115,13 +130,13 @@ func (c *aesCryptoClient) Encrypt(plainText string) (string, error) {
 }
 
 // Decrypt decrypt cipher text
-func (c *aesCryptoClient) Decrypt(content string) (s string, err error) {
+func (c *cryptoClient) Decrypt(content string) (s string, err error) {
 	if !strings.HasPrefix(content, cryptoPrefix) {
 		return content, nil
 	}
 
 	var raw string
-	block, err := aes.NewCipher(c.key)
+	block, err := c.getCipher()
 	if err != nil {
 		return raw, err
 	}
@@ -152,42 +167,57 @@ func (c *aesCryptoClient) Decrypt(content string) (s string, err error) {
 	return raw, nil
 }
 
-func loadCryptoParams(option *config.MCTech) (key []byte, iv []byte, err error) {
-	// 从配置中获取
+func doRequestCryptoParams(path string, option *config.MCTech) ([]byte, int, error) {
 	apiPrefix := option.Encryption.APIPrefix
-	serviceURL := apiPrefix + "db/aes"
+	serviceURL := apiPrefix + path
 	get, err := http.NewRequest("GET", serviceURL, nil)
 	if err != nil {
-		return nil, nil, err
+		return nil, 0, err
 	}
 
 	get.Header = map[string][]string{
 		"x-access-id": {option.Encryption.AccessID},
 	}
 
-	body, err := mctech.DoRequest(get)
+	return mctech.DoRequest(get)
+}
+
+func loadCryptoParams(option *config.MCTech) (_type string, key []byte, iv []byte, err error) {
+	// 从配置中获取
+	body, statusCode, err := doRequestCryptoParams("crypto?type=db", option)
+	if statusCode == 404 {
+		body, _, err = doRequestCryptoParams("db/aes", option)
+	}
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 
 	var tokens = map[string]string{}
 	err = json.Unmarshal(body, &tokens)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
+
+	if tp, ok := tokens["type"]; ok {
+		_type = tp
+	} else {
+		// 默认值为aes，兼容以前的实现
+		_type = "aes"
+	}
+
 	key, err = base64.StdEncoding.DecodeString(tokens["key"])
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 	iv, err = base64.StdEncoding.DecodeString(tokens["iv"])
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 
 	if len(key) == 0 || len(iv) == 0 {
-		return nil, nil, fmt.Errorf("key或者iv不能为空")
+		return "", nil, nil, fmt.Errorf("key或者iv不能为空")
 	}
-	return key, iv, nil
+	return _type, key, iv, nil
 }
 
 func pkcs7Padding(data []byte, blockSize int) []byte {
