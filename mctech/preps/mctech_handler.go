@@ -66,8 +66,8 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmt ast.StmtNode) (b
 	}
 
 	var (
-		dbs []string // sql中用到的数据库
-		err error
+		schema mctech.StmtSchemaInfo // sql中用到的数据库的物理表
+		err    error
 	)
 	// ddl 与dml语句不必重复判断
 	if option.Tenant.Enabled {
@@ -76,17 +76,17 @@ func (h *mctechHandler) ApplyAndCheck(mctx mctech.Context, stmt ast.StmtNode) (b
 
 		var skipped bool // 是否需要跳过后续处理
 		// 启用租户隔离，改写SQL，添加租户隔离信息
-		if dbs, skipped, err = preprocessor.ResolveStmt(mctx, stmt, charset, collation); err != nil {
+		if schema, skipped, err = preprocessor.ResolveStmt(mctx, stmt, charset, collation); err != nil {
 			return false, err
 		}
-		mctx.SetDbs(stmt, dbs)
+		mctx.SetSchema(stmt, schema)
 		if !skipped {
 			changed = true
 		}
 
-		if option.DbChecker.Enabled && len(dbs) > 0 {
+		if option.DbChecker.Enabled && len(schema.Databases) > 0 {
 			// 启用数据库联合查询规则检查
-			if err = getDatabaseChecker().Check(mctx, stmt, dbs); err != nil {
+			if err = getDatabaseChecker().Check(mctx, stmt, schema.Databases); err != nil {
 				return changed, err
 			}
 		}

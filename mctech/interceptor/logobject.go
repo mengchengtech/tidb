@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/sessionctx/variable"
 	"go.uber.org/zap/zapcore"
 )
@@ -26,6 +27,7 @@ type logSQLTraceObject struct {
 	at       time.Time          // 执行sql开始时间（不含从sql字符串解析成语法树的时间）
 	db       string             // 执行sql时的当前库名称
 	dbs      string             // 执行的sql中用到的所有数据库名称列表。','分隔
+	tables   tableNames         // 执行的sql中用到的所有数据库名称列表
 	across   string             // sql中指定的跨库查询的数据库
 	client   clientInfo         // 执行sql的客户端信息
 	inTX     bool               // 当前sql是否在事务中
@@ -48,10 +50,31 @@ type logSQLTraceObject struct {
 	err      error              // sql执行错误信息
 }
 
+type tableNames []mctech.TableName
+
+// MarshalLogArray implements the zapcore.ArrayMarshaler interface.
+func (tn tableNames) MarshalLogArray(enc zapcore.ArrayEncoder) error {
+	for _, o := range tn {
+		if err := enc.AppendObject(&o); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // MarshalLogObject implements the zapcore.ObjectMarshaler interface.
 func (st *logSQLTraceObject) MarshalLogObject(enc zapcore.ObjectEncoder) error {
-	enc.AddString("db", st.db)
-	enc.AddString("dbs", st.dbs)
+	if len(st.db) > 0 {
+		enc.AddString("db", st.db)
+	}
+	if len(st.dbs) > 0 {
+		enc.AddString("dbs", st.dbs)
+	}
+	if len(st.tables) > 0 {
+		if err := enc.AddArray("tables", st.tables); err != nil {
+			return err
+		}
+	}
 	enc.AddString("usr", st.user)
 	if len(st.tenant) > 0 {
 		enc.AddString("tenant", st.tenant)

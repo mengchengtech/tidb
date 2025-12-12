@@ -11,7 +11,7 @@ import (
 )
 
 type isolationConditionVisitor struct {
-	*databaseNameVisitor
+	*tableNameVisitor
 	// 租户条件是否使用参数化方式
 	usingParam bool
 	tenant     ast.ValueExpr
@@ -22,20 +22,6 @@ type isolationConditionVisitor struct {
 }
 
 const tenantFieldName = "tenant"
-
-type dbNameVisitor interface {
-	ast.Visitor
-	DBNames() map[string]bool
-}
-
-func newDatabaseNameVisitor(mctx mctech.Context) *databaseNameVisitor {
-	return &databaseNameVisitor{
-		context: mctx,
-		dbNames: map[string]bool{},
-
-		withClauseScope: &nodeScope[*cteScopeItem]{items: list.New()},
-	}
-}
 
 func toExprList(values []string, charset, collation string) []ast.ExprNode {
 	var exprList []ast.ExprNode
@@ -55,7 +41,7 @@ func newIsolationConditionVisitor(
 	charset string, collation string) *isolationConditionVisitor {
 	visitor := &isolationConditionVisitor{
 		usingParam:          mctx.UsingTenantParam(),
-		databaseNameVisitor: newDatabaseNameVisitor(mctx),
+		tableNameVisitor:    newTableNameVisitor(mctx),
 		columnModifiedScope: &nodeScope[bool]{items: list.New()},
 	}
 	result := mctx.ParseResult()
@@ -79,7 +65,7 @@ func (v *isolationConditionVisitor) enabled() bool {
 
 // Enter implements interface Visitor
 func (v *isolationConditionVisitor) Enter(n ast.Node) (node ast.Node, skipChildren bool) {
-	v.databaseNameVisitor.Enter(n)
+	v.tableNameVisitor.Enter(n)
 
 	if v.enabled() {
 		switch node := n.(type) {
@@ -118,7 +104,7 @@ func (v *isolationConditionVisitor) Leave(n ast.Node) (node ast.Node, ok bool) {
 			v.leaveTableSource(node)
 		}
 	}
-	v.databaseNameVisitor.Leave(n)
+	v.tableNameVisitor.Leave(n)
 
 	return n, true
 }

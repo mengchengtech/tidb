@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/mctech"
 	"github.com/pingcap/tidb/mctech/visitor"
 	"github.com/pingcap/tidb/parser/ast"
@@ -19,7 +18,7 @@ var mctechHintPattern = regexp.MustCompile(`(?i)/\*&\s*(\$?[a-z_0-9]+)[:|]\s*(.*
 type StatementPreprocessor interface {
 	ParseSQL(mctx mctech.Context, sql string) (string, mctech.ParseResult, error)
 	ResolveStmt(mctx mctech.Context,
-		stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error)
+		stmt ast.Node, charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error)
 	Validate(mctx mctech.Context) error
 }
 
@@ -103,17 +102,6 @@ func (r *mctechStatementPreprocessor) ParseSQL(
 	return parsedSQL, result, nil
 }
 
-func (r *mctechStatementPreprocessor) ResolveStmt(mctx mctech.Context,
-	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = r.rewriteStmt(mctx, stmt, charset, collation)
-	if err != nil {
-		return nil, false, err
-	}
-
-	dbs = normalize(dbs)
-	return dbs, skipped, nil
-}
-
 func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
 	result := mctx.ParseResult()
 	// 执行到此处说明当前语句一定是DML或QUERY
@@ -126,26 +114,21 @@ func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
 	return nil
 }
 
-func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
-	stmt ast.Node, charset string, collation string) (dbs []string, skipped bool, err error) {
-	dbs, skipped, err = visitor.ApplyExtension(mctx, stmt, charset, collation)
-
-	failpoint.Inject("SetSQLDBS", func(v failpoint.Value) {
-		str := v.(string)
-		dbs = strings.Split(str, ",")
-	})
+func (r *mctechStatementPreprocessor) ResolveStmt(mctx mctech.Context,
+	stmt ast.Node, charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
+	schema, skipped, err = visitor.ApplyExtension(mctx, stmt, charset, collation)
 
 	if skipped || err != nil {
-		return dbs, skipped, err
+		return schema, skipped, err
 	}
 
 	// 判断sql中是否使用了是否包含'global_xxx'这样的数据库
-	hasGlobalDb := slices.IndexFunc(dbs, func(db string) bool {
+	hasGlobalDb := slices.IndexFunc(schema.Databases, func(db string) bool {
 		return mctx.IsGlobalDb(db)
 	}) >= 0
 
 	if !hasGlobalDb {
-		return dbs, false, nil
+		return schema, false, nil
 	}
 
 	modifyCtx := mctx.(mctech.BaseContextAware).BaseContext().(mctech.ModifyContext)
@@ -153,30 +136,16 @@ func (r *mctechStatementPreprocessor) rewriteStmt(mctx mctech.Context,
 	result := mctx.ParseResult()
 	if result.TenantOmit() {
 		// 启用global时，允许跨任意数据库查询
-		return dbs, false, nil
+		return schema, false, nil
 	}
 
 	// 未启用global,租户code为空，留到后续Validate步骤统一校验
 	if result.Tenant().Code() == "" && !mctx.UsingTenantParam() {
-		return dbs, false, nil
+		return schema, false, nil
 	}
 
 	modifyCtx.SetSQLRewrited(!skipped)
-	return dbs, false, nil
-}
-
-// normalize 对db列表排序，去重
-func normalize(dbs []string) []string {
-	slices.Sort(dbs)
-
-	newDbs := make([]string, 0, len(dbs))
-	for _, db := range dbs {
-		if slices.Contains(newDbs, db) {
-			continue
-		}
-		newDbs = append(newDbs, db)
-	}
-	return newDbs
+	return schema, false, nil
 }
 
 var preprocessor StatementPreprocessor = &mctechStatementPreprocessor{}
