@@ -2,6 +2,7 @@ package preps_test
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/pingcap/failpoint"
@@ -130,15 +131,19 @@ func TestDatabaseCheckerFromInternalConfig(t *testing.T) {
 	failpoint.Enable("github.com/pingcap/tidb/session/mctech-ddl-upgrade", mock.M(t, "false"))
 	defer failpoint.Disable("github.com/pingcap/tidb/session/mctech-ddl-upgrade")
 
+	randomDB := fmt.Sprintf("global_demo_%d", rand.Int())
 	cases := []*testDatabaseCheckerCase{
 		// 当前账号不属于tenant_only角色
 		{false, nil, "", []string{"global_cq3", "global_mtlp"}, ""},
 		{false, nil, "", []string{"global_mp", "global_mp"}, ""},
 		// 当前账号属于tenant_only角色
-		{true, nil, "", []string{"global_platform", "global_ipm", "global_dw_1", "global_dw_2", "global_dwb"}, ""},     // 基础库，允许在一起使用
-		{true, nil, "", []string{"global_platform", "global_cq3"}, ""},                                                 // 基础库，和一个普通库，允许在一起使用
-		{true, nil, "", []string{"global_platform", "global_ipm", "global_cq3"}, ""},                                   // 基础库，和一个普通库，允许在一起使用
-		{true, nil, "", []string{"global_platform", "global_ds", "global_cq3"}, "dbs not allow in the same statement"}, // 基础库，和两个普通库，不允许在一起使用
+		// internal config
+		{true, map[string]string{"package": "@mctech/dp-impala-tidb-other"}, "", []string{"global_demo1", "global_demo2", randomDB}, "dbs not allow in the same statement"},
+		{true, map[string]string{"package": "@mctech/dp-impala-tidb-enhanced"}, "", []string{"global_demo1", "global_demo2", randomDB}, ""}, // 已经配置的package 允许全部数据库都可以在一起使用
+		{true, nil, "", []string{"global_platform", "global_ipm", "global_dw_1", "global_dw_2", "global_dwb"}, ""},                          // 基础库，允许在一起使用
+		{true, nil, "", []string{"global_platform", "global_cq3"}, ""},                                                                      // 基础库，和一个普通库，允许在一起使用
+		{true, nil, "", []string{"global_platform", "global_ipm", "global_cq3"}, ""},                                                        // 基础库，和一个普通库，允许在一起使用
+		{true, nil, "", []string{"global_platform", "global_ds", "global_cq3"}, "dbs not allow in the same statement"},                      // 基础库，和两个普通库，不允许在一起使用
 		{true, nil, "", []string{"global_ds", "global_mtlp"}, "dbs not allow in the same statement"},
 		{true, nil, "", []string{"global_platform", "global_mtlp"}, ""},
 		{true, nil, "", []string{"global_cq3", "global_sq"}, "dbs not allow in the same statement"},
@@ -194,9 +199,7 @@ func (a *mockStmtTextAware) OriginalText() string {
 
 func checkRunTestCase(t *testing.T, i int, c *testDatabaseCheckerCase, sctx sessionctx.Context) error {
 	option := config.GetMCTechConfig()
-	checker := preps.NewMutuallyExclusiveDatabaseCheckerWithParamsForTest(
-		option.DbChecker.Mutex,
-		option.DbChecker.Exclude)
+	checker := preps.NewMutuallyExclusiveDatabaseCheckerWithParamsForTest(option.DbChecker.Mutex)
 
 	roles, err := preps.NewFlagRoles(c.tenantOnly, false, true)
 	if err != nil {

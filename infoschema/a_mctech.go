@@ -88,6 +88,8 @@ var mctechCrossDBLoadInfo = []columnInfo{
 	{name: "LOADED_DETAIL_SERVICE", tp: mysql.TypeVarchar, size: 512},
 	{name: "LOADED_DETAIL_PACKAGE", tp: mysql.TypeVarchar, size: 512},
 	{name: "LOADED_DETAIL_CROSS_DBS", tp: mysql.TypeVarchar, size: 1024},
+	{name: "LOADED_DETAIL_FILTER_GLOBAL", tp: mysql.TypeTiny, size: 1},
+	{name: "LOADED_DETAIL_FILTER_PATTERNS", tp: mysql.TypeVarchar, size: 1024},
 }
 
 func init() {

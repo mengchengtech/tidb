@@ -39,6 +39,7 @@ go_test(
     flaky = True,
     deps = [
         "//domain",
+        "//mctech",
         "//mctech/mock",
         "//parser/mysql",
         "//session",

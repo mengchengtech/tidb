@@ -1,5 +1,9 @@
 package worker
 
+import (
+	"github.com/pingcap/tidb/mctech"
+)
+
 var (
 	_ modifyWorkerScheduler[string, CrossDBInfo]    = &defaultCrossDBScheduler{}
 	_ modifyWorkerScheduler[string, DenyDigestInfo] = &defaultDigestScheduler{}
@@ -10,7 +14,22 @@ type modifyWorkerScheduler[TKey, TValue any] interface {
 	SetAll(all map[string]*TValue)
 }
 
-func CreateCrossDBDetail(crossDBGroups [][]string, name string, tp InvokerType, allowAllDBs bool) *CrossDBDetailData {
+func NewCrossDBInfo(allowAllDBs bool, patterns []string, groups []CrossDBGroup) *CrossDBInfo {
+	var filters []mctech.Filter
+	for _, filter := range patterns {
+		if exclude, ok := mctech.NewStringFilter(filter); ok {
+			filters = append(filters, exclude)
+		}
+	}
+
+	return &CrossDBInfo{
+		AllowAllDBs: allowAllDBs,
+		filters:     filters,
+		Groups:      groups,
+	}
+}
+
+func CreateCrossDBDetail(crossDBGroups [][]string, filters *FilterData, name string, tp InvokerType, allowAllDBs bool) *CrossDBDetailData {
 	var groupDatas []CrossDBGroupData
 	if len(crossDBGroups) > 0 {
 		groupDatas = make([]CrossDBGroupData, 0, len(crossDBGroups))
@@ -18,7 +37,7 @@ func CreateCrossDBDetail(crossDBGroups [][]string, name string, tp InvokerType, 
 			groupDatas = append(groupDatas, CrossDBGroupData{DBList: dbList})
 		}
 	}
-	detail := &CrossDBDetailData{AllowAllDBs: allowAllDBs, CrossDBGroups: groupDatas}
+	detail := &CrossDBDetailData{AllowAllDBs: allowAllDBs, CrossDBGroups: groupDatas, Filters: filters}
 	detail.init(name, tp)
 	return detail
 }
