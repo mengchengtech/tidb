@@ -67,7 +67,7 @@ type mctechFunctionInfo struct {
 
 var mctechFunctionHelps = []mctechFunctionInfo{
 	{
-		name: "mctech_sequence", shortName: "mc_seq", mutable: true,
+		name: ast.MCTechSequence, shortName: ast.MCSeq, mutable: true,
 		signatures: []signatureInfo{
 			{
 				description: "获取主键序列，与程序框架里获取主键序列的算法和来源相同",
@@ -80,7 +80,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 	},
 	{
 		hidden: true,
-		name:   "mctech_version_just_pass", shortName: "mc_version_just_pass",
+		name:   ast.MCTechVersionJustPass, shortName: ast.MCVersionJustPass,
 		signatures: []signatureInfo{
 			{
 				description: "获取一个比当前主键序列值的时间略小一点（目前是3秒）的值，一般用于查询中version过滤条件",
@@ -92,7 +92,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 		},
 	},
 	{
-		name: "mctech_decrypt", shortName: "mc_decrypt", mutable: true,
+		name: ast.MCTechDecrypt, shortName: ast.MCDecrypt, mutable: true,
 		signatures: []signatureInfo{
 			{
 				description: "解密自定义算法加密的字符串",
@@ -130,7 +130,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 		},
 	},
 	{
-		name: "mctech_encrypt", shortName: "mc_encrypt", mutable: true,
+		name: ast.MCTechEncrypt, shortName: ast.MCEncrypt, mutable: true,
 		signatures: []signatureInfo{{
 			description: "用自定义加密算法加密给定的字符串",
 			parameters:  []parameterInfo{{name: "plain", tp: "string", description: "需要加密的字符串"}},
@@ -141,7 +141,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 		}},
 	},
 	{
-		name: "mctech_sequence_decode", shortName: "mc_seq_decode", mutable: true,
+		name: ast.MCTechSequenceDecode, shortName: ast.MCSeqDecode, mutable: true,
 		signatures: []signatureInfo{{
 			description: "从序列值中提取时间信息，可用于了解生成该序列值的具体时间",
 			parameters:  []parameterInfo{{name: "seq", tp: "bigint", description: "由 mctech_sequence 方法，或代码框架中等效调用方式生成的序列值"}},
@@ -153,7 +153,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 	},
 	{
 		hidden: true,
-		name:   "mctech_get_full_sql", shortName: "mc_get_full_sql", mutable: true,
+		name:   ast.MCTechGetFullSQL, shortName: ast.MCGetFullSQL, mutable: true,
 		signatures: []signatureInfo{{
 			description: "获取sql执行信息中的保存在磁盘上的完整sql。仅限于在导入过sql执行信息的数据库上使用",
 			parameters: []parameterInfo{
@@ -164,12 +164,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 				tp:          "string",
 				description: "从磁盘上加载的完整sql。如果磁盘上找不到，则返回null",
 			},
-		}},
-	},
-	{
-		hidden: true,
-		name:   "mctech_get_full_sql", shortName: "mc_get_full_sql", mutable: true,
-		signatures: []signatureInfo{{
+		}, {
 			description: "获取sql执行信息中的保存在磁盘上的完整sql。仅限于在导入过sql执行信息的数据库上使用",
 			parameters: []parameterInfo{
 				{name: "at", tp: "datetime|string", description: "sql执行信息中'at'字段的值。"},
@@ -183,7 +178,7 @@ var mctechFunctionHelps = []mctechFunctionInfo{
 		}},
 	},
 	{
-		name: "mctech_get_data_warehouse_index_info", shortName: "mc_dw_index_info", mutable: false,
+		name: ast.MCTechDataWarehouseIndexInfo, shortName: ast.MCDWIndexInfo, mutable: false,
 		signatures: []signatureInfo{{
 			description: "获取数仓前后台库索引信息",
 			returnType: returnInfo{
@@ -201,7 +196,7 @@ func init() {
 	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 4}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
-	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 3}}
+	funcs[ast.MCGetFullSQL] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSQL, 2, 3}}
 	funcs[ast.MCDWIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
 	funcs[ast.MCHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
@@ -210,7 +205,7 @@ func init() {
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 4}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
-	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 3}}
+	funcs[ast.MCTechGetFullSQL] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSQL, 2, 3}}
 	funcs[ast.MCTechDataWarehouseIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
 	funcs[ast.MCTechHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
@@ -339,7 +334,7 @@ func (c *mctechVersionJustPassFunctionClass) getFunction(ctx BuildContext, args 
 	case 1:
 		argTps = append(argTps, types.ETInt)
 	default:
-		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_version_just_pass")
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs(c.funcName)
 	}
 	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETInt, argTps...)
 	if err != nil {
@@ -399,7 +394,7 @@ func (c *mctechDecryptFunctionClass) getFunction(ctx BuildContext, args []Expres
 	case 4:
 		argTps = append(argTps, types.ETString, types.ETInt, types.ETInt, types.ETString)
 	default:
-		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs(c.funcName)
 	}
 	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, argTps...)
 	if err != nil {
@@ -412,7 +407,7 @@ func (c *mctechDecryptFunctionClass) getFunction(ctx BuildContext, args []Expres
 		sig = &builtinMCTechDecryptAndMaskSig{bf}
 	default:
 		// Should never happens.
-		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs(c.funcName)
 	}
 	bf.tp.SetFlen(mysql.MaxFieldCharLength)
 	return sig, nil
@@ -602,7 +597,7 @@ func (c *mctechGetFullSQLFunctionClass) getFunction(ctx BuildContext, args []Exp
 	case 3:
 		argTps = append(argTps, types.ETDatetime, types.ETInt, types.ETString)
 	default:
-		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_get_full_sql")
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs(c.funcName)
 	}
 	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, argTps...)
 	if err != nil {
@@ -717,7 +712,7 @@ func (c *mctechHelpFunctionClass) getFunction(ctx BuildContext, args []Expressio
 	case 1:
 		argTps = append(argTps, types.ETInt)
 	default:
-		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_decrypt")
+		return nil, ErrIncorrectParameterCount.GenWithStackByArgs(c.funcName)
 	}
 	bf, err := newBaseBuiltinFuncWithTp(ctx, c.funcName, args, types.ETString, argTps...)
 	if err != nil {

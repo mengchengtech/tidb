@@ -243,9 +243,9 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 		// add by zhangbing
 		// mctech functions
 	case
-		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSql,
+		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSQL,
 		// 全名
-		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSql:
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSQL:
 		return false
 		// add end
 	}
@@ -407,9 +407,9 @@ func scalarExprSupportedByFlash(function *ScalarFunction) bool {
 		// add by zhangbing
 		// mctech functions
 	case
-		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSql,
+		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSQL,
 		// 全名
-		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSql:
+		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSQL:
 		return false
 		// add end
 	}
