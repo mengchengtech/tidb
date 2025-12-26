@@ -23,7 +23,7 @@ import (
 
 const cryptoPrefix = "{crypto}"
 
-var cryptoPfrefixLength = len(cryptoPrefix)
+var cryptoPrefixLength = len(cryptoPrefix)
 
 // CryptoClient crypto client
 type CryptoClient interface {
@@ -142,7 +142,7 @@ func (c *cryptoClient) Decrypt(content string) (s string, err error) {
 	}
 	//设置解密方式
 	blockMode := cipher.NewCBCDecrypter(block, c.iv)
-	cypher, err := base64.StdEncoding.DecodeString(content[cryptoPfrefixLength:])
+	cypher, err := base64.StdEncoding.DecodeString(content[cryptoPrefixLength:])
 	if err != nil {
 		return raw, err
 	}

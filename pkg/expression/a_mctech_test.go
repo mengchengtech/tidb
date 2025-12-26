@@ -184,7 +184,7 @@ func TestMCTechDecryptMask(t *testing.T) {
 
 func TestGetFullSqlWithNotConfig(t *testing.T) {
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx,
 			datumsToConstants(types.MakeDatums("2023-10-10 19:55:40", 0, 1697003594436)))
@@ -210,7 +210,7 @@ func TestGetFullSqlByTime1(t *testing.T) {
 	require.Equal(t, int64(1697003594437), unixMilli)
 	dt := types.NewTime(types.FromGoTime(at), mysql.TypeDatetime, 3)
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(dt, 1697003594435)))
 		require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestGetFullSqlByTime2(t *testing.T) {
 	require.Equal(t, int64(1697003594437), unixMilli)
 	dt := types.NewTime(types.FromGoTime(at), mysql.TypeDatetime, 3)
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(dt, 0, 1697003594435)))
 		require.NoError(t, err)
@@ -257,7 +257,7 @@ func TestGetFullSqlByString(t *testing.T) {
 
 	datetime := "2023-10-11 13:53:14.437"
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1234567890", "1697003594436", "pre")))
 		require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestGetFullSqlByStringAndGroup1(t *testing.T) {
 
 	datetime := "2023-10-11 13:53:14.437"
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "0", "1697003594437")))
 		require.NoError(t, err)
@@ -299,7 +299,7 @@ func TestGetFullSqlByStringAndGroup2(t *testing.T) {
 
 	datetime := "2023-10-11 13:53:14.437"
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1697003594437", "product")))
 		require.NoError(t, err)
@@ -320,7 +320,7 @@ func TestGetFullSqlNotExists(t *testing.T) {
 
 	datetime := "2099-10-11 13:53:14.437"
 	ctx := createContext(t)
-	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+	for _, name := range []string{ast.MCTechGetFullSQL, ast.MCGetFullSQL} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, 1234567890, 1697003594437, "product")))
 		require.NoError(t, err)
