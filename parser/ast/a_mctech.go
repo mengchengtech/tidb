@@ -22,7 +22,7 @@ const (
 	MCDecrypt         = "mc_decrypt"
 	MCEncrypt         = "mc_encrypt"
 	MCSeqDecode       = "mc_seq_decode"
-	MCGetFullSql      = "mc_get_full_sql"
+	MCGetFullSQL      = "mc_get_full_sql"
 	MCHelp            = "mc_help"
 	MCDWIndexInfo     = "mc_dw_index_info"
 
@@ -32,7 +32,7 @@ const (
 	MCTechDecrypt         = "mctech_decrypt"
 	MCTechEncrypt         = "mctech_encrypt"
 	MCTechSequenceDecode  = "mctech_sequence_decode"
-	MCTechGetFullSql      = "mctech_get_full_sql"
+	MCTechGetFullSQL      = "mctech_get_full_sql"
 	MCTechHelp            = "mctech_help"
 	// 获取数仓库的索引信息
 	MCTechDataWarehouseIndexInfo = "mctech_get_data_warehouse_index_info"
