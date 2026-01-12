@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/config"
 	"github.com/pingcap/tidb/pkg/mctech"
 	"github.com/pingcap/tidb/pkg/parser/ast"
@@ -67,29 +68,35 @@ func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast
 var ddlVisitor *_ddlExtension
 var ddlVisitorInitOne sync.Once
 
+func createDDLExtension() *_ddlExtension {
+	option := config.GetMCTechConfig()
+	e := &_ddlExtension{
+		versionEnabled: option.DDL.Version.Enabled,
+	}
+
+	if e.versionEnabled {
+		e.visitor = newDDLExtensionVisitor(option.DDL.Version.Name)
+		matchTexts := slices.Clone(option.DDL.Version.DbMatches)
+
+		for _, t := range matchTexts {
+			if filter, ok := mctech.NewStringFilter(t); ok {
+				e.filters = append(e.filters, filter)
+			}
+		}
+	}
+	return e
+}
 func getDDLExtension() *_ddlExtension {
+	failpoint.Inject("DDLExtension", func(_ failpoint.Value) {
+		failpoint.Return(createDDLExtension())
+	})
+
 	if ddlVisitor != nil {
 		return ddlVisitor
 	}
 
 	ddlVisitorInitOne.Do(func() {
-		option := config.GetMCTechConfig()
-		e := &_ddlExtension{
-			versionEnabled: option.DDL.Version.Enabled,
-		}
-
-		if e.versionEnabled {
-			e.visitor = newDDLExtensionVisitor(option.DDL.Version.Name)
-			matchTexts := slices.Clone(option.DDL.Version.DbMatches)
-
-			for _, t := range matchTexts {
-				if filter, ok := mctech.NewStringFilter(t); ok {
-					e.filters = append(e.filters, filter)
-				}
-			}
-		}
-
-		ddlVisitor = e
+		ddlVisitor = createDDLExtension()
 	})
 	return ddlVisitor
 }
