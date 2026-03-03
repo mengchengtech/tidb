@@ -287,7 +287,7 @@ func (g *globalValueInfo) Merge(other GlobalValueInfo) {
 	}
 	g.global = true
 	g.includes = slices.Clone(other.Includes())
-	g.includes = slices.Clone(other.Excludes())
+	g.excludes = slices.Clone(other.Excludes())
 }
 
 // FlagRoles custom roles
