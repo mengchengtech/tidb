@@ -40,8 +40,8 @@ type workerScheduler[TKey, TValue any] interface {
 // Scheduler scheduler interface
 type Scheduler interface {
 	Start()
-	Stop()
 	WaitStopped(ctx context.Context, timeout time.Duration) error
+	Stop()
 }
 
 type schedulerWrapper[TKey, TValue any] interface {
