@@ -998,6 +998,41 @@ func (do *Domain) Close() {
 			logutil.BgLogger().Warn("fail to wait until the ttl job manager stop", zap.Error(err))
 		}
 	}
+	// add by zhangbing
+	crossDBManager := do.crossDBManager.Load()
+	if crossDBManager != nil {
+		logutil.BgLogger().Info("stopping crossDBManager")
+		crossDBManager.mgr.Stop()
+		err := crossDBManager.mgr.WaitStopped(context.Background(), func() time.Duration {
+			if intest.InTest {
+				return 10 * time.Second
+			}
+			return 30 * time.Second
+		}())
+		if err != nil {
+			logutil.BgLogger().Warn("fail to wait until the cross db manager stop", zap.Error(err))
+		} else {
+			logutil.BgLogger().Info("crossDBManager exited.")
+		}
+	}
+
+	denyDigestManager := do.denyDigestManager.Load()
+	if denyDigestManager != nil {
+		logutil.BgLogger().Info("stopping denyDigestManager")
+		denyDigestManager.mgr.Stop()
+		err := denyDigestManager.mgr.WaitStopped(context.Background(), func() time.Duration {
+			if intest.InTest {
+				return 10 * time.Second
+			}
+			return 30 * time.Second
+		}())
+		if err != nil {
+			logutil.BgLogger().Warn("fail to wait until the deny digest manager stop", zap.Error(err))
+		} else {
+			logutil.BgLogger().Info("denyDigestManager exited.")
+		}
+	}
+	// add end
 	close(do.exit)
 	if do.etcdClient != nil {
 		terror.Log(errors.Trace(do.etcdClient.Close()))
