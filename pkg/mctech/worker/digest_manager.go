@@ -31,6 +31,8 @@ const (
 
 	updateDigestRequestSQL = "UPDATE %n.%n SET last_request_time = %? WHERE digest = %?"
 	selectDigestSQL        = "SELECT digest, expired_at from %n.%n where expired_at >= %?"
+	// SelectALLDigestSQL select all digest sql
+	SelectALLDigestSQL = "SELECT digest, created_at, expired_at, last_request_time, query_sql, remark from %n.%n"
 )
 
 const digestManagerLoopTickerInterval = 10 * time.Second
@@ -77,6 +79,15 @@ func (m *defaultDigestScheduler) GetAll() map[string]*DenyDigestInfo {
 		return nil
 	}
 	return maps.Clone(m.denyDigests)
+}
+
+func (m *defaultDigestScheduler) GetRawAll(ctx context.Context, se sqlexec.SQLExecutor) (rs sqlexec.RecordSet, err error) {
+	m.lck.RLock()
+	defer m.lck.RUnlock()
+	args := []any{
+		mysql.SystemDB, MCTechDenyDigest,
+	}
+	return se.ExecuteInternal(m.ctx, SelectALLDigestSQL, args...)
 }
 
 func (m *defaultDigestScheduler) UpdateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
@@ -157,6 +168,19 @@ func (m *DigestManager) Get(digest string) *DenyDigestInfo {
 // GetAll method inplements Scheduler interface
 func (m *DigestManager) GetAll() map[string]*DenyDigestInfo {
 	return m.Unwrap().GetAll()
+}
+
+// GetRawAll method inplements Scheduler interface
+func (m *DigestManager) GetRawAll(ctx context.Context) (sqlexec.RecordSet, error) {
+	wrapper := m.schedulerWrapper.(*defaultSchedulerWrapper[string, DenyDigestInfo])
+	var (
+		se  sqlexec.SQLExecutor
+		err error
+	)
+	if se, err = wrapper.getSQLExecutor(); err != nil {
+		return nil, err
+	}
+	return m.Unwrap().GetRawAll(ctx, se)
 }
 
 // NewDigestManager creates a new digest manager

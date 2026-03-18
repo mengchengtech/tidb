@@ -3,14 +3,20 @@
 package core_test
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pingcap/failpoint"
 	"github.com/pingcap/tidb/pkg/mctech/mock"
+	"github.com/pingcap/tidb/pkg/mctech/worker"
 	"github.com/pingcap/tidb/pkg/parser/auth"
 	"github.com/pingcap/tidb/pkg/testkit"
+	"github.com/pingcap/tidb/pkg/types"
+	"github.com/pingcap/tidb/pkg/util/sqlexec"
 	"github.com/stretchr/testify/require"
 )
 
@@ -46,6 +52,177 @@ func initSession(tk *testkit.TestKit, user string, roles ...string) {
 		}
 	}
 	vars.ActiveRoles = ar
+}
+
+func TestBuildMCTechCommon(t *testing.T) {
+	fullPath, err := filepath.Abs("../../mctech/udf/data")
+	require.NoError(t, err)
+	// unixMilli = 1697003594437
+	datetime := "2023-10-11 13:53:14.437"
+	failpoint.Enable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig",
+		mock.M(t, map[string]any{
+			"Tenant.Enabled":              true,
+			"DbChecker.Enabled":           true,
+			"SQLChecker.Enabled":          true,
+			"Metrics.SqlTrace.FullSqlDir": fullPath,
+		}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp",
+		mock.M(t, map[string]any{"DWIndex.Current": map[string]any{"current": 1}}),
+	)
+	failpoint.Enable("github.com/pingcap/tidb/pkg/session/mctech-ddl-upgrade", mock.M(t, "true"))
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/session/mctech-ddl-upgrade")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/config/GetMCTechConfig")
+	defer failpoint.Disable("github.com/pingcap/tidb/pkg/mctech/MockMctechHttp")
+
+	now := time.Now()
+	cases := []struct {
+		sql   string
+		check func(rs sqlexec.RecordSet)
+		mock  func(*testkit.TestKit)
+	}{
+		{
+			sql: "mctech show help",
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				value := row["Help_content"]
+				require.Contains(t, value, "FUNCTION::")
+				require.NotContains(t, value, "mctech_version_just_pass")
+			},
+		},
+		{
+			sql: "mctech show help true",
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				value := row["Help_content"]
+				require.Contains(t, value, "FUNCTION::")
+				require.Contains(t, value, "mctech_version_just_pass")
+			},
+		},
+		{
+			sql: "mctech show database constraints",
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 16)
+				rows := fetchResultsetRows(t, rs)
+				require.Len(t, rows, 4)
+				for _, row := range rows {
+					loadedAt, err := time.Parse("2006-01-02 15:04:05.000000", row["LOADED_AT"].(string))
+					require.NoError(t, err)
+					require.True(t, loadedAt.After(now))
+					delete(row, "LOADED_AT")
+				}
+				expect := []map[string]any{
+					{
+						"RULE_ID": uint64(1), "INVOKER_NAME": "*", "INVOKER_TYPE": "both", "ALLOW_ALL_DBS": uint64(0), "CROSS_DBS": "global_mtlp,global_ma", "ENABLED": uint64(1),
+						"REMARK": "同一条sql语句中允许同时使用给定的数据库", "LOADED_STATE": "success", "LOADED_MESSAGE": "Loaded Success", "LOADED_DETAIL_ALLOW_ALL_DBS": uint64(0),
+						"LOADED_DETAIL_SERVICE": "*", "LOADED_DETAIL_PACKAGE": "*", "LOADED_DETAIL_CROSS_DBS": "[global_mtlp global_ma]", "LOADED_DETAIL_FILTER_GLOBAL": nil,
+						"LOADED_DETAIL_FILTER_PATTERNS": nil,
+					},
+					{
+						"RULE_ID": uint64(2), "INVOKER_NAME": "*", "INVOKER_TYPE": "both", "ALLOW_ALL_DBS": uint64(0), "CROSS_DBS": "global_platform,global_ipm,*", "ENABLED": uint64(1),
+						"REMARK": "规则里其中一项为'*'时，其它数据库排除在任意规则检查之外", "LOADED_STATE": "success", "LOADED_MESSAGE": "Loaded Success", "LOADED_DETAIL_ALLOW_ALL_DBS": uint64(0),
+						"LOADED_DETAIL_SERVICE": "*", "LOADED_DETAIL_PACKAGE": "*", "LOADED_DETAIL_CROSS_DBS": "[]", "LOADED_DETAIL_FILTER_GLOBAL": uint64(1),
+						"LOADED_DETAIL_FILTER_PATTERNS": "[global_ipm global_platform]",
+					},
+					{
+						"RULE_ID": uint64(3), "INVOKER_NAME": "*", "INVOKER_TYPE": "both", "ALLOW_ALL_DBS": uint64(0), "CROSS_DBS": "global_dw_*,global_dwb,*", "ENABLED": uint64(1),
+						"REMARK": "规则里其中一项为'*'时，其它数据库排除在任意规则检查之外", "LOADED_STATE": "success", "LOADED_MESSAGE": "Loaded Success", "LOADED_DETAIL_ALLOW_ALL_DBS": uint64(0),
+						"LOADED_DETAIL_SERVICE": "*", "LOADED_DETAIL_PACKAGE": "*", "LOADED_DETAIL_CROSS_DBS": "[]", "LOADED_DETAIL_FILTER_GLOBAL": uint64(1),
+						"LOADED_DETAIL_FILTER_PATTERNS": "[global_dw_* global_dwb]",
+					},
+					{
+						"RULE_ID": uint64(4), "INVOKER_NAME": "@mctech/dp-impala-tidb-enhanced", "INVOKER_TYPE": "package", "ALLOW_ALL_DBS": uint64(1), "CROSS_DBS": "", "ENABLED": uint64(1),
+						"REMARK": "删除约束检查里跨库约束规则检查，需要允许任意配置的跨库规则", "LOADED_STATE": "success", "LOADED_MESSAGE": "Loaded Success", "LOADED_DETAIL_ALLOW_ALL_DBS": uint64(1),
+						"LOADED_DETAIL_SERVICE": "", "LOADED_DETAIL_PACKAGE": "@mctech/dp-impala-tidb-enhanced", "LOADED_DETAIL_CROSS_DBS": "[]", "LOADED_DETAIL_FILTER_GLOBAL": nil,
+						"LOADED_DETAIL_FILTER_PATTERNS": nil,
+					},
+				}
+				require.Equal(t, expect, rows)
+			},
+		},
+		{
+			sql: fmt.Sprintf("mctech show full_sql '%s' %d %d", datetime, 0, 1697003594435),
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				value := row["SQL_content"]
+				require.Contains(t, value, "UPDATE gdcd_project_subcontract_bill_account")
+			},
+		},
+		{
+			sql: fmt.Sprintf("mctech show full_sql '%s' %d %d 'product'", datetime, 0, 1697003594437),
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				value := row["SQL_content"]
+				require.Contains(t, value, "UPDATE gdcd_project_subcontract_bill_account")
+			},
+		},
+		{
+			sql: fmt.Sprintf("mctech show full_sql '%s' %d %d", datetime, 1, 10),
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				expect := map[string]any{"SQL_content": nil}
+				require.Equal(t, expect, row)
+			},
+		},
+		{
+			sql: "mctech show dw_index",
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				value := row["Index_content"]
+				require.Contains(t, value, `{"background":`)
+			},
+		},
+		{
+			sql: "mctech seq_decode 1310341421945856",
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 1)
+				row := fetchResultsetFirstRow(t, rs)
+				value := row["Seq_Decode_value"]
+				require.Equal(t, "2022-07-07 14:16:41.964000", value)
+			},
+		},
+		{
+			sql: "mctech show deny_digest",
+			check: func(rs sqlexec.RecordSet) {
+				require.Len(t, rs.Fields(), 6)
+				row := fetchResultsetFirstRow(t, rs)
+				expect := map[string]any{
+					"DIGEST":            "123456",
+					"CREATED_AT":        "2026-01-05 12:31:05",
+					"EXPIRED_AT":        nil,
+					"LAST_REQUEST_TIME": "2026-02-15 02:11:05",
+					"QUERY_SQL":         "select 1",
+					"REMARK":            "this is a test",
+				}
+				require.Equal(t, expect, row)
+			},
+			mock: func(tk *testkit.TestKit) {
+				tk.MustExec(fmt.Sprintf(
+					`insert into mysql.%s
+					(digest, created_at, expired_at, last_request_time, query_sql, remark)
+					values ('123456', '2026-01-05 12:31:05', null, '2026-02-15 02:11:05', 'select 1', 'this is a test')
+					`, worker.MCTechDenyDigest))
+			},
+		},
+	}
+
+	store := testkit.CreateMockStore(t)
+	tk := testkit.NewTestKit(t, store)
+
+	for _, c := range cases {
+		if c.mock != nil {
+			c.mock(tk)
+		}
+		rs, err := tk.Exec(c.sql)
+		require.NoError(t, err)
+		c.check(rs)
+	}
 }
 
 func TestBuildMCTechTenantEnabled(t *testing.T) {
@@ -214,4 +391,40 @@ func testCase(t *testing.T, tk *testkit.TestKit, db string, sql string, tenantEn
 	expected := fmt.Sprintf(c.expected, db, db, tenantCondition)
 	res := tk.MustQuery(strings.Join(lst, "\n"))
 	res.Check(testkit.RowsWithSep("|", expected))
+}
+
+func fetchResultsetRows(t *testing.T, rs sqlexec.RecordSet) []map[string]any {
+	rawRows, err := sqlexec.DrainRecordSet(context.Background(), rs, 1024)
+	require.NoError(t, err)
+	rows := []map[string]any{}
+	fields := rs.Fields()
+	for _, rawRow := range rawRows {
+		row := map[string]any{}
+		for index, field := range fields {
+			dt := rawRow.GetDatum(index, &field.Column.FieldType)
+			var value any
+			if !dt.IsNull() {
+				v := dt.GetValue()
+				switch x := v.(type) {
+				case types.BinaryJSON:
+					v = x.String()
+				case types.Time:
+					v = x.String()
+				case types.Enum:
+					v = x.String()
+				}
+				value = v
+			}
+			fieldName := field.Column.Name.O
+			row[fieldName] = value
+		}
+		rows = append(rows, row)
+	}
+	return rows
+}
+
+func fetchResultsetFirstRow(t *testing.T, rs sqlexec.RecordSet) map[string]any {
+	rows := fetchResultsetRows(t, rs)
+	require.Len(t, rows, 1)
+	return rows[0]
 }

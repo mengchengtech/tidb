@@ -506,6 +506,11 @@ func (m *defaultCrossDBScheduler) ReloadAll(se sqlexec.SQLExecutor) error {
 	return nil
 }
 
+func (m *defaultCrossDBScheduler) GetRawAll(_ context.Context, _ sqlexec.SQLExecutor) (sqlexec.RecordSet, error) {
+	// 没有对应的物理表，直接返回空
+	return nil, nil
+}
+
 func (m *defaultCrossDBScheduler) UpdateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {
 	// 什么也不做
 	return nil
