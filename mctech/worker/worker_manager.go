@@ -33,6 +33,7 @@ type workerScheduler[TKey, TValue any] interface {
 	Get(key TKey) *TValue
 	GetAll() map[string]*TValue
 	ReloadAll(se sqlexec.SQLExecutor) error
+	GetRawAll(ctx context.Context, se sqlexec.SQLExecutor) (sqlexec.RecordSet, error)
 	UpdateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error
 }
 
@@ -80,6 +81,10 @@ func (s *nonWorkerScheduler[TKey, TValue]) SetAll(all map[string]*TValue) {
 
 func (s *nonWorkerScheduler[TKey, TValue]) ReloadAll(se sqlexec.SQLExecutor) error {
 	return nil
+}
+
+func (s *nonWorkerScheduler[TKey, TValue]) GetRawAll(ctx context.Context, se sqlexec.SQLExecutor) (sqlexec.RecordSet, error) {
+	return nil, nil
 }
 
 func (s *nonWorkerScheduler[TKey, TValue]) UpdateHeartBeat(ctx context.Context, se sqlexec.SQLExecutor) error {

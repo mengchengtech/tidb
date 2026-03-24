@@ -9,6 +9,7 @@ import (
 	mcworker "github.com/pingcap/tidb/mctech/worker"
 	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/logutil"
+	"github.com/pingcap/tidb/util/sqlexec"
 	"go.uber.org/zap"
 )
 
@@ -16,6 +17,7 @@ import (
 type DenyDigestManager interface {
 	// Get 是否拒绝执行 digest 对应的sql
 	Get(digest string) *mcworker.DenyDigestInfo
+	GetRawAll(ctx context.Context) (sqlexec.RecordSet, error)
 }
 
 type denyDigestManager struct {
@@ -24,6 +26,10 @@ type denyDigestManager struct {
 
 func (m *denyDigestManager) Get(digest string) *mcworker.DenyDigestInfo {
 	return m.mgr.Get(digest)
+}
+
+func (m *denyDigestManager) GetRawAll(ctx context.Context) (sqlexec.RecordSet, error) {
+	return m.mgr.GetRawAll(ctx)
 }
 
 // CrossDBManager CrossDBManager interface

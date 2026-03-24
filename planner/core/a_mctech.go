@@ -10,11 +10,15 @@ import (
 	"time"
 
 	"github.com/pingcap/errors"
+	"github.com/pingcap/failpoint"
 	"github.com/pingcap/kvproto/pkg/coprocessor"
 	"github.com/pingcap/tidb/config"
+	"github.com/pingcap/tidb/domain"
 	"github.com/pingcap/tidb/expression"
 	"github.com/pingcap/tidb/kv"
 	"github.com/pingcap/tidb/mctech"
+	"github.com/pingcap/tidb/mctech/udf"
+	"github.com/pingcap/tidb/mctech/worker"
 	"github.com/pingcap/tidb/parser/ast"
 	"github.com/pingcap/tidb/parser/format"
 	"github.com/pingcap/tidb/parser/mysql"
@@ -25,6 +29,7 @@ import (
 	"github.com/pingcap/tidb/util/codec"
 	"github.com/pingcap/tidb/util/intest"
 	"github.com/pingcap/tidb/util/rowcodec"
+	"github.com/pingcap/tidb/util/sqlexec"
 	"golang.org/x/exp/slices"
 )
 
@@ -104,9 +109,7 @@ func fetchMinimumParamCount(markers []ast.ParamMarkerExpr) int {
 
 func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan, error) {
 	p := &MCTech{
-		Format:   stmt.ShowDesc.Format,
-		Stmt:     stmt,
-		ExecStmt: stmt.ShowDesc.Stmt,
+		Stmt: stmt,
 	}
 	p.ctx = b.ctx
 	return p, p.prepareSchema()
@@ -116,10 +119,8 @@ func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan
 type MCTech struct {
 	baseSchemaProducer
 
-	Format   string
-	Stmt     ast.StmtNode // mctech 语句本身
-	ExecStmt ast.StmtNode // mctech 包含的子语句
-	Rows     [][]*types.Datum
+	Stmt *ast.MCTechStmt // mctech 语句本身
+	Rows [][]*types.Datum
 }
 
 type columnDef struct {
@@ -133,72 +134,250 @@ func getDefaultFieldLength(tp byte) int {
 	return flen
 }
 
-var columnDefs = []*columnDef{
-	{"global", mysql.TypeTiny, 1},
-	{"excludes", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"includes", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"comments", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"tenant", mysql.TypeVarchar, 50},
-	{"tenant_from", mysql.TypeVarchar, 10},
-	{"db", mysql.TypeVarchar, 50},
-	{"dbs", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"tables", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"dw_index", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"params", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
-	{"prepared_sql", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
-}
-
 // prepareSchema prepares mctech's result schema.
-func (e *MCTech) prepareSchema() error {
-	format := strings.ToLower(e.Format)
-	if format == types.ExplainFormatTraditional {
-		format = types.ExplainFormatROW
-		e.Format = types.ExplainFormatROW
-	}
-	switch format {
-	case types.ExplainFormatROW:
-		length := len(columnDefs)
-		cwn := &columnsWithNames{
-			cols:  make([]*expression.Column, 0, length),
-			names: make([]*types.FieldName, 0, length),
-		}
-
-		for _, def := range columnDefs {
-			column, field := buildColumnWithName("", def.name, def.colType, def.size)
-			cwn.Append(column, field)
-		}
-		e.SetSchema(cwn.col2Schema())
-		e.names = cwn.names
+func (m *MCTech) prepareSchema() error {
+	var columnDefs []*columnDef
+	switch m.Stmt.Type {
+	case ast.MCTechStmtOpShowDenyDigest:
+		columnDefs = m.getShowDenyDigestResultsetColumns()
+	case ast.MCTechStmtOpShowFullSQL:
+		columnDefs = m.getShowFullSQLResultsetColumns()
+	case ast.MCTechStmtOpShowDWIndex:
+		columnDefs = m.getShowDWIndexResultsetColumns()
+	case ast.MCTechStmtOpDesc:
+		columnDefs = m.getDescResultsetColumns()
+	case ast.MCTechStmtOpShowHelp:
+		columnDefs = m.getShowHelpResultsetColumns()
+	case ast.MCTechStmtOpShowDatabaseConstraints:
+		columnDefs = m.getShowDatabaseConstraintsResultsetColumns()
+	case ast.MCTechStmtOpSeqDecode:
+		columnDefs = m.getSequenceDecodeResultsetColumns()
 	default:
-		return errors.Errorf("mctech format '%s' is not supported now", e.Format)
+		return fmt.Errorf("unknown MCTECH statement type: %v", m.Stmt.Type)
 	}
+
+	length := len(columnDefs)
+	cwn := &columnsWithNames{
+		cols:  make([]*expression.Column, 0, length),
+		names: make([]*types.FieldName, 0, length),
+	}
+
+	for _, def := range columnDefs {
+		column, field := buildColumnWithName("", def.name, def.colType, def.size)
+		cwn.Append(column, field)
+	}
+	m.SetSchema(cwn.col2Schema())
+	m.names = cwn.names
 	return nil
 }
 
 // RenderResult renders the mctech result as specified format.
-func (e *MCTech) RenderResult(_ context.Context) error {
-	switch strings.ToLower(e.Format) {
-	case types.ExplainFormatROW:
-		if err := e.mctechPlanInRowFormat(); err != nil {
-			return err
-		}
+func (m *MCTech) RenderResult(ctx context.Context) (err error) {
+	switch m.Stmt.Type {
+	case ast.MCTechStmtOpShowDenyDigest:
+		err = m.getShowDenyDigestResultsetRows(ctx)
+	case ast.MCTechStmtOpShowFullSQL:
+		err = m.renderShowFullSQLResultsetRows()
+	case ast.MCTechStmtOpShowDWIndex:
+		err = m.renderShowDWIndexResultsetRows()
+	case ast.MCTechStmtOpDesc:
+		err = m.renderDescResultsetRows()
+	case ast.MCTechStmtOpShowHelp:
+		err = m.renderShowHelpResultsetRows()
+	case ast.MCTechStmtOpShowDatabaseConstraints:
+		err = m.renderShowDatabaseConstraintsResultsetRows()
+	case ast.MCTechStmtOpSeqDecode:
+		err = m.renderSequenceDecodeResultsetRows()
 	default:
-		return errors.Errorf("mctech format '%s' is not supported now", e.Format)
+		return fmt.Errorf("unknown MCTECH statement type: %v", m.Stmt.Type)
+	}
+	return err
+}
+
+func (m *MCTech) getShowDenyDigestResultsetColumns() []*columnDef {
+	return []*columnDef{
+		{"DIGEST", mysql.TypeString, 64},
+		{"CREATED_AT", mysql.TypeDatetime, getDefaultFieldLength(mysql.TypeDatetime)},
+		{"EXPIRED_AT", mysql.TypeDatetime, getDefaultFieldLength(mysql.TypeDatetime)},
+		{"LAST_REQUEST_TIME", mysql.TypeDatetime, getDefaultFieldLength(mysql.TypeDatetime)},
+		{"QUERY_SQL", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
+		{"REMARK", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
+	}
+}
+
+func (m *MCTech) getShowFullSQLResultsetColumns() []*columnDef {
+	return []*columnDef{
+		{"SQL_content", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
+	}
+}
+
+func (m *MCTech) getShowDWIndexResultsetColumns() []*columnDef {
+	return []*columnDef{
+		{"Index_content", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+	}
+}
+
+func (m *MCTech) getDescResultsetColumns() (columnDefs []*columnDef) {
+	return []*columnDef{
+		{"GLOBAL", mysql.TypeTiny, 1},
+		{"EXCLUDES", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"INCLUDES", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"COMMENTS", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"TENANT", mysql.TypeVarchar, 50},
+		{"TENANT_FROM", mysql.TypeVarchar, 10},
+		{"DB", mysql.TypeVarchar, 50},
+		{"DBS", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"TABLES", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"DW_INDEX", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"PARAMS", mysql.TypeJSON, getDefaultFieldLength(mysql.TypeJSON)},
+		{"PREPARED_SQL", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
+	}
+}
+
+func (m *MCTech) getShowHelpResultsetColumns() (columnDefs []*columnDef) {
+	return []*columnDef{
+		{"Help_content", mysql.TypeString, getDefaultFieldLength(mysql.TypeString)},
+	}
+}
+
+func (m *MCTech) getSequenceDecodeResultsetColumns() (columnDefs []*columnDef) {
+	return []*columnDef{
+		{"Seq_Decode_value", mysql.TypeDatetime, getDefaultFieldLength(mysql.TypeDatetime)},
+	}
+}
+
+func (m *MCTech) getShowDatabaseConstraintsResultsetColumns() (columnDefs []*columnDef) {
+	return []*columnDef{
+		{"RULE_ID", mysql.TypeLonglong, 21},
+		{"INVOKER_NAME", mysql.TypeVarchar, 128},
+		{"INVOKER_TYPE", mysql.TypeEnum, 26},
+		{"ALLOW_ALL_DBS", mysql.TypeTiny, 1},
+		{"CROSS_DBS", mysql.TypeVarchar, 1024},
+		{"ENABLED", mysql.TypeTiny, 1},
+		{"REMARK", mysql.TypeVarchar, 512},
+		{"LOADED_AT", mysql.TypeDatetime, 19},
+		{"LOADED_STATE", mysql.TypeEnum, 26},
+		{"LOADED_MESSAGE", mysql.TypeVarchar, 512},
+		{"LOADED_DETAIL_ALLOW_ALL_DBS", mysql.TypeTiny, 1},
+		{"LOADED_DETAIL_SERVICE", mysql.TypeVarchar, 512},
+		{"LOADED_DETAIL_PACKAGE", mysql.TypeVarchar, 512},
+		{"LOADED_DETAIL_CROSS_DBS", mysql.TypeVarchar, 1024},
+		{"LOADED_DETAIL_FILTER_GLOBAL", mysql.TypeTiny, 1},
+		{"LOADED_DETAIL_FILTER_PATTERNS", mysql.TypeVarchar, 1024},
+	}
+}
+
+func (m *MCTech) getShowDenyDigestResultsetRows(ctx context.Context) (err error) {
+	if !config.GetMCTechConfig().SQLChecker.Enabled {
+		// 禁用检查的时候返回空数据
+		return nil
+	}
+
+	dom := domain.GetDomain(m.SCtx())
+	var (
+		mgr domain.DenyDigestManager
+		ok  bool
+	)
+	if mgr, ok = dom.DenyDigestManager(); !ok {
+		return nil
+	}
+	var (
+		rs   sqlexec.RecordSet
+		rows []chunk.Row
+	)
+	if rs, err = mgr.GetRawAll(ctx); err != nil {
+		return err
+	}
+	// drain recordset to release resource
+	if rows, err = sqlexec.DrainRecordSet(ctx, rs, 1024); err != nil {
+		return err
+	}
+	for _, r := range rows {
+		datumRows := r.GetDatumRow([]*types.FieldType{
+			types.NewFieldType(mysql.TypeString),   // DIGEST
+			types.NewFieldType(mysql.TypeDatetime), // CREATED_AT
+			types.NewFieldType(mysql.TypeDatetime), // EXPIRED_AT
+			types.NewFieldType(mysql.TypeDatetime), // LAST_REQUEST_TIME
+			types.NewFieldType(mysql.TypeString),   // QUERY_SQL
+			types.NewFieldType(mysql.TypeString),   // REMARK
+		})
+		var row = make([]*types.Datum, 0, len(datumRows))
+		for i := range datumRows {
+			row = append(row, &datumRows[i])
+		}
+		m.Rows = append(m.Rows, row)
 	}
 	return nil
 }
 
-// explainPlanInRowFormat generates mctech information for root-tasks.
-func (e *MCTech) mctechPlanInRowFormat() (err error) {
+func (m *MCTech) renderShowFullSQLResultsetRows() (err error) {
+	opt := m.Stmt.ShowFullSQL
+	var runAt types.Datum
+	runAt, err = expression.GetTimeValue(m.SCtx(), opt.RunAt, mysql.TypeDatetime, mysql.MaxDatetimeWidthWithFsp, time.Local)
+	if err != nil {
+		return fmt.Errorf("invalid run_at value: %s. %v", opt.RunAt, err)
+	}
+	var (
+		sql    string
+		isNull bool
+	)
+	if sql, isNull, err = udf.GetFullSQL(runAt.GetMysqlTime(), opt.RunConnID, opt.RunTxID, opt.Group); err != nil {
+		return fmt.Errorf("show full_sql failed: %v", err)
+	}
+
+	var content *string
+	if !isNull {
+		content = &sql
+	}
+	var row = []*types.Datum{
+		createDatumByPrimitivePt(content),
+	}
+	m.Rows = append(m.Rows, row)
+	return nil
+}
+
+func (m *MCTech) renderShowDWIndexResultsetRows() (err error) {
+	var (
+		sctx sessionctx.Context = m.SCtx()
+		mctx mctech.Context
+	)
+	if mctx, err = mctech.GetContext(sctx); err != nil {
+		return err
+	}
+	var (
+		info *mctech.DWIndexInfo
+	)
+	if info, err = mctx.GetDWIndexInfo(); err != nil {
+		return fmt.Errorf("show dw_index: %v", err)
+	}
+	var row = []*types.Datum{
+		createDatumByObject(info.ToMap()),
+	}
+	m.Rows = append(m.Rows, row)
+	return nil
+}
+
+func (m *MCTech) renderDescResultsetRows() (err error) {
+	opt := m.Stmt.ShowDesc
+	opt.Format = strings.ToLower(opt.Format)
+	if opt.Format == types.ExplainFormatTraditional {
+		opt.Format = types.ExplainFormatROW
+	}
+	if strings.ToLower(opt.Format) != types.ExplainFormatROW {
+		return errors.Errorf("mctech format '%s' is not supported now", opt.Format)
+	}
+
+	sctx := m.SCtx()
+
 	var mctx mctech.Context
-	if mctx, err = mctech.GetContext(e.SCtx()); err != nil {
+	if mctx, err = mctech.GetContext(sctx); err != nil {
 		return err
 	}
 
 	// "global", "excludes", "tenant", "tenant_from_role", "dw_index", "params", "prepared_sql"
 	var sb strings.Builder
 	restoreCtx := format.NewRestoreCtx(format.DefaultRestoreFlags|format.RestoreBracketAroundBinaryOperation, &sb)
-	err = e.ExecStmt.Restore(restoreCtx)
+	err = m.Stmt.ShowDesc.Stmt.Restore(restoreCtx)
 	if err != nil {
 		return err
 	}
@@ -211,7 +390,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		tenant     *string
 		tenantFrom *string
 		params     map[string]any
-		db         = e.SCtx().GetSessionVars().CurrentDB
+		db         = m.SCtx().GetSessionVars().CurrentDB
 		dbs        []string
 		tables     []mctech.TableName
 		index      map[string]any
@@ -248,7 +427,7 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 				index = info.ToMap()
 			}
 		}
-		if schema, exists := mctx.GetSchema(e.Stmt); exists {
+		if schema, exists := mctx.GetSchema(m.Stmt); exists {
 			dbs = schema.Databases
 			tables = schema.Tables
 		}
@@ -268,7 +447,92 @@ func (e *MCTech) mctechPlanInRowFormat() (err error) {
 		createDatumByObject(params),
 		createDatum(restoreSQL),
 	}
-	e.Rows = append(e.Rows, row)
+	m.Rows = append(m.Rows, row)
+	return nil
+}
+
+func (m *MCTech) renderShowHelpResultsetRows() (err error) {
+	content := expression.GetHelpContent(m.Stmt.ShowHelp.ShowHidden)
+	var row = []*types.Datum{
+		createDatum(content),
+	}
+	m.Rows = append(m.Rows, row)
+	return nil
+}
+
+func (m *MCTech) renderSequenceDecodeResultsetRows() (err error) {
+	var msec int64
+	if msec, err = udf.SequenceDecode(m.Stmt.SeqDecode.SeqValue); err != nil {
+		return fmt.Errorf("decode sequence %v failed: %v", m.Stmt.SeqDecode.SeqValue, err)
+	}
+	unixTime := time.UnixMilli(msec)
+	var row = []*types.Datum{
+		createDatumByTime(unixTime),
+	}
+	m.Rows = append(m.Rows, row)
+	return nil
+}
+
+func (m *MCTech) renderShowDatabaseConstraintsResultsetRows() (err error) {
+	if !config.GetMCTechConfig().DbChecker.Enabled {
+		// 禁用检查的时候返回空数据
+		return nil
+	}
+
+	do := domain.GetDomain(m.SCtx())
+	var results []*worker.LoadedRuleResult
+	if mgr, ok := do.CrossDBManager(); ok {
+		results = mgr.GetLoadedResults()
+	}
+
+	if len(results) > 0 {
+		failpoint.Inject("inject-loaded-at", func(v failpoint.Value) {
+			at := time.UnixMilli(int64(v.(int)))
+			for _, result := range results {
+				if !at.After(result.Data.LoadedAt) {
+					result.Data.LoadedAt = at
+				}
+			}
+		})
+		for _, result := range results {
+			var row = []*types.Datum{
+				createDatum(result.ID),                   // RULE_ID
+				createDatum(result.InvokerName),          // INVOKER_NAME
+				createDatum(result.InvokerType.ToEnum()), // INVOKER_TYPE
+				createDatum(result.AllowAllDBs),          // ALLOW_ALL_DBS
+				createDatum(result.CrossDBs),             // CROSS_DBS
+				createDatum(result.Enabled),              // ENABLED
+				createDatum(result.Remark),               // REMARK
+				createDatumByTime(result.Data.LoadedAt),  // LOADED_AT
+				createDatum(result.Data.State.ToEnum()),  // LOADED_STATE
+				createDatum(result.Data.Message),         // LOADED_MESSAGE
+			}
+
+			detail := result.Data.Detail
+			index := len(row)
+			row = append(row, nil, nil, nil, nil, nil, nil)
+			if detail != nil {
+				filters := detail.Filters
+				crossDBGroups := make([]string, 0, len(detail.CrossDBGroups))
+				for _, gp := range detail.CrossDBGroups {
+					crossDBGroups = append(crossDBGroups, gp.DBList...)
+				}
+				row[index+0] = createDatum(detail.AllowAllDBs)               // LOADED_DETAIL_ALLOW_ALL_DBS
+				row[index+1] = createDatum(detail.Service)                   // LOADED_DETAIL_SERVICE
+				row[index+2] = createDatum(detail.Package)                   // LOADED_DETAIL_PACKAGE
+				row[index+3] = createDatum(fmt.Sprintf("%v", crossDBGroups)) // LOADED_DETAIL_CROSS_DBS
+
+				if filters != nil {
+					row[index+4] = createDatum(filters.Global)                      // LOADED_DETAIL_FILTER_GLOBAL
+					row[index+5] = createDatum(fmt.Sprintf("%v", filters.Patterns)) // LOADED_DETAIL_FILTER_PATTERNS
+				} else {
+					row[index+4] = createDatum(nil)
+					row[index+5] = createDatum(nil)
+				}
+			}
+			m.Rows = append(m.Rows, row)
+		}
+	}
 	return nil
 }
 
@@ -284,6 +548,12 @@ func createDatumByPrimitivePt[T any](value *T) *types.Datum {
 	} else {
 		d.SetValueWithDefaultCollation(*value)
 	}
+	return d
+}
+
+func createDatumByTime(value time.Time) *types.Datum {
+	d := &types.Datum{}
+	d.SetMysqlTime(types.NewTime(types.FromGoTime(value), mysql.TypeDatetime, types.MaxFsp))
 	return d
 }
 

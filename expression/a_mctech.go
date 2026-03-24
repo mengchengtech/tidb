@@ -795,6 +795,11 @@ func (b *builtinMCTechHelpSig) evalString(row chunk.Row) (string, bool, error) {
 		showHidden = val != 0
 	}
 
+	return GetHelpContent(showHidden), false, nil
+}
+
+// GetHelpContent gets the help content of mctech functions. If showHidden is false, hidden functions will be filtered out.
+func GetHelpContent(showHidden bool) string {
 	lst := []string{}
 	for i, item := range mctechFunctionHelps {
 		if item.hidden && !showHidden {
@@ -830,7 +835,7 @@ func (b *builtinMCTechHelpSig) evalString(row chunk.Row) (string, bool, error) {
 		}
 	}
 
-	return strings.Join(lst, "\n"), false, nil
+	return strings.Join(lst, "\n")
 }
 
 // --------------------------------------------------------------
