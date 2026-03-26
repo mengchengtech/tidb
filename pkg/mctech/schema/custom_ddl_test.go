@@ -236,15 +236,18 @@ func TestInsertSelectUseSequenceTest(t *testing.T) {
 	store := testkit.CreateMockStore(t)
 	tk := initMock(t, store)
 
-	tk.MustExec("create table t1 (id int primary key, c1 bigint not null)")
+	tk.MustExec("create table t1 (id int primary key, c1 bigint not null, c2 bigint not null)")
 	tk.MustExec("create table t2 (id int)")
 	tk.MustExec(`insert into t2 (id) values (1),(2)`)
-	tk.MustExec(`insert into t1 (id, c1) select id, mc_seq() from t2`)
-	res := tk.MustQuery("select id, c1 from t1")
+	tk.MustExec(`insert into t1 (id, c1, c2) select id, mc_seq(),mc_version_just_pass() from t2`)
+	res := tk.MustQuery("select id, c1, c2 from t1")
 	rows := res.Rows()
 	seqs := map[string]any{}
+	justpass := map[string]any{}
 	for _, row := range rows {
 		seqs[row[1].(string)] = true
+		justpass[row[2].(string)] = true
 	}
 	require.Len(t, seqs, len(rows))
+	require.Len(t, justpass, 1)
 }
