@@ -1115,14 +1115,6 @@ func scalarExprSupportedByTiKV(sf *ScalarFunction) bool {
 			return false
 		}
 		return true
-		// add by zhangbing
-		// mctech functions
-	case
-		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSQL,
-		// 全名
-		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSQL:
-		return false
-		// add end
 	}
 	return false
 }
@@ -1289,14 +1281,6 @@ func scalarExprSupportedByFlash(function *ScalarFunction) bool {
 		return true
 	case ast.IsIPv4, ast.IsIPv6:
 		return true
-		// add by zhangbing
-		// mctech functions
-	case
-		ast.MCSeq, ast.MCVersionJustPass, ast.MCDecrypt, ast.MCEncrypt, ast.MCSeqDecode, ast.MCGetFullSQL,
-		// 全名
-		ast.MCTechSequence, ast.MCTechVersionJustPass, ast.MCTechDecrypt, ast.MCTechEncrypt, ast.MCTechSequenceDecode, ast.MCTechGetFullSQL:
-		return false
-		// add end
 	}
 	return false
 }
