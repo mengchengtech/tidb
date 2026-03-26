@@ -27,11 +27,10 @@ import (
 type interceptor struct{}
 
 const (
-	timeFormat        = "2006-01-02 15:04:05.000"
-	ellipsis          = "......"
-	sqlPrefixLen      = 100 // 生成sql片断时，前面至少保留的字符数
-	sqlSuffixLen      = 100 // 生成sql片断时，后面至少保留的字符数
-	sqlReserveBothLen = sqlPrefixLen + sqlSuffixLen
+	timeFormat   = "2006-01-02 15:04:05.000"
+	ellipsis     = "......"
+	sqlPrefixLen = 100 // 生成sql片断时，前面至少保留的字符数
+	sqlSuffixLen = 100 // 生成sql片断时，后面至少保留的字符数
 )
 
 func init() {
