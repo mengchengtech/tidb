@@ -671,6 +671,9 @@ type SessionVarsProvider interface {
 
 // SessionVars is to handle user-defined or global variables in the current session.
 type SessionVars struct {
+	// add by zhangbing
+	MCTechSessionVars
+	// add end
 	Concurrency
 	MemQuota
 	BatchSize
