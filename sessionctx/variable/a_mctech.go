@@ -109,7 +109,17 @@ const (
 	MCTechMetricsIgnoreByRoles = "mctech_metrics_ignore_by_roles"
 	// MCTechMetricsIgnoreByDatabases is one of mctech config items
 	MCTechMetricsIgnoreByDatabases = "mctech_metrics_ignore_by_databases"
+
+	// MCTechInjection is one of mctech variables
+	MCTechInjection = "mctech_injection"
+	// MCTechCerburusProxy is one of mctech variables
+	MCTechCerburusProxy = "mctech_cerburus_proxy"
 )
+
+// MCTechSessionVars MCTech SessionVars
+type MCTechSessionVars struct {
+	CerburusProxy bool
+}
 
 var varMutex sync.Mutex
 
@@ -244,6 +254,11 @@ func init() {
 				return nil
 			},
 		},
+		{Scope: ScopeNone, Name: MCTechInjection, Value: BoolToOnOff(true)},
+		{Scope: ScopeSession, Name: MCTechCerburusProxy, Type: TypeStr, Value: BoolToOnOff(false), SetSession: func(s *SessionVars, val string) error {
+			s.CerburusProxy = TiDBOptOn(val)
+			return nil
+		}},
 	}
 
 	defaultSysVars = append(defaultSysVars, mctechSysVars...)

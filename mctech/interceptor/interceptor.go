@@ -43,6 +43,10 @@ func (*interceptor) BeforeParseSQL(sctx sessionctx.Context, sql string) (mctech.
 		return nil, "", err
 	}
 
+	if sctx.GetSessionVars().CerburusProxy {
+		// 如果前端启用了cerberus代理，当前不再重复处理
+		return mctx, sql, nil
+	}
 	handler := mctech.GetHandler()
 	if sql, err = handler.ParseSQL(mctx, sql); err != nil {
 		mctx.Clear()
@@ -53,6 +57,10 @@ func (*interceptor) BeforeParseSQL(sctx sessionctx.Context, sql string) (mctech.
 }
 
 func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (err error) {
+	if sctx.GetSessionVars().CerburusProxy {
+		// 如果前端启用了cerberus代理，当前不再重复处理
+		return nil
+	}
 	// 判断当前是否是查询语句
 	queryOnly := false
 	switch stmtNode := stmt.(type) {
@@ -176,6 +184,11 @@ func ignoreTrace(sctx sessionctx.Context, mctx mctech.Context, stmt ast.StmtNode
 }
 
 func doAfterHandleStmt(sctx sessionctx.Context, sql string, stmt ast.StmtNode, err error) {
+	if sctx.GetSessionVars().CerburusProxy {
+		// 如果前端启用了cerberus代理，当前不再重复处理
+		return
+	}
+
 	sessVars := sctx.GetSessionVars()
 	if sessVars.InRestrictedSQL {
 		// 不记录内部sql

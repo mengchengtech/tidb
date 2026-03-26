@@ -42,11 +42,12 @@ go_test(
     name = "interceptor_test",
     timeout = "short",
     srcs = [
+        "cerberus_proxy_test.go",
         "execute_inteceptor_test.go",
         "interceptor_test.go",
     ],
     flaky = True,
-    shard_count = 15,
+    shard_count = 16,
     deps = [
         ":interceptor",
         "//extension",
