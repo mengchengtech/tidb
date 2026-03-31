@@ -11,11 +11,39 @@ import (
 
 // ApplyExtension apply tenant condition
 func ApplyExtension(mctx mctech.Context, stmt ast.StmtNode,
-	charset, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
+	charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
+	ext := getCommonExtension(mctx, stmt, charset, collation)
+	return ext.Apply()
+}
+
+func getCommonExtension(mctx mctech.Context, stmt ast.StmtNode, charset, collation string) *_commonExtension {
+	return &_commonExtension{
+		mctx:      mctx,
+		stmt:      stmt,
+		visitor:   nil,
+		charset:   charset,
+		collation: collation,
+	}
+}
+
+type _commonExtension struct {
+	mctx      mctech.Context
+	stmt      ast.StmtNode
+	visitor   ast.Visitor
+	charset   string
+	collation string
+}
+
+// Apply apply tenant condition
+func (c *_commonExtension) Apply() (schema mctech.StmtSchemaInfo, skipped bool, err error) {
+	return c.doApply(c.stmt)
+}
+
+func (c *_commonExtension) doApply(stmt ast.StmtNode) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
 	skipped = false
 	switch stmtNode := stmt.(type) {
 	case *ast.SelectStmt:
-		schema, err = doApplyExtension(mctx, stmtNode, charset, collation)
+		schema, err = c.doApplyExtension(stmtNode)
 		if stmtNode.Kind == ast.SelectStmtKindTable {
 			// "desc global_xxx.table" 语句解析后生成的SelectStmt
 			skipped = true
@@ -25,13 +53,13 @@ func ApplyExtension(mctx mctech.Context, stmt ast.StmtNode,
 		*ast.LoadDataStmt, *ast.ImportIntoStmt,
 		*ast.NonTransactionalDMLStmt, // BATCH ......
 		*ast.TruncateTableStmt:
-		schema, err = doApplyExtension(mctx, stmtNode, charset, collation)
+		schema, err = c.doApplyExtension(stmtNode)
 	case *ast.MCTechStmt:
 		// MCTechStmt只需要处理对应的子句就可以
-		schema, skipped, err = ApplyExtension(mctx, stmtNode.Stmt, charset, collation)
+		schema, skipped, err = c.doApply(stmtNode.Stmt)
 	case *ast.ExplainStmt:
 		// ExplainStmt只需要处理对应的子句就可以
-		schema, skipped, err = ApplyExtension(mctx, stmtNode.Stmt, charset, collation)
+		schema, skipped, err = c.doApply(stmtNode.Stmt)
 	default:
 		skipped = true
 	}
@@ -45,8 +73,7 @@ func ApplyExtension(mctx mctech.Context, stmt ast.StmtNode,
 	return schema, skipped, err
 }
 
-func doApplyExtension(
-	mctx mctech.Context, stmt ast.StmtNode, charset, collation string) (schema mctech.StmtSchemaInfo, err error) {
+func (c *_commonExtension) doApplyExtension(stmtNode ast.StmtNode) (schema mctech.StmtSchemaInfo, err error) {
 	failpoint.Inject("SetSQLDBS", func(v failpoint.Value) {
 		str := v.(string)
 		for _, item := range strings.Split(str, ",") {
@@ -60,10 +87,10 @@ func doApplyExtension(
 	})
 
 	var v tblNameVisitor
-	if mctx.InExecute() {
-		v = newTableNameVisitor(mctx)
+	if c.mctx.InExecute() {
+		v = newTableNameVisitor(c.mctx)
 	} else {
-		v = newIsolationConditionVisitor(mctx, charset, collation)
+		v = newIsolationConditionVisitor(c.mctx, c.charset, c.collation)
 	}
 	defer func() {
 		if e := recover(); e != nil {
@@ -71,7 +98,7 @@ func doApplyExtension(
 		}
 	}()
 
-	stmt.Accept(v)
+	stmtNode.Accept(v)
 	schema = v.StmtSchemaInfo()
 	schema.Sort()
 
