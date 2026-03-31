@@ -9,9 +9,12 @@ import (
 )
 
 func TestMCTechStmtVisitorCover(t *testing.T) {
-	stmts := []ast.Node{
-		&ast.MCTechStmt{Stmt: &ast.ShowStmt{}},
+	mc := &ast.MCTechStmt{
+		ShowDesc: &ast.ShowDescOption{
+			Stmt: &ast.ShowStmt{},
+		},
 	}
+	stmts := []ast.Node{mc}
 
 	for _, v := range stmts {
 		v.Accept(visitor{})

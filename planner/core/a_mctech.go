@@ -104,9 +104,9 @@ func fetchMinimumParamCount(markers []ast.ParamMarkerExpr) int {
 
 func (b *PlanBuilder) buildMCTech(_ context.Context, stmt *ast.MCTechStmt) (Plan, error) {
 	p := &MCTech{
-		Format:   stmt.Format,
+		Format:   stmt.ShowDesc.Format,
 		Stmt:     stmt,
-		ExecStmt: stmt.Stmt,
+		ExecStmt: stmt.ShowDesc.Stmt,
 	}
 	p.ctx = b.ctx
 	return p, p.prepareSchema()

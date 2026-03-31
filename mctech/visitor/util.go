@@ -56,7 +56,11 @@ func (c *_commonExtension) doApply(stmt ast.StmtNode) (schema mctech.StmtSchemaI
 		schema, err = c.doApplyExtension(stmtNode)
 	case *ast.MCTechStmt:
 		// MCTechStmt只需要处理对应的子句就可以
-		schema, skipped, err = c.doApply(stmtNode.Stmt)
+		if stmtNode.ShowDesc == nil {
+			skipped = true
+		} else {
+			schema, skipped, err = c.doApply(stmtNode.ShowDesc.Stmt)
+		}
 	case *ast.ExplainStmt:
 		// ExplainStmt只需要处理对应的子句就可以
 		schema, skipped, err = c.doApply(stmtNode.Stmt)

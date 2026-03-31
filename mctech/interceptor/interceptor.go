@@ -60,7 +60,9 @@ func (*interceptor) AfterParseSQL(sctx sessionctx.Context, stmt ast.StmtNode) (e
 	case *ast.SelectStmt, *ast.SetOprStmt:
 		queryOnly = true
 	case *ast.MCTechStmt:
-		_, queryOnly = stmtNode.Stmt.(*ast.SelectStmt)
+		if stmtNode.ShowDesc != nil {
+			_, queryOnly = stmtNode.ShowDesc.Stmt.(*ast.SelectStmt)
+		}
 	case *ast.ExplainStmt:
 		_, queryOnly = stmtNode.Stmt.(*ast.SelectStmt)
 	case *ast.PrepareStmt:
