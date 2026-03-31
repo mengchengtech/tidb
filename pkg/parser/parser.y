@@ -144,6 +144,10 @@ import (
 	explain           "EXPLAIN"
 	/* add by zhangbing */
 	mctech            "MCTECH"
+  mcSeqDecode       "SEQ_DECODE"
+  mcDWIndex         "DW_INDEX"
+  mcDenyDigest      "DENY_DIGEST"
+  mcFullSql         "FULL_SQL"
 	/* add end */
 	falseKwd          "FALSE"
 	fetch             "FETCH"
@@ -1522,6 +1526,11 @@ import (
 	ProcedureFetchList                     "Procedure fetch into variables"
 	ProcedureHandlerType                   "Procedure handler operation type"
 	ProcedureHcondList                     "Procedure handler condition value list"
+	/* add by zhangbing */
+  mctechFullSQLGroupOpt                  "MCTech statement full sql group"
+  mctechBoolOpt                          "MCTech statement mctech show help bool"
+  mctechDescFormatOpt                    "MCTech statement mctech desc type"
+	/* add end */
 
 %type	<ident>
 	AsOpt             "AS or EmptyString"
@@ -5493,26 +5502,105 @@ ReleaseSavepointStmt:
 	}
 
 /* add by zhangbing */
+mctechFullSQLGroupOpt:
+  /* EMPTY */
+  {
+    $$ = ""
+  }
+| 
+  stringLit
+  {
+    $$ = $1
+  }
+
+mctechBoolOpt:
+  /* EMPTY */
+  {
+    $$ = false
+  }
+|
+  Boolean
+  {
+    $$ = $1
+  }
+mctechDescFormatOpt:
+  /* EMPTY */
+  {
+    $$ = "row"
+  }
+|
+  "FORMAT" "=" ExplainFormatType
+  {
+    $$ = $3
+  }
+| "FORMAT" "=" stringLit
+  {
+    $$ = $3
+  }
+
 MCTechStmt:
-	"MCTECH" ExplainableStmt
-	{
+  "MCTECH" "SHOW" "DENY_DIGEST"
+  {
 		$$ = &ast.MCTechStmt{
-			Stmt:   $2,
-			Format: "row",
+			Type: ast.MCTechStmtOpShowDenyDigest,
 		}
 	}
-|	"MCTECH" "FORMAT" "=" ExplainFormatType ExplainableStmt
-	{
+|
+  "MCTECH" "SHOW" "HELP" mctechBoolOpt
+  {
 		$$ = &ast.MCTechStmt{
-			Stmt:   $5,
-			Format: $4,
+			Type: ast.MCTechStmtOpShowHelp,
+      ShowHelp: &ast.ShowHelpOption{
+        ShowHidden: $4.(bool),
+      },
 		}
 	}
-|	"MCTECH" "FORMAT" "=" stringLit ExplainableStmt
-	{
+|
+  "MCTECH" "SHOW" "DATABASE" "CONSTRAINTS"
+  {
 		$$ = &ast.MCTechStmt{
-			Stmt:   $5,
-			Format: $4,
+			Type: ast.MCTechStmtOpShowDatabaseConstraints,
+		}
+	}
+|
+  "MCTECH" "SHOW" "FULL_SQL" stringLit NUM NUM mctechFullSQLGroupOpt // <at> <conn_id> <tx_id> [group]
+  {
+    $$ = &ast.MCTechStmt{
+      Type: ast.MCTechStmtOpShowFullSQL,
+      ShowFullSQL: &ast.ShowFullSQLOption{
+        RunAt: $4,
+        RunConnID: getUint64FromNUM($5),
+        RunTxID: getUint64FromNUM($6),
+        Group: $7.(string),
+      },
+    }
+  }
+|
+  "MCTECH" "SHOW" "DW_INDEX"
+  {
+    $$ = &ast.MCTechStmt{
+      Type: ast.MCTechStmtOpShowDWIndex,
+    }
+  }
+|
+  "MCTECH" "SEQ_DECODE" Int64Num
+  {
+		$$ = &ast.MCTechStmt{
+			Type: ast.MCTechStmtOpSeqDecode,
+			SeqDecode: &ast.SeqDecodeOption{
+        SeqValue: $3.(int64),
+      },
+		}
+	}
+|
+	"MCTECH" mctechDescFormatOpt ExplainableStmt
+	{
+    $$ = &ast.MCTechStmt{
+			Type: ast.MCTechStmtOpDesc,
+			ShowDesc: &ast.ShowDescOption{
+        Stmt: $3,
+        Format: $2.(string),
+      },
 		}
 	}
 /* add end */
