@@ -16,13 +16,13 @@ type _ddlExtension struct {
 	visitor        ast.Visitor
 }
 
-func (r *_ddlExtension) Apply(currentDb string, node ast.Node) (matched bool, err error) {
+func (r *_ddlExtension) Apply(currentDb string, stmt ast.StmtNode) (matched bool, err error) {
 	if !r.versionEnabled {
 		return false, nil
 	}
 
 	matched = true
-	switch stmtNode := node.(type) {
+	switch stmtNode := stmt.(type) {
 	case *ast.CreateTableStmt:
 		err = r.doApply(currentDb, stmtNode.Table, stmtNode)
 	case *ast.AlterTableStmt:
@@ -34,7 +34,7 @@ func (r *_ddlExtension) Apply(currentDb string, node ast.Node) (matched bool, er
 	return matched, err
 }
 
-func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast.Node) (err error) {
+func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, stmt ast.StmtNode) (err error) {
 	db := table.Schema.L
 	if db == "" {
 		db = currentDb
@@ -61,7 +61,7 @@ func (r *_ddlExtension) doApply(currentDb string, table *ast.TableName, node ast
 			err = e.(error)
 		}
 	}()
-	node.Accept(r.visitor)
+	stmt.Accept(r.visitor)
 	return err
 }
 
@@ -102,7 +102,7 @@ func getDDLExtension() *_ddlExtension {
 }
 
 // ApplyExtension apply ddl modify
-func ApplyExtension(currentDb string, node ast.Node) (matched bool, err error) {
+func ApplyExtension(currentDb string, stmt ast.StmtNode) (matched bool, err error) {
 	ext := getDDLExtension()
-	return ext.Apply(currentDb, node)
+	return ext.Apply(currentDb, stmt)
 }

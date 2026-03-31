@@ -18,7 +18,7 @@ var mctechHintPattern = regexp.MustCompile(`(?i)/\*&\s*(\$?[a-z_0-9]+)[:|]\s*(.*
 type StatementPreprocessor interface {
 	ParseSQL(mctx mctech.Context, sql string) (string, mctech.ParseResult, error)
 	ResolveStmt(mctx mctech.Context,
-		stmt ast.Node, charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error)
+		stmt ast.StmtNode, charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error)
 	Validate(mctx mctech.Context) error
 }
 
@@ -115,7 +115,7 @@ func (r *mctechStatementPreprocessor) Validate(mctx mctech.Context) error {
 }
 
 func (r *mctechStatementPreprocessor) ResolveStmt(mctx mctech.Context,
-	stmt ast.Node, charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
+	stmt ast.StmtNode, charset string, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
 	schema, skipped, err = visitor.ApplyExtension(mctx, stmt, charset, collation)
 
 	if skipped || err != nil {
