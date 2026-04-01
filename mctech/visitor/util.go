@@ -10,10 +10,10 @@ import (
 )
 
 // ApplyExtension apply tenant condition
-func ApplyExtension(mctx mctech.Context, node ast.Node,
+func ApplyExtension(mctx mctech.Context, stmt ast.StmtNode,
 	charset, collation string) (schema mctech.StmtSchemaInfo, skipped bool, err error) {
 	skipped = false
-	switch stmtNode := node.(type) {
+	switch stmtNode := stmt.(type) {
 	case *ast.SelectStmt:
 		schema, err = doApplyExtension(mctx, stmtNode, charset, collation)
 		if stmtNode.Kind == ast.SelectStmtKindTable {
@@ -21,7 +21,7 @@ func ApplyExtension(mctx mctech.Context, node ast.Node,
 			skipped = true
 		}
 	case *ast.UpdateStmt, *ast.DeleteStmt, *ast.InsertStmt,
-		*ast.SetOprSelectList, *ast.SetOprStmt,
+		*ast.SetOprStmt,
 		*ast.LoadDataStmt,
 		*ast.NonTransactionalDMLStmt, // BATCH ......
 		*ast.TruncateTableStmt:
@@ -46,7 +46,7 @@ func ApplyExtension(mctx mctech.Context, node ast.Node,
 }
 
 func doApplyExtension(
-	mctx mctech.Context, node ast.Node, charset, collation string) (schema mctech.StmtSchemaInfo, err error) {
+	mctx mctech.Context, stmt ast.StmtNode, charset, collation string) (schema mctech.StmtSchemaInfo, err error) {
 	failpoint.Inject("SetSQLDBS", func(v failpoint.Value) {
 		str := v.(string)
 		for _, item := range strings.Split(str, ",") {
@@ -71,7 +71,7 @@ func doApplyExtension(
 		}
 	}()
 
-	node.Accept(v)
+	stmt.Accept(v)
 	schema = v.StmtSchemaInfo()
 	schema.Sort()
 

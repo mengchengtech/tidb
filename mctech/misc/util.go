@@ -11,9 +11,9 @@ import (
 type _miscExtension struct {
 }
 
-func (r *_miscExtension) Apply(mctx mctech.Context, node ast.Node) (matched bool, err error) {
+func (r *_miscExtension) Apply(mctx mctech.Context, stmt ast.StmtNode) (matched bool, err error) {
 	matched = true
-	switch stmtNode := node.(type) {
+	switch stmtNode := stmt.(type) {
 	case *ast.UseStmt:
 		stmtNode.DBName, err = r.changeToPhysicalDb(mctx, stmtNode.DBName)
 	case *ast.ShowStmt:
@@ -59,7 +59,7 @@ func getMsicExtension() *_miscExtension {
 }
 
 // ApplyExtension apply misc
-func ApplyExtension(mctx mctech.Context, node ast.Node) (matched bool, err error) {
+func ApplyExtension(mctx mctech.Context, stmt ast.StmtNode) (matched bool, err error) {
 	ext := getMsicExtension()
-	return ext.Apply(mctx, node)
+	return ext.Apply(mctx, stmt)
 }
