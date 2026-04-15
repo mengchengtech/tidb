@@ -187,7 +187,7 @@ func TestGetFullSqlWithNotConfig(t *testing.T) {
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
 		f, err := fc.getFunction(ctx,
-			datumsToConstants(types.MakeDatums("2023-10-10 19:55:40", 1697003594436)))
+			datumsToConstants(types.MakeDatums("2023-10-10 19:55:40", 0, 1697003594436)))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		_, err = evalBuiltinFunc(f, chunk.Row{})
@@ -195,7 +195,7 @@ func TestGetFullSqlWithNotConfig(t *testing.T) {
 	}
 }
 
-func TestGetFullSqlByTime(t *testing.T) {
+func TestGetFullSqlByTime1(t *testing.T) {
 	fullPath, err := filepath.Abs("../mctech/udf/data")
 	require.NoError(t, err)
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
@@ -221,6 +221,32 @@ func TestGetFullSqlByTime(t *testing.T) {
 	}
 }
 
+func TestGetFullSqlByTime2(t *testing.T) {
+	fullPath, err := filepath.Abs("../mctech/udf/data")
+	require.NoError(t, err)
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mmock.M(t, map[string]string{"Metrics.SqlTrace.FullSqlDir": fullPath}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
+	datetime := "2023-10-11 13:53:14.437"
+	at, err := time.ParseInLocation("2006-01-02 15:04:05.999", datetime, time.Local)
+	require.NoError(t, err)
+	unixMilli := at.UnixMilli()
+	require.Equal(t, int64(1697003594437), unixMilli)
+	dt := types.NewTime(types.FromGoTime(at), mysql.TypeDatetime, 3)
+	ctx := createContext(t)
+	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+		fc := funcs[name]
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(dt, 0, 1697003594435)))
+		require.NoError(t, err)
+		resetStmtContext(ctx)
+		d, err := evalBuiltinFunc(f, chunk.Row{})
+		require.NoError(t, err)
+		require.False(t, d.IsNull())
+	}
+}
+
 func TestGetFullSqlByString(t *testing.T) {
 	fullPath, err := filepath.Abs("../mctech/udf/data")
 	require.NoError(t, err)
@@ -233,7 +259,7 @@ func TestGetFullSqlByString(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1697003594436", "pre")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1234567890", "1697003594436", "pre")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
@@ -242,7 +268,7 @@ func TestGetFullSqlByString(t *testing.T) {
 	}
 }
 
-func TestGetFullSqlByStringAndGroup(t *testing.T) {
+func TestGetFullSqlByStringAndGroup1(t *testing.T) {
 	fullPath, err := filepath.Abs("../mctech/udf/data")
 	require.NoError(t, err)
 	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
@@ -254,7 +280,28 @@ func TestGetFullSqlByStringAndGroup(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1697003594437")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "0", "1697003594437")))
+		require.NoError(t, err)
+		resetStmtContext(ctx)
+		d, err := evalBuiltinFunc(f, chunk.Row{})
+		require.NoError(t, err)
+		require.False(t, d.IsNull())
+	}
+}
+
+func TestGetFullSqlByStringAndGroup2(t *testing.T) {
+	fullPath, err := filepath.Abs("../mctech/udf/data")
+	require.NoError(t, err)
+	failpoint.Enable("github.com/pingcap/tidb/config/GetMCTechConfig",
+		mmock.M(t, map[string]string{"Metrics.SqlTrace.FullSqlDir": fullPath}),
+	)
+	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
+
+	datetime := "2023-10-11 13:53:14.437"
+	ctx := createContext(t)
+	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
+		fc := funcs[name]
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, "1697003594437", "product")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
@@ -275,7 +322,7 @@ func TestGetFullSqlNotExists(t *testing.T) {
 	ctx := createContext(t)
 	for _, name := range []string{ast.MCTechGetFullSql, ast.MCGetFullSql} {
 		fc := funcs[name]
-		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, 1697003594437, "product")))
+		f, err := fc.getFunction(ctx, datumsToConstants(types.MakeDatums(datetime, 1234567890, 1697003594437, "product")))
 		require.NoError(t, err)
 		resetStmtContext(ctx)
 		d, err := evalBuiltinFunc(f, chunk.Row{})
@@ -333,7 +380,8 @@ func TestMCTechHelp(t *testing.T) {
 			d, err := evalBuiltinFunc(f, chunk.Row{})
 			require.NoError(t, err)
 			content := d.GetString()
-			fmt.Print(content)
+			require.NotEmpty(t, content)
+			// fmt.Print(content)
 		}
 	}
 }

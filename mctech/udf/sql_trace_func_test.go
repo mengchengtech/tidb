@@ -13,7 +13,7 @@ import (
 )
 
 func TestGetFullSqlNotSetConfig(t *testing.T) {
-	_, _, err := GetFullSQL(types.MinTimestamp, 1234567890, "")
+	_, _, err := GetFullSQL(types.MinTimestamp, 0, 1234567890, "")
 	require.ErrorContains(t, err, "未设置 mctech.metrics.sql-trace.full-sql-dir 配置项")
 }
 
@@ -26,7 +26,7 @@ func TestGetFullSql(t *testing.T) {
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594437)), mysql.TypeDatetime, 3)
-	sql, isNull, err := GetFullSQL(datetime, 1697003594435, "")
+	sql, isNull, err := GetFullSQL(datetime, 0, 1697003594435, "")
 	require.NoError(t, err)
 	require.False(t, isNull)
 	require.Equal(t, 279828, len(sql))
@@ -41,7 +41,7 @@ func TestGetFullSqlWithPre(t *testing.T) {
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594437)), mysql.TypeDatetime, 3)
-	sql, isNull, err := GetFullSQL(datetime, 1697003594436, "pre")
+	sql, isNull, err := GetFullSQL(datetime, 1234567890, 1697003594436, "pre")
 	require.NoError(t, err)
 	require.False(t, isNull)
 	require.Equal(t, 279828, len(sql))
@@ -56,7 +56,7 @@ func TestGetFullSqlWithProduct(t *testing.T) {
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594437)), mysql.TypeDatetime, 3)
-	sql, isNull, err := GetFullSQL(datetime, 1697003594437, "")
+	sql, isNull, err := GetFullSQL(datetime, 0, 1697003594437, "")
 	require.NoError(t, err)
 	require.False(t, isNull)
 	require.Equal(t, 279828, len(sql))
@@ -71,6 +71,6 @@ func TestGetFullSqlNotExists(t *testing.T) {
 	defer failpoint.Disable("github.com/pingcap/tidb/config/GetMCTechConfig")
 
 	datetime := types.NewTime(types.FromGoTime(time.UnixMilli(1697003594499)), mysql.TypeDatetime, 3)
-	_, _, err = GetFullSQL(datetime, 1697003594437, "product")
+	_, _, err = GetFullSQL(datetime, 0, 1697003594437, "product")
 	require.NoError(t, err)
 }
