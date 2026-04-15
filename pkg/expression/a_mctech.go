@@ -201,7 +201,7 @@ func init() {
 	funcs[ast.MCDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCDecrypt, 1, 4}}
 	funcs[ast.MCEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCEncrypt, 1, 1}}
 	funcs[ast.MCSeqDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCSeqDecode, 1, 1}}
-	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 3}}
+	funcs[ast.MCGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCGetFullSql, 2, 4}}
 	funcs[ast.MCDWIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
 	funcs[ast.MCHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
@@ -210,8 +210,8 @@ func init() {
 	funcs[ast.MCTechDecrypt] = &mctechDecryptFunctionClass{baseFunctionClass{ast.MCTechDecrypt, 1, 4}}
 	funcs[ast.MCTechEncrypt] = &mctechEncryptFunctionClass{baseFunctionClass{ast.MCTechEncrypt, 1, 1}}
 	funcs[ast.MCTechSequenceDecode] = &mctechSequenceDecodeFunctionClass{baseFunctionClass{ast.MCTechSequenceDecode, 1, 1}}
-	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 3}}
-	funcs[ast.MCTechDataWarehouseIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCDWIndexInfo, 0, 0}}
+	funcs[ast.MCTechGetFullSql] = &mctechGetFullSQLFunctionClass{baseFunctionClass{ast.MCTechGetFullSql, 2, 4}}
+	funcs[ast.MCTechDataWarehouseIndexInfo] = &mctechDataWarehouseIndexInfoFunctionClass{baseFunctionClass{ast.MCTechDataWarehouseIndexInfo, 0, 0}}
 	funcs[ast.MCTechHelp] = &mctechHelpFunctionClass{baseFunctionClass{ast.MCHelp, 0, 1}}
 
 	// deferredFunctions集合中保存的函数允许延迟计算，在不影响执行计划时可延迟计算，好处是当最终结果不需要函数计算时，可省掉无效的中间计算过程，特别是对unFoldableFunctions类型函数
@@ -600,7 +600,13 @@ func (c *mctechGetFullSQLFunctionClass) getFunction(ctx BuildContext, args []Exp
 	case 2:
 		argTps = append(argTps, types.ETDatetime, types.ETInt)
 	case 3:
-		argTps = append(argTps, types.ETDatetime, types.ETInt, types.ETString)
+		argTp := args[2].GetType().EvalType()
+		if argTp != types.ETString && argTp != types.ETInt {
+			argTp = types.ETString
+		}
+		argTps = append(argTps, types.ETDatetime, types.ETInt, argTp)
+	case 4:
+		argTps = append(argTps, types.ETDatetime, types.ETInt, types.ETInt, types.ETString)
 	default:
 		return nil, ErrIncorrectParameterCount.GenWithStackByArgs("mc_get_full_sql")
 	}
@@ -625,36 +631,76 @@ func (b *builtinMCTechGetFullSQLSig) Clone() builtinFunc {
 
 func (b *builtinMCTechGetFullSQLSig) evalString(ctx EvalContext, row chunk.Row) (sql string, isNull bool, err error) {
 	var (
-		at   types.Time
-		txID uint64
+		at     types.Time
+		connID uint64
+		txID   uint64
+		group  string
 	)
 
 	if at, isNull, err = b.args[0].EvalTime(ctx, row); isNull || err != nil {
 		return "", isNull, err
 	}
 
-	var val types.Datum
-	if val, err = b.args[1].Eval(ctx, row); val.IsNull() || err != nil {
-		return "", val.IsNull(), err
-	}
-	txID = val.GetUint64()
-
-	var group = ""
-	if len(b.args) == 3 {
-		val, isNull, err := b.args[2].EvalString(ctx, row)
-		if err != nil {
+	switch len(b.args) {
+	case 2: // args[1] => `txId`
+		if txID, isNull, err = evalUint64(ctx, b.args[1], row); isNull || err != nil {
 			return "", isNull, err
 		}
-		if !isNull {
-			group = val
+	case 3: // args[1], args[2] => `connId`, `txId` 或者 args[1] => `txId`, args[2] => `group`
+		var arg1Value uint64
+		if arg1Value, isNull, err = evalUint64(ctx, b.args[1], row); err != nil || isNull {
+			return "", true, err
+		}
+		arg2 := b.args[2]
+		// 根据后一个参数的类型推断前一个参数的含义
+		switch arg2.GetType().EvalType() {
+		case types.ETString:
+			var arg2Value string
+			if arg2Value, isNull, err = arg2.EvalString(ctx, row); isNull || err != nil {
+				return "", true, err
+			}
+			if txID, err = strconv.ParseUint(arg2Value, 10, 64); err == nil {
+				// 第三个参数优先当作int64兼容类型
+				connID = arg1Value
+			} else {
+				// 如果不能转换成uint64类型，则当作group
+				txID = arg1Value
+				group = arg2Value
+			}
+		case types.ETInt:
+			connID = arg1Value
+			if txID, isNull, err = evalUint64(ctx, arg2, row); isNull || err != nil {
+				return "", true, err
+			}
+		}
+	case 4: // args[1], args[2], args[3] => `connId`, `txId`, `group`
+		if connID, isNull, err = evalUint64(ctx, b.args[1], row); err != nil || isNull {
+			fmt.Println("[4] args1 null")
+			return "", true, err
+		}
+		if txID, isNull, err = evalUint64(ctx, b.args[2], row); err != nil || isNull {
+			fmt.Println("[4] args2 null")
+			return "", true, err
+		}
+		if group, isNull, err = b.args[3].EvalString(ctx, row); err != nil || isNull {
+			fmt.Println("[4] args3 null")
+			return "", true, err
 		}
 	}
 
-	fullsql, isNull, err := udf.GetFullSQL(at, txID, group)
+	fullsql, isNull, err := udf.GetFullSQL(at, connID, txID, group)
 	if err != nil {
 		return "", true, err
 	}
 	return fullsql, isNull, nil
+}
+
+func evalUint64(ctx EvalContext, arg Expression, row chunk.Row) (val uint64, isNull bool, err error) {
+	var v types.Datum
+	if v, err = arg.Eval(ctx, row); err != nil || v.IsNull() {
+		return 0, true, err
+	}
+	return v.GetUint64(), false, nil
 }
 
 // --------------------------------------------------------------
