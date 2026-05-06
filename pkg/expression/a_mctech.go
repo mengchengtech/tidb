@@ -65,6 +65,51 @@ type mctechFunctionInfo struct {
 	signatures []signatureInfo
 }
 
+type mctechStmtInfo struct {
+	tp          ast.MCTechStmtOp
+	usage       string
+	description string
+	hidden      bool
+}
+
+var mctechStmtHelps = []mctechStmtInfo{
+	{
+		tp:          ast.MCTechStmtOpDesc,
+		usage:       "MCTECH [FORMAT = RAW] <statement>",
+		description: "输出经过处理后的语句，以及提取到的租户/角色/数据库等其它相关信息",
+	},
+	{
+		tp:          ast.MCTechStmtOpSeqDecode,
+		usage:       "MCTECH SEQ_DECODE <seq_num>",
+		description: "解析生成的序列值，输出生序列值中包含的日期和时间信息",
+	},
+	{
+		tp:          ast.MCTechStmtOpShowDWIndex,
+		usage:       "MCTECH SHOW DW_INDEX",
+		description: "输出global_dw库的前后台信息",
+	},
+	{
+		tp:          ast.MCTechStmtOpShowHelp,
+		usage:       "MCTECH SHOW HELP",
+		description: "输出扩展语句支持的语法格式帮助信息",
+	},
+	{
+		tp:          ast.MCTechStmtOpShowDenyDigest,
+		usage:       "MCTECH SHOW DENY_DIGEST",
+		description: "输出当前配置的拒绝执行的sql的digest信息，替代原来的information_schema.MCTECH_DENY_DIGEST表",
+	},
+	{
+		tp:          ast.MCTechStmtOpShowDatabaseConstraints,
+		usage:       "MCTECH SHOW DATABASE CONSTRAINTS",
+		description: "输出当前配置的允许跨数据库关联查询的信息",
+	},
+	{
+		tp:          ast.MCTechStmtOpShowFullSQL,
+		usage:       "MCTECH SHOW FULL_SQL <at> <conn_id> <tx_id> [group]",
+		description: "获取给定时间点、连接ID、事务ID的SQL语句，用于导入了执行sql的数据库环境（例如pre环境）。group默认值为'product'，可在配置文件中修改默认值。如果有多个环境时，group可以区分想要获取哪一个环境的sql语句。",
+	},
+}
+
 var mctechFunctionHelps = []mctechFunctionInfo{
 	{
 		name: ast.MCTechSequence, shortName: ast.MCSeq, mutable: true,
@@ -792,6 +837,8 @@ func (b *builtinMCTechHelpSig) evalString(ctx EvalContext, row chunk.Row) (strin
 // GetHelpContent gets the help content of mctech functions. If showHidden is false, hidden functions will be filtered out.
 func GetHelpContent(showHidden bool) string {
 	lst := []string{}
+	lst = append(lst, "******************************* 以下为扩展函数帮助说明 *******************************")
+	lst = append(lst, "", "")
 	for i, item := range mctechFunctionHelps {
 		if item.hidden && !showHidden {
 			continue
@@ -824,6 +871,22 @@ func GetHelpContent(showHidden bool) string {
 				}
 			}
 		}
+	}
+
+	lst = append(lst, "", "")
+	lst = append(lst, "******************************* 以下为 MCTECH 语句帮助说明 *******************************")
+	lst = append(lst, "", "")
+	for i, item := range mctechStmtHelps {
+		if item.hidden && !showHidden {
+			continue
+		}
+
+		if i > 0 {
+			lst = append(lst, "============================ mctech statement split =======================================")
+		}
+		lst = append(lst, fmt.Sprintf("Statement:: %s", item.tp))
+		lst = append(lst, fmt.Sprintf("Usage:: %s", item.usage))
+		lst = append(lst, fmt.Sprintf("    %s", item.description))
 	}
 
 	return strings.Join(lst, "\n")
